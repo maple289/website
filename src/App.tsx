@@ -1,17 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Bell,
-  Compass,
-  Home,
-  Library,
-  Menu,
-  Search,
-  Settings,
-  Upload,
-  X,
-  Youtube,
-  ShieldCheck,
-} from 'lucide-react';
+import { Bell, Compass, Chrome as Home, Library, Menu, Search, Settings, Upload, X, Youtube, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -90,9 +78,9 @@ function AppContent() {
   const isAuthed = !!user;
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-[#f1f1f1]">
+    <div className="min-h-screen bg-[#150b1e] text-[#f1f1f1]">
       {/* Header */}
-      <header className="fixed inset-x-0 top-0 z-40 h-[72px] border-b border-[#272727] bg-[#0f0f0f]/95 backdrop-blur-xl">
+      <header className="fixed inset-x-0 top-0 z-40 h-[72px] border-b border-[#272727] bg-[#150b1e]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-full max-w-[1560px] items-center gap-4 px-5 lg:px-8">
           {isAuthed && (
             <button aria-label="Open menu" onClick={() => setSidebarOpen(!sidebarOpen)} className="rounded-full p-3 transition hover:bg-[#272727] lg:hidden">
@@ -135,7 +123,7 @@ function AppContent() {
 
       {/* Sidebar — only for authenticated users */}
       {isAuthed && (
-        <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[72px] z-30 h-[calc(100vh-72px)] w-64 border-r border-[#272727] bg-[#0f0f0f] p-3 transition-transform duration-300 lg:translate-x-0`}>
+        <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[72px] z-30 h-[calc(100vh-72px)] w-64 border-r border-[#272727] bg-[#150b1e] p-3 transition-transform duration-300 lg:translate-x-0`}>
           <nav className="space-y-1 text-sm">
             <NavItem icon={<Home size={20} />} label="Home" active={route === 'home'} onClick={() => navigate('home')} />
             <NavItem icon={<Library size={20} />} label="My Library" active={route === 'library'} onClick={() => navigate('library')} />

@@ -20,7 +20,7 @@ export function AdminPage() {
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0f0f0f] text-[#f1f1f1]">
+      <div className="flex min-h-screen items-center justify-center bg-[#150b1e] text-[#f1f1f1]">
         <Loader2 size={28} className="animate-spin text-[#ff3d46]" />
       </div>
     );
@@ -28,7 +28,7 @@ export function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0f0f0f] px-6 text-center text-[#f1f1f1]">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#150b1e] px-6 text-center text-[#f1f1f1]">
         <ShieldCheck size={48} className="text-[#ff3d46]" />
         <h1 className="text-2xl font-semibold tracking-[-0.03em]">Admin access required</h1>
         <p className="max-w-sm text-sm text-[#999]">
@@ -42,8 +42,8 @@ export function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-[#f1f1f1]">
-      <header className="sticky top-0 z-30 border-b border-[#272727] bg-[#0f0f0f]/95 backdrop-blur-xl">
+    <div className="min-h-screen bg-[#150b1e] text-[#f1f1f1]">
+      <header className="sticky top-0 z-30 border-b border-[#272727] bg-[#150b1e]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[1100px] items-center gap-4 px-5 lg:px-8">
           <a href="/" className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back to home">
             <ArrowLeft size={20} />
@@ -363,7 +363,7 @@ function StorageTab() {
           <FolderTree size={18} className="text-[#ff737b]" />
           <h3 className="text-sm font-semibold tracking-[-0.01em]">Folder Structure Preview</h3>
         </div>
-        <div className="overflow-x-auto rounded-xl border border-[#222] bg-[#0f0f0f] p-4">
+        <div className="overflow-x-auto rounded-xl border border-[#222] bg-[#150b1e] p-4">
           <pre className="font-mono text-[13px] leading-[1.7] text-[#bbb]">
 {rootFolder.trim() || '[bucket root]'}/{'\n'}
     john-a1b2c3d4/{'\n'}
