@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Film, Globe, Loader2, Play, Search, X } from 'lucide-react';
+import { Film, Globe, Loader as Loader2, Play } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { timeAgo } from '@/lib/types';
@@ -8,7 +8,7 @@ import { VideoPlayer } from '@/components/VideoPlayer';
 export function HomePage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search] = useState('');
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
 
   const load = async () => {

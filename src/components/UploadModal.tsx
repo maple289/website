@@ -12,7 +12,6 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewInputRef = useRef<HTMLInputElement>(null);
-  const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [autoPreviewTried, setAutoPreviewTried] = useState(false);

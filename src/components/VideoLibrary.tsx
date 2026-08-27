@@ -1,20 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  Film,
-  Globe,
-  Library,
-  Loader2,
-  Lock,
-  Pencil,
-  Play,
-  Plus,
-  Trash2,
-  Upload,
-  AlertTriangle,
-  X,
-} from 'lucide-react';
+import { Film, Globe, Library, Loader as Loader2, Lock, Pencil, Play, Plus, Trash2, Upload, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
 import type { Video } from '@/lib/types';
 import { formatBytes, timeAgo } from '@/lib/types';
 import { UploadModal } from '@/components/UploadModal';
@@ -22,7 +8,6 @@ import { EditVideoModal } from '@/components/EditVideoModal';
 import { VideoPlayer } from '@/components/VideoPlayer';
 
 export function VideoLibrary() {
-  const { user } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +35,7 @@ export function VideoLibrary() {
 
   const confirmDelete = async () => {
     if (!deletingVideo) return;
-    const { error: storageErr } = await supabase.storage
+    await supabase.storage
       .from('user-videos')
       .remove([deletingVideo.storage_path]);
     const { error: dbErr } = await supabase
