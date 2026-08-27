@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Film, Loader2, Lock, Globe, Upload, X } from 'lucide-react';
+import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -12,13 +12,47 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [autoPreviewTried, setAutoPreviewTried] = useState(false);
   const [fileName, setFileName] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  const captureFirstFrame = (videoFile: File) => {
+    const url = URL.createObjectURL(videoFile);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.src = url;
+
+    video.addEventListener('loadeddata', () => {
+      // Seek slightly into the video so we don't get a black frame
+      video.currentTime = Math.min(0.1, (video.duration || 1) / 2);
+    });
+
+    video.addEventListener('seeked', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 180;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setPreviewImage(dataUrl);
+      }
+      URL.revokeObjectURL(url);
+      setAutoPreviewTried(true);
+    });
+
+    video.addEventListener('error', () => {
+      URL.revokeObjectURL(url);
+      setAutoPreviewTried(true);
+    });
+  };
 
   const handleFileSelect = (f: File) => {
     if (!f.type.startsWith('video/')) {
@@ -27,7 +61,10 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     }
     setFile(f);
     setFileName(f.name.replace(/\.[^.]+$/, ''));
+    setPreviewImage(null);
+    setAutoPreviewTried(false);
     setError(null);
+    captureFirstFrame(f);
   };
 
   const handlePreviewSelect = (f: File) => {
@@ -54,9 +91,19 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
     setUploading(true);
     try {
+      // Fetch the admin-configured root folder and this user's folder name
+      const [{ data: rootData }, { data: userFolderData }] = await Promise.all([
+        supabase.rpc('get_root_folder'),
+        supabase.rpc('get_user_storage_folder', { p_user_id: user.id }),
+      ]);
+
+      const rootFolder = (rootData as string ?? '').replace(/\/+$/, '').trim();
+      const userFolder = (userFolderData as string ?? user.id).trim();
       const ext = file.name.split('.').pop() || 'mp4';
-      const folderPrefix = user.id;
-      const storagePath = `${folderPrefix}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const fileNamePart = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const storagePath = rootFolder
+        ? `${rootFolder}/${userFolder}/${fileNamePart}`
+        : `${userFolder}/${fileNamePart}`;
 
       const { error: uploadErr } = await supabase.storage
         .from('user-videos')
@@ -130,7 +177,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                 <p className="truncate text-sm font-medium">{file.name}</p>
                 <p className="text-xs text-[#888]">{(file.size / (1024 * 1024)).toFixed(1)} MB · {file.type}</p>
               </div>
-              <button type="button" onClick={() => { setFile(null); setFileName(''); }} className="rounded-full p-2 text-[#888] hover:bg-[#272727] hover:text-white">
+              <button type="button" onClick={() => { setFile(null); setFileName(''); setPreviewImage(null); setAutoPreviewTried(false); }} className="rounded-full p-2 text-[#888] hover:bg-[#272727] hover:text-white">
                 <X size={16} />
               </button>
             </div>
@@ -146,21 +193,32 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                 className="mb-4 h-11 w-full rounded-xl border border-[#3a3a3a] bg-[#121212] px-4 text-sm outline-none transition focus:border-[#4b86ff]"
               />
 
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Preview Image (optional)</label>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Preview Image</label>
               <div className="mb-4 flex items-center gap-3">
                 {previewImage ? (
                   <div className="relative">
                     <img src={previewImage} alt="Preview" className="h-16 w-28 rounded-lg object-cover" />
                     <button type="button" onClick={() => setPreviewImage(null)} className="absolute -right-2 -top-2 rounded-full bg-[#ff3d46] p-1 text-white"><X size={12} /></button>
                   </div>
-                ) : (
+                ) : autoPreviewTried ? (
                   <button type="button" onClick={() => previewInputRef.current?.click()} className="flex h-16 w-28 items-center justify-center rounded-lg border-2 border-dashed border-[#3a3a3a] text-[#666] transition hover:border-[#555]">
-                    <Upload size={18} />
+                    <ImageIcon size={18} />
                   </button>
+                ) : (
+                  <div className="flex h-16 w-28 items-center justify-center rounded-lg border-2 border-dashed border-[#3a3a3a] bg-[#121212]">
+                    <Loader2 size={18} className="animate-spin text-[#555]" />
+                  </div>
                 )}
                 <div className="flex-1">
-                  <button type="button" onClick={() => previewInputRef.current?.click()} className="text-sm font-medium text-[#ff6971] hover:text-[#ff9ba0]">Choose image</button>
-                  <p className="mt-0.5 text-xs text-[#777]">Upload a thumbnail for your video</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => previewInputRef.current?.click()} className="text-sm font-medium text-[#ff6971] hover:text-[#ff9ba0]">Choose image</button>
+                    {file && (
+                      <button type="button" onClick={() => { setAutoPreviewTried(false); setPreviewImage(null); captureFirstFrame(file); }} className="flex items-center gap-1 text-xs text-[#888] hover:text-white">
+                        <RefreshCw size={12} /> Re-capture
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-[#777]">Auto-generated from the first frame. You can upload a custom image instead.</p>
                 </div>
                 <input ref={previewInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewSelect(e.target.files[0])} />
               </div>

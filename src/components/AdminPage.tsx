@@ -1,21 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  ArrowLeft,
-  HardDrive,
-  Loader2,
-  Mail,
-  Lock,
-  Pencil,
-  ShieldCheck,
-  Trash2,
-  Users,
-  UserPlus,
-  X,
-  FolderTree,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-} from 'lucide-react';
+import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 
@@ -314,10 +298,6 @@ function StorageTab() {
     e.preventDefault();
     setError(null);
     setSaved(false);
-    if (!rootFolder.trim()) {
-      setError('Please enter a root folder path.');
-      return;
-    }
     setSaving(true);
     const { error } = await supabase.from('app_config').update({ root_folder: rootFolder.trim(), updated_at: new Date().toISOString() }).eq('id', 1);
     setSaving(false);
@@ -338,7 +318,7 @@ function StorageTab() {
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-semibold tracking-[-0.03em]">Video Storage Configuration</h2>
-        <p className="mt-1 text-sm text-[#888]">Set the root folder where all user videos are stored. Each user gets their own subfolder automatically.</p>
+        <p className="mt-1 text-sm text-[#888]">Set the root folder where all user videos are stored. Each user automatically gets their own subfolder named after them (e.g. <code className="rounded bg-[#272727] px-1.5 py-0.5 font-mono text-xs text-[#ccc]">john-a1b2c3d4</code>), with a short unique ID to prevent name conflicts.</p>
       </div>
 
       {error && (
@@ -385,14 +365,14 @@ function StorageTab() {
         </div>
         <div className="overflow-x-auto rounded-xl border border-[#222] bg-[#0f0f0f] p-4">
           <pre className="font-mono text-[13px] leading-[1.7] text-[#bbb]">
-{rootFolder.trim() || '[Not configured]'}/{'\n'}
-    User Name 1/{'\n'}
-        video-1.mp4{'\n'}
-        video-2.mp4{'\n'}
+{rootFolder.trim() || '[bucket root]'}/{'\n'}
+    john-a1b2c3d4/{'\n'}
+        1693...-xyz.mp4{'\n'}
+        1693...-abc.mp4{'\n'}
         ...{'\n'}
-    User Name 2/{'\n'}
-        video-1.mp4{'\n'}
-        video-2.mp4{'\n'}
+    sarah-5e6f7g8h/{'\n'}
+        1693...-def.mp4{'\n'}
+        1693...-ghi.mp4{'\n'}
         ...{'\n'}
     ...{'\n'}
           </pre>
@@ -400,7 +380,7 @@ function StorageTab() {
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <StatCard label="Registered Users" value={userCount} icon={<Users size={16} />} />
           <StatCard label="Total Videos" value={videoCount} icon={<FolderTree size={16} />} />
-          <StatCard label="Status" value={rootFolder.trim() ? 'Configured' : 'Not set'} icon={rootFolder.trim() ? <CheckCircle2 size={16} /> : <XCircle size={16} />} active={!!rootFolder.trim()} />
+          <StatCard label="Status" value={rootFolder.trim() ? 'Configured' : 'Bucket root'} icon={<CheckCircle2 size={16} />} active={true} />
         </div>
       </div>
     </div>
