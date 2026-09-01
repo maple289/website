@@ -7,12 +7,7 @@
 :root {
   font-family: 'DM Sans', Arial, sans-serif;
   color: #f1f1f1;
-   background: linear-gradient(
-  90deg,
-  #033C8D 0%,
-  #001338 48%,
-  #0062C7 100%
-);
+  background: #150b1e;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
