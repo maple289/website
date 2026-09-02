@@ -71,15 +71,10 @@ web container.
 
 ## First administrator
 
-Create the user through the website first. Then run the bootstrap function as
-the database owner, replacing the email:
+Create the user through the website first. Then promote that account:
 
 ```bash
-docker compose \
-  --env-file /srv/streamly/supabase/.env \
-  -f /srv/streamly/supabase/docker-compose.yml \
-  exec -T db psql -U postgres -d postgres \
-  -c "SELECT public.promote_first_admin('admin@example.com');"
+./scripts/promote-first-admin.sh admin@example.com
 ```
 
 The function stops working after the first administrator is assigned and is not
