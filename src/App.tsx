@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Compass, Chrome as Home, Library, Menu, Search, Settings, Upload, X, Youtube, ShieldCheck } from 'lucide-react';
+import { Bell, Compass, Chrome as Home, Images, Library, Menu, Search, Settings, Upload, X, Youtube, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -9,6 +9,7 @@ import { VideoLibrary } from '@/components/VideoLibrary';
 import { UploadModal } from '@/components/UploadModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
+import { PhotoLibrary } from '@/components/PhotoLibrary';
 
 function App() {
   return (
@@ -18,12 +19,13 @@ function App() {
   );
 }
 
-type Route = 'home' | 'library' | 'admin';
+type Route = 'home' | 'library' | 'photos' | 'admin';
 
 function getRoute(): Route {
   const hash = window.location.hash;
   if (hash === '#/admin') return 'admin';
   if (hash === '#/library') return 'library';
+  if (hash === '#/photos') return 'photos';
   return 'home';
 }
 
@@ -45,7 +47,7 @@ function AppContent() {
 
   // Redirect: if not signed in and trying to access library, go home
   useEffect(() => {
-    if (!loading && !user && route === 'library') {
+    if (!loading && !user && (route === 'library' || route === 'photos')) {
       window.location.hash = '';
       setRoute('home');
     }
@@ -58,6 +60,7 @@ function AppContent() {
   const navigate = (r: Route) => {
     if (r === 'home') window.location.hash = '';
     else if (r === 'library') window.location.hash = '#/library';
+    else if (r === 'photos') window.location.hash = '#/photos';
     else if (r === 'admin') window.location.hash = '#/admin';
     setRoute(r);
     setSidebarOpen(false);
@@ -111,7 +114,7 @@ function AppContent() {
                   aria-label="Upload"
                   className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition hover:bg-[#272727]"
                 >
-                  <Upload size={20} /> <span className="hidden sm:inline">Upload</span>
+                  <Upload size={20} /> <span className="hidden sm:inline">Upload video</span>
                 </button>
                 <button aria-label="Notifications" className="relative rounded-full p-3 transition hover:bg-[#272727]"><Bell size={21} /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ff3d46]" /></button>
               </>
@@ -127,6 +130,7 @@ function AppContent() {
           <nav className="space-y-1 text-sm">
             <NavItem icon={<Home size={20} />} label="Home" active={route === 'home'} onClick={() => navigate('home')} />
             <NavItem icon={<Library size={20} />} label="My Library" active={route === 'library'} onClick={() => navigate('library')} />
+            <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
             <NavItem icon={<Compass size={20} />} label="Explore" />
             <div className="my-4 h-px bg-[#272727]" />
             {isAdmin && (
@@ -145,7 +149,7 @@ function AppContent() {
 
       {/* Main content */}
       <main className={`pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {route === 'library' && isAuthed ? <VideoLibrary /> : <HomePage />}
+        {route === 'library' && isAuthed ? <VideoLibrary /> : route === 'photos' && isAuthed ? <PhotoLibrary /> : <HomePage />}
       </main>
 
       {/* Auth modal */}

@@ -266,49 +266,23 @@ function UsersTab() {
 // ---------- Storage Tab ----------
 
 function StorageTab() {
-  const [rootFolder, setRootFolder] = useState('');
-  const [originalFolder, setOriginalFolder] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [userCount, setUserCount] = useState(0);
   const [videoCount, setVideoCount] = useState(0);
+  const [photoCount, setPhotoCount] = useState(0);
 
   const load = async () => {
     setLoading(true);
-    setError(null);
-    const { data, error } = await supabase.from('app_config').select('root_folder').eq('id', 1).single();
-    if (error) {
-      setError('Could not load storage configuration.');
-    } else {
-      setRootFolder(data?.root_folder ?? '');
-      setOriginalFolder(data?.root_folder ?? '');
-    }
     const { count: uCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
     setUserCount(uCount ?? 0);
     const { count: vCount } = await supabase.from('videos').select('*', { count: 'exact', head: true });
     setVideoCount(vCount ?? 0);
+    const { count: pCount } = await supabase.from('photos').select('*', { count: 'exact', head: true });
+    setPhotoCount(pCount ?? 0);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSaved(false);
-    setSaving(true);
-    const { error } = await supabase.from('app_config').update({ root_folder: rootFolder.trim(), updated_at: new Date().toISOString() }).eq('id', 1);
-    setSaving(false);
-    if (error) {
-      setError('Failed to save. Make sure you are signed in as admin.');
-      return;
-    }
-    setOriginalFolder(rootFolder.trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>;
@@ -318,43 +292,31 @@ function StorageTab() {
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-semibold tracking-[-0.03em]">Video Storage Configuration</h2>
-        <p className="mt-1 text-sm text-[#888]">Set the root folder where all user videos are stored. Each user automatically gets their own subfolder named after them (e.g. <code className="rounded bg-[#272727] px-1.5 py-0.5 font-mono text-xs text-[#ccc]">john-a1b2c3d4</code>), with a short unique ID to prevent name conflicts.</p>
+        <p className="mt-1 text-sm text-[#888]">Video files are stored in a private Supabase bucket. The physical disk location is configured on the server through Docker, so it cannot be changed from the website.</p>
       </div>
 
-      {error && (
-        <div className="mb-5 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
-      )}
-
       <div className="rounded-2xl border border-[#272727] bg-[#161616] p-6">
-        <form onSubmit={handleSave}>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Root Folder Path</label>
-          <div className="flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
-            <HardDrive className="ml-4 text-[#888]" size={18} />
-            <input
-              value={rootFolder}
-              onChange={(e) => setRootFolder(e.target.value)}
-              placeholder="e.g. D:\\Videos or /mnt/user-videos"
-              className="h-full w-full bg-transparent px-3 font-mono text-sm outline-none placeholder:text-[#6a6a6a]"
-            />
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]">
+            <HardDrive size={20} />
           </div>
-          <p className="mt-2 text-xs text-[#6a6a6a]">This is the single source of truth for video storage. All user videos are saved under this folder.</p>
+          <div>
+            <p className="text-sm font-semibold">Private bucket: <code className="rounded bg-[#272727] px-1.5 py-0.5 font-mono text-xs text-[#ccc]">user-videos</code></p>
+            <p className="mt-1.5 text-xs leading-5 text-[#777]">Maximum file size: 10 GB. Uploaded files must use a video MIME type. Only the owner can upload, edit, or delete files in their folder.</p>
+          </div>
+        </div>
+      </div>
 
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={saving || rootFolder.trim() === originalFolder.trim()}
-              className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] px-6 text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-50"
-            >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              Save configuration
-            </button>
-            {saved && (
-              <span className="flex items-center gap-1.5 text-sm text-emerald-400">
-                <CheckCircle2 size={16} /> Saved
-              </span>
-            )}
+      <div className="mt-4 rounded-2xl border border-[#272727] bg-[#161616] p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]">
+            <FolderTree size={20} />
           </div>
-        </form>
+          <div>
+            <p className="text-sm font-semibold">Private bucket: <code className="rounded bg-[#272727] px-1.5 py-0.5 font-mono text-xs text-[#ccc]">user-images</code></p>
+            <p className="mt-1.5 text-xs leading-5 text-[#777]">Maximum original size: 25 MB. Stores photo originals, optimized previews, thumbnails, and video preview images.</p>
+          </div>
+        </div>
       </div>
 
       {/* Folder structure preview */}
@@ -365,22 +327,22 @@ function StorageTab() {
         </div>
         <div className="overflow-x-auto rounded-xl border border-[#222] bg-[#150b1e] p-4">
           <pre className="font-mono text-[13px] leading-[1.7] text-[#bbb]">
-{rootFolder.trim() || '[bucket root]'}/{'\n'}
-    john-a1b2c3d4/{'\n'}
-        1693...-xyz.mp4{'\n'}
-        1693...-abc.mp4{'\n'}
+user-videos/{'\n'}
+    {'<user-id>'}/videos/{'<video-id>'}/{'<file-id>'}.mp4{'\n'}
+user-images/{'\n'}
+    {'<user-id>'}/photos/{'<photo-id>'}/{'\n'}
+        original.jpg{'\n'}
+        preview.webp{'\n'}
+        thumbnail.webp{'\n'}
+    {'<user-id>'}/video-previews/{'<video-id>'}/{'<preview-id>'}.webp{'\n'}
         ...{'\n'}
-    sarah-5e6f7g8h/{'\n'}
-        1693...-def.mp4{'\n'}
-        1693...-ghi.mp4{'\n'}
-        ...{'\n'}
-    ...{'\n'}
           </pre>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
           <StatCard label="Registered Users" value={userCount} icon={<Users size={16} />} />
           <StatCard label="Total Videos" value={videoCount} icon={<FolderTree size={16} />} />
-          <StatCard label="Status" value={rootFolder.trim() ? 'Configured' : 'Bucket root'} icon={<CheckCircle2 size={16} />} active={true} />
+          <StatCard label="Total Photos" value={photoCount} icon={<FolderTree size={16} />} />
+          <StatCard label="Access" value="Private" icon={<CheckCircle2 size={16} />} active={true} />
         </div>
       </div>
     </div>

@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { timeAgo } from '@/lib/types';
 import { VideoPlayer } from '@/components/VideoPlayer';
+import { StorageImage } from '@/components/StorageImage';
+import { PublicPhotoGallery } from '@/components/PublicPhotoGallery';
 
 export function HomePage() {
   const [videos, setVideos] = useState<Video[]>([]);
@@ -50,11 +52,13 @@ export function HomePage() {
             {filtered.map((v) => (
               <article key={v.id} className="group min-w-0 cursor-pointer" onClick={() => setPlayingVideo(v)}>
                 <div className="relative aspect-video overflow-hidden rounded-xl bg-[#202020]">
-                  {v.preview_url ? (
-                    <img src={v.preview_url} alt={v.file_name} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>
-                  )}
+                  <StorageImage
+                    storagePath={v.preview_path}
+                    legacyUrl={v.preview_url}
+                    alt={v.file_name}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                    fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>}
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>
@@ -78,6 +82,8 @@ export function HomePage() {
           </div>
         )}
       </section>
+
+      <PublicPhotoGallery />
 
       {playingVideo && (
         <VideoPlayer video={playingVideo} onClose={() => setPlayingVideo(null)} />

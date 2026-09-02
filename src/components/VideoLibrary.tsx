@@ -6,8 +6,11 @@ import { formatBytes, timeAgo } from '@/lib/types';
 import { UploadModal } from '@/components/UploadModal';
 import { EditVideoModal } from '@/components/EditVideoModal';
 import { VideoPlayer } from '@/components/VideoPlayer';
+import { StorageImage } from '@/components/StorageImage';
+import { useAuth } from '@/hooks/useAuth';
 
 export function VideoLibrary() {
+  const { user } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,9 +22,15 @@ export function VideoLibrary() {
   const load = async () => {
     setLoading(true);
     setError(null);
+    if (!user) {
+      setVideos([]);
+      setLoading(false);
+      return;
+    }
     const { data, error } = await supabase
       .from('videos')
       .select('*')
+      .eq('owner_id', user.id)
       .order('created_at', { ascending: false });
     if (error) {
       setError('Could not load your videos.');
@@ -31,13 +40,10 @@ export function VideoLibrary() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [user]);
 
   const confirmDelete = async () => {
     if (!deletingVideo) return;
-    await supabase.storage
-      .from('user-videos')
-      .remove([deletingVideo.storage_path]);
     const { error: dbErr } = await supabase
       .from('videos')
       .delete()
@@ -46,6 +52,8 @@ export function VideoLibrary() {
       setError('Failed to delete video.');
       return;
     }
+    await supabase.storage.from('user-videos').remove([deletingVideo.storage_path]);
+    if (deletingVideo.preview_path) await supabase.storage.from('user-images').remove([deletingVideo.preview_path]);
     setDeletingVideo(null);
     load();
   };
@@ -138,11 +146,13 @@ function VideoCard({ video, onPlay, onEdit, onDelete }: { video: Video; onPlay: 
   return (
     <article className="group min-w-0">
       <div className="relative aspect-video cursor-pointer overflow-hidden rounded-xl bg-[#202020]" onClick={onPlay}>
-        {video.preview_url ? (
-          <img src={video.preview_url} alt={video.file_name} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>
-        )}
+        <StorageImage
+          storagePath={video.preview_path}
+          legacyUrl={video.preview_url}
+          alt={video.file_name}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+          fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
         <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>

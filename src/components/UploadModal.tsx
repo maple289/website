@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
 
 type UploadModalProps = {
   onClose: () => void;
@@ -67,8 +68,12 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   };
 
   const handlePreviewSelect = (f: File) => {
-    if (!f.type.startsWith('image/')) {
-      setError('Please select an image file for the preview.');
+    if (!isSupportedImage(f)) {
+      setError('Please select a JPEG, PNG, WebP, GIF, or AVIF preview image.');
+      return;
+    }
+    if (f.size > 25 * 1024 * 1024) {
+      setError('Preview images must be 25 MB or smaller.');
       return;
     }
     const reader = new FileReader();
@@ -89,20 +94,13 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     }
 
     setUploading(true);
+    let uploadedVideoPath: string | null = null;
+    let uploadedPreviewPath: string | null = null;
     try {
-      // Fetch the admin-configured root folder and this user's folder name
-      const [{ data: rootData }, { data: userFolderData }] = await Promise.all([
-        supabase.rpc('get_root_folder'),
-        supabase.rpc('get_user_storage_folder', { p_user_id: user.id }),
-      ]);
-
-      const rootFolder = (rootData as string ?? '').replace(/\/+$/, '').trim();
-      const userFolder = (userFolderData as string ?? user.id).trim();
-      const ext = file.name.split('.').pop() || 'mp4';
-      const fileNamePart = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const storagePath = rootFolder
-        ? `${rootFolder}/${userFolder}/${fileNamePart}`
-        : `${userFolder}/${fileNamePart}`;
+      const videoId = createStorageId();
+      const sourceExtension = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
+      const extension = sourceExtension.replace(/[^a-z0-9]/g, '') || 'mp4';
+      const storagePath = `${user.id}/videos/${videoId}/${createStorageId()}.${extension}`;
 
       const { error: uploadErr } = await supabase.storage
         .from('user-videos')
@@ -113,19 +111,45 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         setUploading(false);
         return;
       }
+      uploadedVideoPath = storagePath;
+
+      let previewPath: string | null = null;
+      if (previewImage) {
+        const previewSource = await dataUrlToBlob(previewImage);
+        const { preview } = await createImageVariants(previewSource);
+        previewPath = `${user.id}/video-previews/${videoId}/${createStorageId()}.webp`;
+        const { error: previewErr } = await supabase.storage
+          .from('user-images')
+          .upload(previewPath, preview, { contentType: 'image/webp' });
+
+        if (previewErr) {
+          await supabase.storage.from('user-videos').remove([storagePath]);
+          uploadedVideoPath = null;
+          setError('Failed to upload preview image: ' + previewErr.message);
+          setUploading(false);
+          return;
+        }
+        uploadedPreviewPath = previewPath;
+      }
 
       const { error: dbErr } = await supabase.from('videos').insert({
+        id: videoId,
         owner_id: user.id,
         owner_email: user.email ?? '',
         file_name: fileName.trim(),
         storage_path: storagePath,
-        preview_url: previewImage,
+        preview_url: null,
+        preview_path: previewPath,
         visibility,
         file_size: file.size,
         mime_type: file.type,
       });
 
       if (dbErr) {
+        await supabase.storage.from('user-videos').remove([storagePath]);
+        if (previewPath) await supabase.storage.from('user-images').remove([previewPath]);
+        uploadedVideoPath = null;
+        uploadedPreviewPath = null;
         setError('Failed to save video record: ' + dbErr.message);
         setUploading(false);
         return;
@@ -133,6 +157,8 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
       onUploaded();
     } catch (err) {
+      if (uploadedVideoPath) await supabase.storage.from('user-videos').remove([uploadedVideoPath]);
+      if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
       setError(err instanceof Error ? err.message : 'Upload failed.');
       setUploading(false);
     }

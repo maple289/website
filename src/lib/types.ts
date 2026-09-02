@@ -5,9 +5,26 @@ export type Video = {
   file_name: string;
   storage_path: string;
   preview_url: string | null;
+  preview_path: string | null;
   visibility: 'public' | 'private';
   file_size: number | null;
   mime_type: string | null;
+  created_at: string;
+};
+
+export type Photo = {
+  id: string;
+  owner_id: string;
+  owner_email: string | null;
+  file_name: string;
+  storage_path: string;
+  preview_path: string;
+  thumbnail_path: string;
+  visibility: 'public' | 'private';
+  file_size: number | null;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
   created_at: string;
 };
 

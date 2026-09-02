@@ -3,6 +3,8 @@ import { Film, Globe, Image as ImageIcon, Loader2, Lock, Pencil, Upload, X } fro
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
+import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
+import { StorageImage } from '@/components/StorageImage';
 
 type EditVideoModalProps = {
   video: Video;
@@ -13,6 +15,7 @@ type EditVideoModalProps = {
 export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps) {
   const [fileName, setFileName] = useState(video.file_name);
   const [previewUrl, setPreviewUrl] = useState<string | null>(video.preview_url);
+  const [previewChanged, setPreviewChanged] = useState(false);
   const [visibility, setVisibility] = useState<'private' | 'public'>(video.visibility);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,16 +52,24 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
     ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
     setPreviewUrl(dataUrl);
+    setPreviewChanged(true);
     setShowCapture(false);
   };
 
   const handlePreviewUpload = (f: File) => {
-    if (!f.type.startsWith('image/')) {
-      setError('Please select an image file.');
+    if (!isSupportedImage(f)) {
+      setError('Please select a JPEG, PNG, WebP, GIF, or AVIF image.');
+      return;
+    }
+    if (f.size > 25 * 1024 * 1024) {
+      setError('Preview images must be 25 MB or smaller.');
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setPreviewUrl(reader.result as string);
+    reader.onload = () => {
+      setPreviewUrl(reader.result as string);
+      setPreviewChanged(true);
+    };
     reader.readAsDataURL(f);
   };
 
@@ -71,19 +82,50 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
     }
 
     setSaving(true);
+    let uploadedPreviewPath: string | null = null;
+    let nextPreviewPath = video.preview_path;
+
+    if (previewChanged && previewUrl) {
+      try {
+        const previewSource = await dataUrlToBlob(previewUrl);
+        const { preview } = await createImageVariants(previewSource);
+        nextPreviewPath = `${video.owner_id}/video-previews/${video.id}/${createStorageId()}.webp`;
+        const { error: uploadError } = await supabase.storage
+          .from('user-images')
+          .upload(nextPreviewPath, preview, { contentType: 'image/webp' });
+        if (uploadError) {
+          setError('Failed to upload preview image: ' + uploadError.message);
+          setSaving(false);
+          return;
+        }
+        uploadedPreviewPath = nextPreviewPath;
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to process preview image.');
+        setSaving(false);
+        return;
+      }
+    } else if (previewChanged) {
+      nextPreviewPath = null;
+    }
+
     const { error } = await supabase
       .from('videos')
       .update({
         file_name: fileName.trim(),
-        preview_url: previewUrl,
+        preview_url: previewChanged ? null : previewUrl,
+        preview_path: nextPreviewPath,
         visibility,
       })
       .eq('id', video.id);
 
     if (error) {
+      if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
       setError('Failed to save changes: ' + error.message);
       setSaving(false);
       return;
+    }
+    if (previewChanged && video.preview_path && video.preview_path !== nextPreviewPath) {
+      await supabase.storage.from('user-images').remove([video.preview_path]);
     }
     onSaved();
   };
@@ -105,13 +147,15 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Preview Image</label>
           <div className="mb-4 flex gap-3">
             <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212]">
-              {previewUrl ? (
-                <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-[#555]"><ImageIcon size={24} /></div>
-              )}
-              {previewUrl && (
-                <button type="button" onClick={() => setPreviewUrl(null)} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={12} /></button>
+              <StorageImage
+                storagePath={previewChanged ? null : video.preview_path}
+                legacyUrl={previewUrl}
+                alt="Preview"
+                className="h-full w-full object-cover"
+                fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><ImageIcon size={24} /></div>}
+              />
+              {(previewUrl || (!previewChanged && video.preview_path)) && (
+                <button type="button" onClick={() => { setPreviewUrl(null); setPreviewChanged(true); }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={12} /></button>
               )}
             </div>
             <div className="flex flex-1 flex-col gap-2">
