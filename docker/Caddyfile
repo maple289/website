@@ -2,7 +2,9 @@
   encode zstd gzip
 
   @health path /healthz
-  respond @health 200
+  handle @health {
+    respond "OK" 200
+  }
 
   @supabase path /auth/v1 /auth/v1/* /rest/v1 /rest/v1/* /storage/v1 /storage/v1/* /functions/v1 /functions/v1/* /realtime/v1 /realtime/v1/* /graphql/v1 /graphql/v1/*
   handle @supabase {
