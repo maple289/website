@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -7,25 +7,30 @@ export function useAdmin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    if (loading) return;
+  const checkAdmin = useCallback(async () => {
     if (!user) {
       setIsAdmin(false);
       setChecking(false);
       return;
     }
+    const { data, error } = await supabase.rpc('is_admin');
+    if (!error && data === true) {
+      setIsAdmin(true);
+    } else {
+      setIsAdmin(false);
+    }
+    setChecking(false);
+  }, [user]);
 
-    let active = true;
-    (async () => {
-      const { data, error } = await supabase.rpc('is_admin');
-      if (active) {
-        if (!error && data === true) setIsAdmin(true);
-        setChecking(false);
-      }
-    })();
+  useEffect(() => {
+    if (loading) return;
+    checkAdmin();
+  }, [loading, checkAdmin]);
 
-    return () => { active = false; };
-  }, [user, loading]);
+  const refreshAdmin = useCallback(() => {
+    setChecking(true);
+    checkAdmin();
+  }, [checkAdmin]);
 
-  return { isAdmin, checking: loading || checking };
+  return { isAdmin, checking: loading || checking, refreshAdmin };
 }
