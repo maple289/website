@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown } from 'lucide-react';
+import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
+const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
 
 type Tab = 'users' | 'storage';
 
@@ -12,6 +13,13 @@ type Profile = {
   id: string;
   email: string | null;
   role: string;
+  created_at: string;
+};
+
+type PendingRegistration = {
+  id: string;
+  email: string;
+  status: string;
   created_at: string;
 };
 
@@ -140,6 +148,8 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
 
   return (
     <div onClick={() => setOpenRoleMenu(null)}>
+      <PendingRegistrations onResolved={load} getAuthHeaders={getAuthHeaders} />
+
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-[-0.03em]">User Accounts</h2>
@@ -303,6 +313,175 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
           saving={actionId === roleChangeUser.id}
         />
       )}
+    </div>
+  );
+}
+
+// ---------- Pending Registrations ----------
+
+function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () => void; getAuthHeaders: AuthHeadersFn }) {
+  const [pending, setPending] = useState<PendingRegistration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ reg: PendingRegistration; action: 'approve' | 'reject' } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    const { data, error } = await supabase
+      .from('pending_registrations')
+      .select('id, email, status, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (!error && data) {
+      setPending(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAction = async () => {
+    if (!confirmAction) return;
+    setActionId(confirmAction.reg.id);
+    setError(null);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(approveFnUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: confirmAction.action, registrationId: confirmAction.reg.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to process request.');
+        setActionId(null);
+        setConfirmAction(null);
+        return;
+      }
+      setPending((prev) => prev.filter((p) => p.id !== confirmAction.reg.id));
+      setActionId(null);
+      setConfirmAction(null);
+      onResolved();
+    } catch {
+      setError('Network error. Please try again.');
+      setActionId(null);
+      setConfirmAction(null);
+    }
+  };
+
+  if (loading) return null;
+  if (pending.length === 0) return null;
+
+  return (
+    <div className="mb-8">
+      <div className="mb-4 flex items-center gap-2">
+        <Clock size={18} className="text-amber-400" />
+        <h3 className="text-base font-semibold tracking-[-0.02em]">Pending Approvals</h3>
+        <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-400">{pending.length}</span>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-amber-500/20">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-amber-500/5 text-[#888]">
+            <tr>
+              <th className="px-5 py-3.5 font-medium">Email</th>
+              <th className="hidden px-5 py-3.5 font-medium sm:table-cell">Requested</th>
+              <th className="px-5 py-3.5 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#222]">
+            {pending.map((reg) => (
+              <tr key={reg.id} className="transition hover:bg-amber-500/5">
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">
+                      {(reg.email ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-[#e8e8e8]">{reg.email}</span>
+                  </div>
+                </td>
+                <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
+                  {new Date(reg.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                </td>
+                <td className="px-5 py-4">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setConfirmAction({ reg, action: 'approve' })}
+                      disabled={actionId === reg.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600/15 px-3 py-2 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-600/25 disabled:opacity-50"
+                    >
+                      {actionId === reg.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction({ reg, action: 'reject' })}
+                      disabled={actionId === reg.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-[#ff3d46]/15 px-3 py-2 text-xs font-semibold text-[#ff737b] transition hover:bg-[#ff3d46]/25 disabled:opacity-50"
+                    >
+                      {actionId === reg.id ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={14} />}
+                      Reject
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmAction && (
+        <ConfirmApprovalModal
+          email={confirmAction.reg.email}
+          action={confirmAction.action}
+          saving={actionId === confirmAction.reg.id}
+          onClose={() => setConfirmAction(null)}
+          onConfirm={handleAction}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmApprovalModal({ email, action, saving, onClose, onConfirm }: { email: string; action: 'approve' | 'reject'; saving: boolean; onClose: () => void; onConfirm: () => void }) {
+  const isApprove = action === 'approve';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+        <div className="px-6 pt-6">
+          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isApprove ? 'bg-emerald-600/15 text-emerald-400' : 'bg-[#ff3d46]/15 text-[#ff737b]'}`}>
+            {isApprove ? <Check size={24} /> : <XCircle size={24} />}
+          </div>
+          <h2 className="text-lg font-semibold tracking-[-0.02em]">
+            {isApprove ? 'Approve Registration' : 'Reject Registration'}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
+            {isApprove ? (
+              <>Are you sure you want to approve the registration for <span className="font-semibold text-white">{email}</span>? An account will be created and they will be able to sign in immediately.</>
+            ) : (
+              <>Are you sure you want to reject the registration for <span className="font-semibold text-white">{email}</span>? No account will be created.</>
+            )}
+          </p>
+        </div>
+        <div className="px-6 pb-7 pt-5">
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button
+              onClick={onConfirm}
+              disabled={saving}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isApprove ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-[#ff3d46] hover:bg-[#ff5962]'}`}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : isApprove ? <Check size={16} /> : <XCircle size={16} />}
+              {isApprove ? 'Approve' : 'Reject'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

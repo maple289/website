@@ -9,7 +9,7 @@ type AuthModalProps = {
 };
 
 export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, requestRegistration } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,13 +59,13 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
 
     setSubmitting(true);
     if (mode === 'signup') {
-      const { error } = await signUp(email.trim(), password);
+      const { error } = await requestRegistration(email.trim(), password);
       setSubmitting(false);
       if (error) {
         setError(error);
       } else {
-        setInfo('Account created. You are now signed in.');
-        setTimeout(onClose, 900);
+        setInfo('Your registration request has been submitted. An administrator will review it and email you once your account is approved.');
+        setTimeout(onClose, 4000);
       }
     } else {
       const { error } = await signIn(email.trim(), password);
