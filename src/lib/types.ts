@@ -59,8 +59,11 @@ export function timeAgo(dateStr: string): string {
 const serveMediaUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-media`;
 
 export async function getPlayableUrl(videoId: string, token?: string): Promise<string | null> {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+  const headers: Record<string, string> = {
+    apikey: anonKey,
+    Authorization: `Bearer ${token ?? anonKey}`,
+  };
 
   const res = await fetch(`${serveMediaUrl}?id=${encodeURIComponent(videoId)}`, { headers });
   if (!res.ok) return null;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
@@ -121,6 +121,7 @@ function UsersTab() {
     const { data } = await supabase.auth.getSession();
     return {
       'Content-Type': 'application/json',
+      apikey: supabaseAnonKey,
       Authorization: `Bearer ${data.session?.access_token ?? ''}`,
     };
   };
