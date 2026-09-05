@@ -68,6 +68,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return { error: error.message };
       }
+
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin-registration`;
+      fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ email }),
+      }).catch((err) => console.warn('Failed to notify admins:', err));
+
       return { error: null };
     },
     signIn: async (email, password) => {

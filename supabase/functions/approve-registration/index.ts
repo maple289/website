@@ -14,6 +14,38 @@ function json(data: unknown, status = 200) {
   });
 }
 
+async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey) {
+    console.warn("RESEND_API_KEY not configured, skipping email send");
+    return false;
+  }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "noreply@bolt.new",
+        to,
+        subject,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`Resend API error (${res.status}): ${text}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to send email:", err);
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -73,6 +105,8 @@ Deno.serve(async (req: Request) => {
       return json({ error: `Registration has already been ${registration.status}` }, 400);
     }
 
+    const userEmail = registration.email;
+
     if (action === "approve") {
       const { data: newUser, error: createErr } = await adminClient.auth.admin.createUser({
         email: registration.email,
@@ -86,6 +120,15 @@ Deno.serve(async (req: Request) => {
             .from("pending_registrations")
             .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: callerData.user.id })
             .eq("id", registrationId);
+
+          await sendEmail(
+            userEmail,
+            "Your Account Has Been Approved",
+            `<h2>Your Account Has Been Approved</h2>
+             <p>Good news! Your registration has been approved by an administrator.</p>
+             <p>You can now sign in to your account using your email and password.</p>`,
+          );
+
           return json({ success: true, message: "User already existed, registration marked as approved" });
         }
         return json({ error: createErr.message }, 400);
@@ -96,12 +139,28 @@ Deno.serve(async (req: Request) => {
         .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: callerData.user.id, password: "" })
         .eq("id", registrationId);
 
+      await sendEmail(
+        userEmail,
+        "Your Account Has Been Approved",
+        `<h2>Your Account Has Been Approved</h2>
+         <p>Good news! Your registration has been approved by an administrator.</p>
+         <p>You can now sign in to your account using your email and password.</p>`,
+      );
+
       return json({ success: true, userId: newUser.user?.id });
     } else {
       await adminClient
         .from("pending_registrations")
         .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: callerData.user.id, password: "" })
         .eq("id", registrationId);
+
+      await sendEmail(
+        userEmail,
+        "Registration Update",
+        `<h2>Registration Update</h2>
+         <p>We're writing to let you know that your registration request has not been approved at this time.</p>
+         <p>If you believe this was an error, please contact an administrator.</p>`,
+      );
 
       return json({ success: true });
     }
