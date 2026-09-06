@@ -31,10 +31,10 @@ sudo mkdir -p /opt/streamly /srv/streamly
 sudo chown -R "$USER":"$USER" /opt/streamly /srv/streamly
 ```
 
-Clone the deployment branch:
+Clone the main branch:
 
 ```bash
-git clone --branch docker-deployment git@github.com:maple289/website.git /opt/streamly/app
+git clone --branch main git@github.com:maple289/website.git /opt/streamly/app
 cd /opt/streamly/app
 ```
 
@@ -102,10 +102,10 @@ update the matching Supabase URLs, and redeploy. Caddy will then manage HTTPS.
 
 ## Updates and rollback
 
-Friend/Bolt updates continue in `main`. Merge them into `docker-deployment`, let
-GitHub Actions validate the result, then deploy a tagged commit on the server.
+Friend/Bolt updates continue in `main`. GitHub Actions validates every push and
+the production runner automatically deploys the newest successful commit.
 
-Before each production update:
+For a manual recovery or rollback:
 
 ```bash
 ./scripts/backup-database.sh
@@ -117,3 +117,37 @@ git checkout <release-tag>
 Rollback checks out the previous tag and runs `deploy.sh` again. Database
 migrations are forward-only, so schema-changing releases require a compatible
 backup and an explicit rollback plan.
+
+## Automatic deployment
+
+Every push to `main` is validated by the hosted `CI` workflow. A successful CI
+run dispatches `Deploy` to the Ubuntu runner labelled `streamly-production`.
+The runner ignores a validated commit if a newer commit has already reached
+`main`, preventing an older delayed workflow from replacing a newer release.
+
+Keep the application environment outside the runner checkout:
+
+```bash
+cp /opt/streamly/app/.env /srv/streamly/app.env
+chmod 600 /srv/streamly/app.env
+```
+
+In the GitHub repository, open **Settings > Actions > Runners**, choose
+**New self-hosted runner**, then follow the displayed Linux x64 commands on the
+Ubuntu VM. Configure the runner with the custom label
+`streamly-production` and install it as a system service under the `vlad` user.
+The runner user must be able to run `docker ps` without `sudo` and write to
+`/srv/streamly`.
+
+For every validated commit, the runner:
+
+1. acquires a deployment lock;
+2. creates a complete PostgreSQL backup;
+3. removes backups older than 30 days;
+4. synchronizes Edge Functions and applies only new migrations;
+5. builds and starts the web container;
+6. verifies `/healthz` and records the deployed commit in
+   `/srv/streamly/last-deployed-sha`.
+
+No GitHub secrets are required for deployment. Supabase and application secrets
+remain in `/srv/streamly/supabase/.env` and `/srv/streamly/app.env` on Ubuntu.
