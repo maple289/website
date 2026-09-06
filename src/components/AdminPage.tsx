@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
+import { useAuth } from '@/hooks/useAuth';
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
+const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
 
 type Tab = 'users' | 'storage';
 
@@ -14,8 +16,16 @@ type Profile = {
   created_at: string;
 };
 
+type PendingRegistration = {
+  id: string;
+  email: string;
+  status: string;
+  created_at: string;
+};
+
 export function AdminPage() {
-  const { isAdmin, checking } = useAdmin();
+  const { isAdmin, checking, refreshAdmin } = useAdmin();
+  const { user: currentUser } = useAuth();
   const [tab, setTab] = useState<Tab>('users');
 
   if (checking) {
@@ -60,7 +70,7 @@ export function AdminPage() {
           <TabButton active={tab === 'users'} onClick={() => setTab('users')} icon={<Users size={17} />}>User Accounts</TabButton>
           <TabButton active={tab === 'storage'} onClick={() => setTab('storage')} icon={<FolderTree size={17} />}>File Locations</TabButton>
         </div>
-        {tab === 'users' ? <UsersTab /> : <StorageTab />}
+        {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : <StorageTab />}
       </main>
     </div>
   );
@@ -80,7 +90,7 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
 
 // ---------- Users Tab ----------
 
-function UsersTab() {
+function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | null; onRoleChanged: () => void }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +99,8 @@ function UsersTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [deletingUser, setDeletingUser] = useState<Profile | null>(null);
+  const [roleChangeUser, setRoleChangeUser] = useState<Profile | null>(null);
+  const [openRoleMenu, setOpenRoleMenu] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -104,17 +116,21 @@ function UsersTab() {
 
   useEffect(() => { load(); }, []);
 
-  const toggleRole = async (profile: Profile) => {
-    setActionId(profile.id);
-    const newRole = profile.role === 'admin' ? 'user' : 'admin';
-    const { error } = await supabase.rpc('set_user_role', { target: profile.id, new_role: newRole });
+  const confirmRoleChange = async () => {
+    if (!roleChangeUser) return;
+    const newRole = roleChangeUser.role === 'admin' ? 'user' : 'admin';
+    setActionId(roleChangeUser.id);
+    const { error } = await supabase.rpc('set_user_role', { target: roleChangeUser.id, new_role: newRole });
     if (error) {
       setError('Failed to update role.');
       setActionId(null);
+      setRoleChangeUser(null);
       return;
     }
-    setProfiles((prev) => prev.map((p) => (p.id === profile.id ? { ...p, role: newRole } : p)));
+    setProfiles((prev) => prev.map((p) => (p.id === roleChangeUser.id ? { ...p, role: newRole } : p)));
     setActionId(null);
+    setRoleChangeUser(null);
+    onRoleChanged();
   };
 
   const getAuthHeaders = async () => {
@@ -132,7 +148,9 @@ function UsersTab() {
   });
 
   return (
-    <div>
+    <div onClick={() => setOpenRoleMenu(null)}>
+      <PendingRegistrations onResolved={load} getAuthHeaders={getAuthHeaders} />
+
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-[-0.03em]">User Accounts</h2>
@@ -192,26 +210,51 @@ function UsersTab() {
                     </div>
                   </td>
                   <td className="px-5 py-4">
-                    {p.role === 'admin' ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff3d46]/15 px-3 py-1 text-xs font-semibold text-[#ff737b]">
-                        <ShieldCheck size={13} /> Admin
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#272727] px-3 py-1 text-xs font-medium text-[#a5a5a5]">User</span>
-                    )}
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          if (p.id === currentUserId) return;
+                          setOpenRoleMenu(openRoleMenu === p.id ? null : p.id);
+                        }}
+                        disabled={actionId === p.id || p.id === currentUserId}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${p.role === 'admin' ? 'bg-[#ff3d46]/15 text-[#ff737b]' : 'bg-[#272727] text-[#a5a5a5]'} ${p.id !== currentUserId ? 'hover:opacity-80' : ''}`}
+                        title={p.id === currentUserId ? 'You cannot change your own role' : 'Change role'}
+                      >
+                        {actionId === p.id ? <Loader2 size={13} className="animate-spin" /> : p.role === 'admin' ? <ShieldCheck size={13} /> : null}
+                        {p.role === 'admin' ? 'Admin' : 'User'}
+                        {p.id !== currentUserId && <ChevronDown size={12} className="opacity-60" />}
+                      </button>
+                      {openRoleMenu === p.id && (
+                        <div className="absolute left-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#181818] py-1 shadow-2xl">
+                          <button
+                            onClick={() => {
+                              setOpenRoleMenu(null);
+                              if (p.role !== 'admin') setRoleChangeUser(p);
+                            }}
+                            className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium transition hover:bg-[#272727] ${p.role === 'admin' ? 'text-[#ff737b]' : 'text-[#ccc]'}`}
+                          >
+                            <ShieldCheck size={14} /> Admin
+                            {p.role === 'admin' && <span className="ml-auto text-[#555]">✓</span>}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenRoleMenu(null);
+                              if (p.role !== 'user') setRoleChangeUser(p);
+                            }}
+                            className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium transition hover:bg-[#272727] ${p.role === 'user' ? 'text-white' : 'text-[#ccc]'}`}
+                          >
+                            <Users size={14} /> User
+                            {p.role === 'user' && <span className="ml-auto text-[#555]">✓</span>}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
                     {new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => toggleRole(p)}
-                        disabled={actionId === p.id}
-                        className={`rounded-lg px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${p.role === 'admin' ? 'bg-[#272727] text-[#ccc] hover:bg-[#333]' : 'bg-[#ff3d46]/15 text-[#ff737b] hover:bg-[#ff3d46]/25'}`}
-                      >
-                        {actionId === p.id ? <Loader2 size={13} className="animate-spin" /> : p.role === 'admin' ? 'Demote' : 'Promote'}
-                      </button>
                       <button
                         onClick={() => setEditingUser(p)}
                         className="rounded-lg p-2 text-[#888] transition hover:bg-[#272727] hover:text-white"
@@ -221,8 +264,10 @@ function UsersTab() {
                       </button>
                       <button
                         onClick={() => setDeletingUser(p)}
-                        className="rounded-lg p-2 text-[#888] transition hover:bg-[#ff3d46]/15 hover:text-[#ff737b]"
+                        disabled={p.id === currentUserId}
+                        className="rounded-lg p-2 text-[#888] transition hover:bg-[#ff3d46]/15 hover:text-[#ff737b] disabled:cursor-not-allowed disabled:opacity-40"
                         aria-label="Delete user"
+                        title={p.id === currentUserId ? 'You cannot delete your own account' : 'Delete user'}
                       >
                         <Trash2 size={15} />
                       </button>
@@ -260,6 +305,232 @@ function UsersTab() {
           getAuthHeaders={getAuthHeaders}
         />
       )}
+
+      {roleChangeUser && (
+        <ChangeRoleModal
+          user={roleChangeUser}
+          onClose={() => setRoleChangeUser(null)}
+          onConfirm={confirmRoleChange}
+          saving={actionId === roleChangeUser.id}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------- Pending Registrations ----------
+
+function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () => void; getAuthHeaders: AuthHeadersFn }) {
+  const [pending, setPending] = useState<PendingRegistration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ reg: PendingRegistration; action: 'approve' | 'reject' } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    const { data, error } = await supabase
+      .from('pending_registrations')
+      .select('id, email, status, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (!error && data) {
+      setPending(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAction = async () => {
+    if (!confirmAction) return;
+    setActionId(confirmAction.reg.id);
+    setError(null);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(approveFnUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: confirmAction.action, registrationId: confirmAction.reg.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to process request.');
+        setActionId(null);
+        setConfirmAction(null);
+        return;
+      }
+      setPending((prev) => prev.filter((p) => p.id !== confirmAction.reg.id));
+      setActionId(null);
+      setConfirmAction(null);
+      onResolved();
+    } catch {
+      setError('Network error. Please try again.');
+      setActionId(null);
+      setConfirmAction(null);
+    }
+  };
+
+  if (loading) return null;
+  if (pending.length === 0) return null;
+
+  return (
+    <div className="mb-8">
+      <div className="mb-4 flex items-center gap-2">
+        <Clock size={18} className="text-amber-400" />
+        <h3 className="text-base font-semibold tracking-[-0.02em]">Pending Approvals</h3>
+        <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-400">{pending.length}</span>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-amber-500/20">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-amber-500/5 text-[#888]">
+            <tr>
+              <th className="px-5 py-3.5 font-medium">Email</th>
+              <th className="hidden px-5 py-3.5 font-medium sm:table-cell">Requested</th>
+              <th className="px-5 py-3.5 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#222]">
+            {pending.map((reg) => (
+              <tr key={reg.id} className="transition hover:bg-amber-500/5">
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">
+                      {(reg.email ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-[#e8e8e8]">{reg.email}</span>
+                  </div>
+                </td>
+                <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
+                  {new Date(reg.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                </td>
+                <td className="px-5 py-4">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setConfirmAction({ reg, action: 'approve' })}
+                      disabled={actionId === reg.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600/15 px-3 py-2 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-600/25 disabled:opacity-50"
+                    >
+                      {actionId === reg.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction({ reg, action: 'reject' })}
+                      disabled={actionId === reg.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-[#ff3d46]/15 px-3 py-2 text-xs font-semibold text-[#ff737b] transition hover:bg-[#ff3d46]/25 disabled:opacity-50"
+                    >
+                      {actionId === reg.id ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={14} />}
+                      Reject
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmAction && (
+        <ConfirmApprovalModal
+          email={confirmAction.reg.email}
+          action={confirmAction.action}
+          saving={actionId === confirmAction.reg.id}
+          onClose={() => setConfirmAction(null)}
+          onConfirm={handleAction}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmApprovalModal({ email, action, saving, onClose, onConfirm }: { email: string; action: 'approve' | 'reject'; saving: boolean; onClose: () => void; onConfirm: () => void }) {
+  const isApprove = action === 'approve';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+        <div className="px-6 pt-6">
+          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isApprove ? 'bg-emerald-600/15 text-emerald-400' : 'bg-[#ff3d46]/15 text-[#ff737b]'}`}>
+            {isApprove ? <Check size={24} /> : <XCircle size={24} />}
+          </div>
+          <h2 className="text-lg font-semibold tracking-[-0.02em]">
+            {isApprove ? 'Approve Registration' : 'Reject Registration'}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
+            {isApprove ? (
+              <>Are you sure you want to approve the registration for <span className="font-semibold text-white">{email}</span>? An account will be created and they will be able to sign in immediately.</>
+            ) : (
+              <>Are you sure you want to reject the registration for <span className="font-semibold text-white">{email}</span>? No account will be created.</>
+            )}
+          </p>
+        </div>
+        <div className="px-6 pb-7 pt-5">
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button
+              onClick={onConfirm}
+              disabled={saving}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isApprove ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-[#ff3d46] hover:bg-[#ff5962]'}`}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : isApprove ? <Check size={16} /> : <XCircle size={16} />}
+              {isApprove ? 'Approve' : 'Reject'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; onClose: () => void; onConfirm: () => void; saving: boolean }) {
+  const newRole = user.role === 'admin' ? 'user' : 'admin';
+  const isPromotion = newRole === 'admin';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+        <div className="px-6 pt-6">
+          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isPromotion ? 'bg-[#ff3d46]/15 text-[#ff737b]' : 'bg-amber-500/15 text-amber-400'}`}>
+            {isPromotion ? <ShieldCheck size={24} /> : <AlertTriangle size={24} />}
+          </div>
+          <h2 className="text-lg font-semibold tracking-[-0.02em]">
+            {isPromotion ? 'Promote to Admin' : 'Demote to User'}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
+            {isPromotion ? (
+              <>Are you sure you want to promote <span className="font-semibold text-white">{user.email}</span> to admin? They will gain full access to the Admin Console, including user management and storage configuration.</>
+            ) : (
+              <>Are you sure you want to demote <span className="font-semibold text-white">{user.email}</span> to a regular user? They will lose access to the Admin Console immediately.</>
+            )}
+          </p>
+        </div>
+        <div className="px-6 pb-7 pt-5">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#272727] bg-[#121212] px-4 py-3">
+            <span className="text-xs text-[#888]">Current role:</span>
+            <span className={`text-xs font-semibold ${user.role === 'admin' ? 'text-[#ff737b]' : 'text-[#a5a5a5]'}`}>{user.role === 'admin' ? 'Admin' : 'User'}</span>
+            <span className="mx-1 text-[#555]">→</span>
+            <span className="text-xs text-[#888]">New role:</span>
+            <span className={`text-xs font-semibold ${newRole === 'admin' ? 'text-[#ff737b]' : 'text-[#a5a5a5]'}`}>{newRole === 'admin' ? 'Admin' : 'User'}</span>
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button
+              onClick={onConfirm}
+              disabled={saving}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isPromotion ? 'bg-[#ff3d46] hover:bg-[#ff5962]' : 'bg-amber-600 hover:bg-amber-500'}`}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : isPromotion ? <ShieldCheck size={16} /> : <Users size={16} />}
+              {isPromotion ? 'Promote' : 'Demote'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

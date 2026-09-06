@@ -1,6 +1,6 @@
 import { createContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, supabaseAnonKey, isSupabaseConfigured } from '@/lib/supabase';
 
 type AuthContextValue = {
   session: Session | null;
@@ -10,6 +10,7 @@ type AuthContextValue = {
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  requestRegistration: (email: string, password: string) => Promise<{ error: string | null }>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -55,6 +56,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isSupabaseConfigured) return { error: 'Authentication is not available right now.' };
       const { error } = await supabase.auth.signUp({ email, password });
       return { error: error ? readableError(error.message) : null };
+    },
+    requestRegistration: async (email, password) => {
+      if (!isSupabaseConfigured) return { error: 'Authentication is not available right now.' };
+      const { error } = await supabase
+        .from('pending_registrations')
+        .insert({ email, password });
+      if (error) {
+        if (error.message.includes('duplicate') || error.message.includes('unique')) {
+          return { error: 'A registration request with this email already exists or is pending approval.' };
+        }
+        return { error: error.message };
+      }
+
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin-registration`;
+      fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({ email }),
+      }).catch((err) => console.warn('Failed to notify admins:', err));
+
+      return { error: null };
     },
     signIn: async (email, password) => {
       if (!isSupabaseConfigured) return { error: 'Authentication is not available right now.' };
