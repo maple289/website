@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Play, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
+import { useVideoVolume } from '@/hooks/useVideoVolume';
 
 type VideoPlayerProps = {
   video: Video;
@@ -13,6 +14,9 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useVideoVolume(videoRef, url);
 
   useEffect(() => {
     let active = true;
@@ -61,7 +65,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
               <p className="text-sm text-[#888]">{error}</p>
             </div>
           ) : (
-            <video src={url ?? undefined} controls autoPlay className="h-full w-full" />
+            <video ref={videoRef} src={url ?? undefined} controls autoPlay className="h-full w-full" />
           )}
         </div>
       </div>

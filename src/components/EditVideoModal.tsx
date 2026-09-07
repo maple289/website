@@ -6,6 +6,7 @@ import { getPlayableUrl } from '@/lib/types';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
 import { StorageImage } from '@/components/StorageImage';
 import { resolveBucketPath } from '@/lib/storageSettings';
+import { useVideoVolume } from '@/hooks/useVideoVolume';
 
 type EditVideoModalProps = {
   video: Video;
@@ -25,6 +26,8 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
   const [videoLoading, setVideoLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useVideoVolume(videoRef, videoUrl);
 
   useEffect(() => {
     if (!showCapture || videoUrl) return;
