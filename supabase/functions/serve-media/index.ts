@@ -124,9 +124,24 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // On self-hosted Supabase the signed URL may use an internal Docker
+    // address (e.g. http://kong:8000). Rewrite only the origin to the
+    // public-facing URL so the browser can stream directly from Storage.
+    let publicSignedUrl = signedData.signedUrl;
+    const publicUrl = Deno.env.get("SUPABASE_PUBLIC_URL");
+    if (publicUrl) {
+      try {
+        const signed = new URL(signedData.signedUrl);
+        const publicOrigin = new URL(publicUrl).origin;
+        publicSignedUrl = `${publicOrigin}${signed.pathname}${signed.search}`;
+      } catch {
+        // If URL parsing fails, fall back to the original signed URL
+      }
+    }
+
     return new Response(
       JSON.stringify({
-        url: signedData.signedUrl,
+        url: publicSignedUrl,
         mime_type: video.mime_type,
         file_name: video.file_name,
       }),
