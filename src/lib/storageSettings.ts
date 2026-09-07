@@ -3,6 +3,7 @@ import { supabase, supabaseAnonKey } from '@/lib/supabase';
 export type StorageSettings = {
   videos_base_path: string;
   images_base_path: string;
+  file_server_url: string;
   updated_at: string | null;
 };
 
@@ -26,6 +27,7 @@ export async function fetchStorageSettings(): Promise<StorageSettings | null> {
   return {
     videos_base_path: data.videos_base_path,
     images_base_path: data.images_base_path,
+    file_server_url: typeof data.file_server_url === 'string' ? data.file_server_url : '',
     updated_at: data.updated_at ?? null,
   };
 }
@@ -33,12 +35,17 @@ export async function fetchStorageSettings(): Promise<StorageSettings | null> {
 export async function saveStorageSettings(
   videosPath: string,
   imagesPath: string,
+  fileServerUrl: string,
 ): Promise<{ ok: true; settings: StorageSettings } | { ok: false; error: string }> {
   const headers = await getAuthHeaders();
   const res = await fetch(storageFnUrl, {
     method: 'PUT',
     headers,
-    body: JSON.stringify({ videos_base_path: videosPath, images_base_path: imagesPath }),
+    body: JSON.stringify({
+      videos_base_path: videosPath,
+      images_base_path: imagesPath,
+      file_server_url: fileServerUrl,
+    }),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -49,6 +56,7 @@ export async function saveStorageSettings(
     settings: {
       videos_base_path: data.videos_base_path,
       images_base_path: data.images_base_path,
+      file_server_url: data.file_server_url ?? '',
       updated_at: data.updated_at,
     },
   };
@@ -56,6 +64,15 @@ export async function saveStorageSettings(
 
 let cachedVideosBase: string | null = null;
 let cachedImagesBase: string | null = null;
+let cachedFileServerUrl: string | null = null;
+
+export async function fetchFileServerUrl(): Promise<string> {
+  if (cachedFileServerUrl !== null) return cachedFileServerUrl;
+  const { data, error } = await supabase.rpc('get_file_server_url');
+  const url = error || !data ? '' : (data as string);
+  cachedFileServerUrl = url;
+  return url;
+}
 
 export async function fetchStorageBasePath(kind: 'videos' | 'images'): Promise<string> {
   if (kind === 'videos' && cachedVideosBase !== null) return cachedVideosBase;

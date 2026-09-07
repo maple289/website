@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Compass, Chrome as Home, Images, Library, Menu, Search, Settings, Upload, X, Youtube, ShieldCheck } from 'lucide-react';
+import { Bell, FolderOpen, Chrome as Home, Images, Library, Menu, Search, Settings, Upload, X, Youtube, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -10,6 +10,7 @@ import { UploadModal } from '@/components/UploadModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 import { PhotoLibrary } from '@/components/PhotoLibrary';
+import { fetchFileServerUrl } from '@/lib/storageSettings';
 
 function App() {
   return (
@@ -38,6 +39,11 @@ function AppContent() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showUpload, setShowUpload] = useState(false);
+  const [fileServerUrl, setFileServerUrl] = useState('');
+
+  useEffect(() => {
+    if (user) fetchFileServerUrl().then(setFileServerUrl);
+  }, [user]);
 
   useEffect(() => {
     const onHash = () => setRoute(getRoute());
@@ -131,7 +137,7 @@ function AppContent() {
             <NavItem icon={<Home size={20} />} label="Home" active={route === 'home'} onClick={() => navigate('home')} />
             <NavItem icon={<Library size={20} />} label="My Library" active={route === 'library'} onClick={() => navigate('library')} />
             <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
-            <NavItem icon={<Compass size={20} />} label="Explore" />
+            <NavItem icon={<FolderOpen size={20} />} label="File Storage" onClick={() => { if (fileServerUrl) window.open(fileServerUrl, '_blank', 'noopener,noreferrer'); }} />
             <div className="my-4 h-px bg-[#272727]" />
             {isAdmin && (
               <NavItem icon={<ShieldCheck size={20} />} label="Admin Console" onClick={() => navigate('admin')} />

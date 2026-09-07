@@ -4,6 +4,7 @@ import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchStorageSettings, saveStorageSettings } from '@/lib/storageSettings';
+import { Server } from 'lucide-react';
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
 const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
@@ -545,8 +546,10 @@ function StorageTab() {
   const [photoCount, setPhotoCount] = useState(0);
   const [videosPath, setVideosPath] = useState('');
   const [imagesPath, setImagesPath] = useState('');
+  const [fileServerUrl, setFileServerUrl] = useState('');
   const [savedVideosPath, setSavedVideosPath] = useState('');
   const [savedImagesPath, setSavedImagesPath] = useState('');
+  const [savedFileServerUrl, setSavedFileServerUrl] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -563,8 +566,10 @@ function StorageTab() {
     if (settings) {
       setVideosPath(settings.videos_base_path);
       setImagesPath(settings.images_base_path);
+      setFileServerUrl(settings.file_server_url);
       setSavedVideosPath(settings.videos_base_path);
       setSavedImagesPath(settings.images_base_path);
+      setSavedFileServerUrl(settings.file_server_url);
       setUpdatedAt(settings.updated_at);
     }
     setUserCount(uRes.count ?? 0);
@@ -579,7 +584,7 @@ function StorageTab() {
     setSavingSettings(true);
     setSettingsError(null);
     setSettingsSaved(false);
-    const result = await saveStorageSettings(videosPath, imagesPath);
+    const result = await saveStorageSettings(videosPath, imagesPath, fileServerUrl);
     if (!result.ok) {
       setSettingsError(result.error);
       setSavingSettings(false);
@@ -587,12 +592,13 @@ function StorageTab() {
     }
     setSavedVideosPath(result.settings.videos_base_path);
     setSavedImagesPath(result.settings.images_base_path);
+    setSavedFileServerUrl(result.settings.file_server_url);
     setUpdatedAt(result.settings.updated_at);
     setSettingsSaved(true);
     setSavingSettings(false);
   };
 
-  const hasUnsavedChanges = videosPath !== savedVideosPath || imagesPath !== savedImagesPath;
+  const hasUnsavedChanges = videosPath !== savedVideosPath || imagesPath !== savedImagesPath || fileServerUrl !== savedFileServerUrl;
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>;
@@ -642,6 +648,21 @@ function StorageTab() {
           <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded images will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/images</code>).</p>
         </div>
 
+        {/* File Storage Server URL */}
+        <div className="mb-5">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">File Storage Server URL</label>
+          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+            <Server className="ml-3.5 text-[#888]" size={17} />
+            <input
+              value={fileServerUrl}
+              onChange={(e) => { setFileServerUrl(e.target.value); setSettingsSaved(false); }}
+              placeholder="https://fileserver.example.com or 192.168.1.100"
+              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+            />
+          </div>
+          <p className="mt-1.5 text-xs leading-5 text-[#777]">The URL or IP address of the external file server. When users click "File Storage" in the sidebar, this address opens in a new tab. Leave empty to hide the link.</p>
+        </div>
+
         {/* Validation info */}
         <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#1a2a4a] bg-[#001338]/50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[#4b86ff]" />
@@ -668,7 +689,7 @@ function StorageTab() {
           </button>
           {hasUnsavedChanges && (
             <button
-              onClick={() => { setVideosPath(savedVideosPath); setImagesPath(savedImagesPath); setSettingsError(null); setSettingsSaved(false); }}
+              onClick={() => { setVideosPath(savedVideosPath); setImagesPath(savedImagesPath); setFileServerUrl(savedFileServerUrl); setSettingsError(null); setSettingsSaved(false); }}
               className="h-11 rounded-xl border border-[#3a3a3a] px-4 text-sm font-medium text-[#ccc] transition hover:bg-[#272727]"
             >
               Revert

@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === "GET") {
       const { data: settings, error: settingsErr } = await adminClient
         .from("storage_settings")
-        .select("videos_base_path, images_base_path, updated_at")
+        .select("videos_base_path, images_base_path, file_server_url, updated_at")
         .eq("id", 1)
         .maybeSingle();
 
@@ -89,6 +89,7 @@ Deno.serve(async (req: Request) => {
       return json({
         videos_base_path: settings?.videos_base_path ?? "",
         images_base_path: settings?.images_base_path ?? "",
+        file_server_url: settings?.file_server_url ?? "",
         updated_at: settings?.updated_at ?? null,
       });
     }
@@ -96,13 +97,15 @@ Deno.serve(async (req: Request) => {
     // PUT: update settings
     if (req.method === "PUT") {
       const body = await req.json();
-      const { videos_base_path, images_base_path } = body as {
+      const { videos_base_path, images_base_path, file_server_url } = body as {
         videos_base_path?: string;
         images_base_path?: string;
+        file_server_url?: string;
       };
 
       const videosRaw = typeof videos_base_path === "string" ? videos_base_path : "";
       const imagesRaw = typeof images_base_path === "string" ? images_base_path : "";
+      const fileServerUrlRaw = typeof file_server_url === "string" ? file_server_url.trim() : "";
 
       const videosPath = sanitizePath(videosRaw);
       const imagesPath = sanitizePath(imagesRaw);
@@ -112,11 +115,29 @@ Deno.serve(async (req: Request) => {
       if (vErr) return json({ error: `Video storage location: ${vErr}` }, 400);
       if (iErr) return json({ error: `Image storage location: ${iErr}` }, 400);
 
+      // Validate file server URL if provided
+      if (fileServerUrlRaw) {
+        try {
+          const parsed = new URL(fileServerUrlRaw);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return json({ error: "File Storage Server URL must use http:// or https://" }, 400);
+          }
+        } catch {
+          // Could be a bare IP/hostname without scheme — prepend http:// and retry
+          try {
+            new URL(`http://${fileServerUrlRaw}`);
+          } catch {
+            return json({ error: "File Storage Server URL is not a valid URL or IP address." }, 400);
+          }
+        }
+      }
+
       const { error: updateErr } = await adminClient
         .from("storage_settings")
         .update({
           videos_base_path: videosPath,
           images_base_path: imagesPath,
+          file_server_url: fileServerUrlRaw,
           updated_at: new Date().toISOString(),
           updated_by: callerData.user.id,
         })
@@ -130,6 +151,7 @@ Deno.serve(async (req: Request) => {
       return json({
         videos_base_path: videosPath,
         images_base_path: imagesPath,
+        file_server_url: fileServerUrlRaw,
         updated_at: new Date().toISOString(),
       });
     }
