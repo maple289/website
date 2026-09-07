@@ -10,7 +10,7 @@ type AuthContextValue = {
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  requestRegistration: (email: string, password: string) => Promise<{ error: string | null }>;
+  requestRegistration: (email: string) => Promise<{ error: string | null }>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -57,11 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signUp({ email, password });
       return { error: error ? readableError(error.message) : null };
     },
-    requestRegistration: async (email, password) => {
+    requestRegistration: async (email) => {
       if (!isSupabaseConfigured) return { error: 'Authentication is not available right now.' };
       const { error } = await supabase
         .from('pending_registrations')
-        .insert({ email, password });
+        .insert({ email });
       if (error) {
         if (error.message.includes('duplicate') || error.message.includes('unique')) {
           return { error: 'A registration request with this email already exists or is pending approval.' };

@@ -52,14 +52,14 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
     setError(null);
     setInfo(null);
 
-    if (!email.trim() || !password) {
-      setError('Please enter your email and password.');
+    if (!email.trim() || (mode === 'signin' && !password)) {
+      setError(mode === 'signin' ? 'Please enter your email and password.' : 'Please enter your email.');
       return;
     }
 
     setSubmitting(true);
     if (mode === 'signup') {
-      const { error } = await requestRegistration(email.trim(), password);
+      const { error } = await requestRegistration(email.trim());
       setSubmitting(false);
       if (error) {
         setError(error);
@@ -94,7 +94,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           </h2>
           <p className="mt-1.5 text-sm text-[#a5a5a5]">
             {mode === 'signup'
-              ? 'Join Streamly to subscribe, like, and save videos.'
+              ? 'Enter your email to request an account. An admin will review and send you an invitation.'
               : 'Sign in to continue where you left off.'}
           </p>
         </div>
@@ -113,21 +113,25 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
             />
           </div>
 
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Password</label>
-          <div className="flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
-            <Lock className="ml-3.5 text-[#888]" size={18} />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#6a6a6a]"
-            />
-            <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="mr-2 rounded-full p-2 text-[#888] transition hover:text-white">
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+          {mode === 'signin' && (
+            <>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Password</label>
+              <div className="flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+                <Lock className="ml-3.5 text-[#888]" size={18} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                  className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#6a6a6a]"
+                />
+                <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="mr-2 rounded-full p-2 text-[#888] transition hover:text-white">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </>
+          )}
 
           {error && (
             <div className="mt-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">
@@ -146,7 +150,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
             className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-[15px] font-semibold text-white transition hover:bg-[#ff5962] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting && <Loader2 size={18} className="animate-spin" />}
-            {mode === 'signup' ? 'Create account' : 'Sign in'}
+            {mode === 'signup' ? 'Request account' : 'Sign in'}
           </button>
 
           <p className="mt-5 text-center text-sm text-[#a5a5a5]">

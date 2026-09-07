@@ -46,6 +46,31 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
   }
 }
 
+async function verifyAdmin(supabaseUrl: string, serviceRoleKey: string, anonKey: string, token: string) {
+  const callerClient = createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: callerData, error: callerErr } = await callerClient.auth.getUser();
+  if (callerErr || !callerData.user) {
+    return { authorized: false as const, status: 401, message: "Unauthorized" };
+  }
+
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+  const { data: profile, error: profileErr } = await adminClient
+    .from("profiles")
+    .select("role, email")
+    .eq("id", callerData.user.id)
+    .maybeSingle();
+
+  if (profileErr || !profile || profile.role !== "admin") {
+    return { authorized: false as const, status: 403, message: "Admin access required" };
+  }
+  return { authorized: true as const, userId: callerData.user.id, adminClient };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -59,26 +84,11 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
 
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: callerData, error: callerErr } = await callerClient.auth.getUser();
-    if (callerErr || !callerData.user) {
-      return json({ error: "Unauthorized" }, 401);
+    const auth = await verifyAdmin(supabaseUrl, serviceRoleKey, anonKey, token);
+    if (!auth.authorized) {
+      return json({ error: auth.message }, auth.status);
     }
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
-    const { data: profile, error: profileErr } = await adminClient
-      .from("profiles")
-      .select("role, email")
-      .eq("id", callerData.user.id)
-      .single();
-    if (profileErr || !profile || profile.role !== "admin") {
-      return json({ error: "Admin access required" }, 403);
-    }
+    const { userId, adminClient } = auth;
 
     const body = await req.json();
     const { action, registrationId } = body;
@@ -93,9 +103,9 @@ Deno.serve(async (req: Request) => {
 
     const { data: registration, error: regErr } = await adminClient
       .from("pending_registrations")
-      .select("id, email, password, status")
+      .select("id, email, status")
       .eq("id", registrationId)
-      .single();
+      .maybeSingle();
 
     if (regErr || !registration) {
       return json({ error: "Registration not found" }, 404);
@@ -108,17 +118,15 @@ Deno.serve(async (req: Request) => {
     const userEmail = registration.email;
 
     if (action === "approve") {
-      const { data: newUser, error: createErr } = await adminClient.auth.admin.createUser({
-        email: registration.email,
-        password: registration.password,
-        email_confirm: true,
+      const { error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(userEmail, {
+        redirectTo: `${Deno.env.get("SITE_URL") ?? ""}/`,
       });
 
-      if (createErr) {
-        if (createErr.message.includes("already been registered") || createErr.message.includes("already exists")) {
+      if (inviteErr) {
+        if (inviteErr.message.includes("already been registered") || inviteErr.message.includes("already exists")) {
           await adminClient
             .from("pending_registrations")
-            .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: callerData.user.id })
+            .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: userId })
             .eq("id", registrationId);
 
           await sendEmail(
@@ -131,12 +139,12 @@ Deno.serve(async (req: Request) => {
 
           return json({ success: true, message: "User already existed, registration marked as approved" });
         }
-        return json({ error: createErr.message }, 400);
+        return json({ error: inviteErr.message }, 400);
       }
 
       await adminClient
         .from("pending_registrations")
-        .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: callerData.user.id, password: "" })
+        .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: userId })
         .eq("id", registrationId);
 
       await sendEmail(
@@ -144,14 +152,14 @@ Deno.serve(async (req: Request) => {
         "Your Account Has Been Approved",
         `<h2>Your Account Has Been Approved</h2>
          <p>Good news! Your registration has been approved by an administrator.</p>
-         <p>You can now sign in to your account using your email and password.</p>`,
+         <p>You will receive a separate invitation email with a link to set your password and activate your account.</p>`,
       );
 
-      return json({ success: true, userId: newUser.user?.id });
+      return json({ success: true });
     } else {
       await adminClient
         .from("pending_registrations")
-        .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: callerData.user.id, password: "" })
+        .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: userId })
         .eq("id", registrationId);
 
       await sendEmail(
