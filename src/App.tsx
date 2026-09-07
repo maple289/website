@@ -81,7 +81,7 @@ function AppContent() {
   const isAuthed = !!user;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(90deg,#033C8D_0%,#001338_48%,#0062C7_100%)] text-[#f1f1f1]">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#033C8D_0%,#0062C7_50%,#001338_100%)] text-[#f1f1f1]">
       {/* Header */}
       <header className="fixed inset-x-0 top-0 z-40 h-[72px] border-b border-[#1a2a4a] bg-[#001338]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-full max-w-[1560px] items-center gap-4 px-5 lg:px-8">
