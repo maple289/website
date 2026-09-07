@@ -322,33 +322,81 @@ async function uploadLargeFile(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('You must be signed in to upload.');
 
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/user-videos/${bucketPath}`;
+  const authHeaders: Record<string, string> = {
+    Authorization: `Bearer ${session.access_token}`,
+    apikey: anonKey,
+  };
 
-  const formData = new FormData();
-  formData.append('cacheControl', '3600');
-  formData.append('', file);
+  const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+  const metadata = [
+    `bucketName ${b64('user-videos')}`,
+    `objectPath ${b64(bucketPath)}`,
+    `contentType ${b64(mimeType)}`,
+  ].join(',');
 
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', uploadUrl);
-    xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
-    xhr.setRequestHeader('apikey', anonKey);
-    xhr.setRequestHeader('x-upsert', 'false');
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        onProgress?.(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else {
-        const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 200)}` : '';
-        reject(new Error(`Upload failed (${xhr.status})${detail}`));
-      }
-    };
-    xhr.onerror = () => reject(new Error('Network error during upload.'));
-    xhr.send(formData);
+  const createRes = await fetch(`${supabaseUrl}/storage/v1/upload/resumable`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders,
+      'Tus-Resumable': '1.0.0',
+      'Upload-Length': String(file.size),
+      'Upload-Metadata': metadata,
+      'Content-Length': '0',
+    },
   });
+
+  if (!createRes.ok) {
+    const detail = await createRes.text().catch(() => '');
+    throw new Error(`Could not start upload (${createRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+  }
+
+  const uploadLocation = createRes.headers.get('Location');
+  if (!uploadLocation) throw new Error('Upload started but no upload URL was returned.');
+
+  const uploadUrl = uploadLocation.startsWith('http')
+    ? uploadLocation
+    : `${supabaseUrl}${uploadLocation}`;
+
+  const CHUNK_SIZE = 8 * 1024 * 1024;
+  let offset = 0;
+
+  while (offset < file.size) {
+    const end = Math.min(offset + CHUNK_SIZE, file.size);
+    const chunk = file.slice(offset, end);
+
+    const chunkRes = await new Promise<Response>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PATCH', uploadUrl);
+      xhr.setRequestHeader('Tus-Resumable', '1.0.0');
+      xhr.setRequestHeader('Upload-Offset', String(offset));
+      xhr.setRequestHeader('Content-Type', 'application/offset+octet-stream');
+      xhr.setRequestHeader('Authorization', authHeaders.Authorization);
+      xhr.setRequestHeader('apikey', authHeaders.apikey);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const sent = offset + e.loaded;
+          onProgress?.(Math.round((sent / file.size) * 100));
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(new Response(xhr.responseText, { status: xhr.status }));
+        } else {
+          const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 200)}` : '';
+          reject(new Error(`Upload failed at ${offset} bytes (${xhr.status})${detail}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload.'));
+      xhr.send(chunk);
+    });
+
+    if (!chunkRes.ok) {
+      const detail = await chunkRes.text().catch(() => '');
+      throw new Error(`Upload failed at ${offset} bytes (${chunkRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+    }
+
+    offset = end;
+  }
 }
 
 function guessMimeType(ext: string): string {
