@@ -338,6 +338,7 @@ async function uploadLargeFile(
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
       chunkSize: 6 * 1024 * 1024,
+      uploadLengthDeferred: true,
       metadata: {
         bucketName: 'user-videos',
         objectName: bucketPath,
