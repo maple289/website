@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import * as tus from 'tus-js-client';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
@@ -22,6 +23,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
 
   const captureFirstFrame = (videoFile: File) => {
@@ -96,6 +98,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     }
 
     setUploading(true);
+    setUploadProgress(0);
     let uploadedVideoPath: string | null = null;
     let uploadedPreviewPath: string | null = null;
     try {
@@ -110,15 +113,19 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
       const mimeType = file.type || guessMimeType(extension);
 
-      const { error: uploadErr } = await supabase.storage
-        .from('user-videos')
-        .upload(bucketPath, file, { contentType: mimeType });
+      if (file.size > 50 * 1024 * 1024) {
+        await uploadResumable(file, bucketPath, mimeType);
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('user-videos')
+          .upload(bucketPath, file, { contentType: mimeType, upsert: false });
 
-      if (uploadErr) {
-        console.error('Video upload failed:', uploadErr);
-        setError(uploadErr.message || 'We could not upload that video. Please check the file and try again.');
-        setUploading(false);
-        return;
+        if (uploadErr) {
+          console.error('Video upload failed:', uploadErr);
+          setError(uploadErr.message || 'We could not upload that video. Please check the file and try again.');
+          setUploading(false);
+          return;
+        }
       }
       uploadedVideoPath = bucketPath;
 
@@ -175,12 +182,14 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       triggerVideoProcessing(videoId);
 
       onUploaded();
-    } catch (err) {
+    } catch (err: unknown) {
       if (uploadedVideoPath) await supabase.storage.from('user-videos').remove([uploadedVideoPath]);
       if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
       console.error('Upload failed:', err);
-      setError('Upload failed. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setError(msg);
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -283,16 +292,67 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
+          {uploadting && uploadProgress > 0 && (
+            <div className="mb-4">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[#2a2a2a]">
+                <div className="h-full rounded-full bg-[#ff3d46] transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
-              {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Upload</>}
+              {uploading ? <><Loader2 size={16} className="animate-spin" /> {uploadProgress > 0 ? `Uploading ${uploadProgress}%...` : 'Uploading...'}</> : <><Upload size={16} /> Upload</>}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
+}
+
+async function uploadResumable(file: File, bucketPath: string, mimeType: string): Promise<void> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
+  const match = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/);
+  const projectId = match?.[1] ?? '';
+  if (!projectId) throw new Error('Could not determine Supabase project ID for resumable upload.');
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('You must be signed in to upload large files.');
+
+  return new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        'x-upsert': 'false',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        bucketName: 'user-videos',
+        objectName: bucketPath,
+        contentType: mimeType,
+        cacheControl: '3600',
+      },
+      chunkSize: 6 * 1024 * 1024,
+      onError: (error) => reject(error),
+      onProgress: (bytesUploaded, bytesTotal) => {
+        const pct = Math.round((bytesUploaded / bytesTotal) * 100);
+        setUploadProgress(pct);
+      },
+      onSuccess: () => resolve(),
+    });
+
+    upload.findPreviousUploads().then((previousUploads) => {
+      if (previousUploads.length) {
+        upload.resumeFromPreviousUpload(previousUploads[0]);
+      }
+      upload.start();
+    });
+  });
 }
 
 function guessMimeType(ext: string): string {
