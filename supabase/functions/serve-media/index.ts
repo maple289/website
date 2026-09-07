@@ -74,6 +74,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Defence in depth: never sign a path that does not live inside the
+    // record owner's own storage folder, even if a row somehow claims one.
+    if (
+      typeof video.storage_path !== "string" ||
+      !video.storage_path.startsWith(`${video.owner_id}/`)
+    ) {
+      return new Response(JSON.stringify({ error: "Access denied" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Create a signed URL (valid for 1 hour) for the file
     const { data: signedData, error: signedErr } = await adminClient
       .storage
@@ -99,8 +111,9 @@ Deno.serve(async (req: Request) => {
       },
     );
   } catch (err) {
+    console.error("serve-media failed:", err);
     return new Response(
-      JSON.stringify({ error: err.message ?? "Internal server error" }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

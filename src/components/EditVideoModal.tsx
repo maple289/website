@@ -94,13 +94,15 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
           .from('user-images')
           .upload(nextPreviewPath, preview, { contentType: 'image/webp' });
         if (uploadError) {
-          setError('Failed to upload preview image: ' + uploadError.message);
+          console.error('Preview upload failed:', uploadError);
+          setError('We could not upload the preview image. Please try a different image.');
           setSaving(false);
           return;
         }
         uploadedPreviewPath = nextPreviewPath;
       } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : 'Failed to process preview image.');
+        console.error('Processing the preview image failed:', uploadError);
+        setError('We could not process that preview image. Please try a different image.');
         setSaving(false);
         return;
       }
@@ -120,7 +122,8 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
 
     if (error) {
       if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
-      setError('Failed to save changes: ' + error.message);
+      console.error('Saving video changes failed:', error);
+      setError('We could not save your changes. Please try again.');
       setSaving(false);
       return;
     }

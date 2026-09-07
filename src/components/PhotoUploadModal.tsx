@@ -65,7 +65,10 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
         const { error: uploadError } = await supabase.storage
           .from('user-images')
           .upload(item.path, item.body, { contentType: item.contentType });
-        if (uploadError) throw new Error(uploadError.message);
+        if (uploadError) {
+          console.error('Photo upload failed:', uploadError);
+          throw new Error('upload-failed');
+        }
         uploadedPaths.push(item.path);
       }
 
@@ -84,11 +87,15 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
         height: variants.height,
       });
 
-      if (databaseError) throw new Error(databaseError.message);
+      if (databaseError) {
+        console.error('Saving the photo record failed:', databaseError);
+        throw new Error('upload-failed');
+      }
       onUploaded();
     } catch (uploadError) {
       if (uploadedPaths.length > 0) await supabase.storage.from('user-images').remove(uploadedPaths);
-      setError(uploadError instanceof Error ? uploadError.message : 'Photo upload failed.');
+      console.error('Photo upload failed:', uploadError);
+      setError('We could not upload that photo. Please check the file and try again.');
       setUploading(false);
     }
   };

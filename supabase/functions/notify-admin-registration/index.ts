@@ -14,6 +14,15 @@ function json(data: unknown, status = 200) {
   });
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) {
@@ -62,9 +71,29 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Email is required" }, 400);
     }
 
+    // This route is public (it fires during signup, before a session exists),
+    // so the input has to be validated rather than trusted.
+    const candidate = email.trim();
+    if (candidate.length > 254 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(candidate)) {
+      return json({ error: "Email is required" }, 400);
+    }
+
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
+
+    // Only notify for an address that actually has a pending request, so this
+    // endpoint cannot be used as an open relay for arbitrary sends.
+    const { data: registration } = await adminClient
+      .from("pending_registrations")
+      .select("id")
+      .eq("email", candidate)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (!registration) {
+      return json({ success: true, notified: 0 });
+    }
 
     const { data: admins, error: adminErr } = await adminClient
       .from("profiles")
@@ -80,7 +109,7 @@ Deno.serve(async (req: Request) => {
     const html = `
       <h2>New Registration Awaiting Approval</h2>
       <p>A new user has submitted a registration request:</p>
-      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Email:</strong> ${escapeHtml(candidate)}</p>
       <p>Please log in to the Admin Console to review and approve or reject this request.</p>
     `;
 
@@ -94,6 +123,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ success: true, notified });
   } catch (err) {
-    return json({ error: err.message ?? "Internal server error" }, 500);
+    console.error("notify-admin-registration failed:", err);
+    return json({ error: "Internal server error" }, 500);
   }
 });

@@ -63,10 +63,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('pending_registrations')
         .insert({ email });
       if (error) {
-        if (error.message.includes('duplicate') || error.message.includes('unique')) {
-          return { error: 'A registration request with this email already exists or is pending approval.' };
+        // A duplicate means this address already has a request or an account.
+        // Return the same outcome as a brand-new request so the response does
+        // not reveal which addresses are known.
+        const isDuplicate = error.message.includes('duplicate') || error.message.includes('unique');
+        if (!isDuplicate) {
+          console.error('Registration request failed:', error);
+          return { error: 'We could not submit your request right now. Please try again.' };
         }
-        return { error: error.message };
+        return { error: null };
       }
 
       const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin-registration`;

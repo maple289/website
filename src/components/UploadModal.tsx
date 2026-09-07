@@ -107,7 +107,8 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         .upload(storagePath, file, { contentType: file.type });
 
       if (uploadErr) {
-        setError('Failed to upload video: ' + uploadErr.message);
+        console.error('Video upload failed:', uploadErr);
+        setError('We could not upload that video. Please check the file and try again.');
         setUploading(false);
         return;
       }
@@ -125,7 +126,8 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         if (previewErr) {
           await supabase.storage.from('user-videos').remove([storagePath]);
           uploadedVideoPath = null;
-          setError('Failed to upload preview image: ' + previewErr.message);
+          console.error('Preview upload failed:', previewErr);
+          setError('We could not upload the preview image. Please try a different image.');
           setUploading(false);
           return;
         }
@@ -150,7 +152,8 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         if (previewPath) await supabase.storage.from('user-images').remove([previewPath]);
         uploadedVideoPath = null;
         uploadedPreviewPath = null;
-        setError('Failed to save video record: ' + dbErr.message);
+        console.error('Saving the video record failed:', dbErr);
+        setError('We could not save this video. Please try again.');
         setUploading(false);
         return;
       }
@@ -159,7 +162,8 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     } catch (err) {
       if (uploadedVideoPath) await supabase.storage.from('user-videos').remove([uploadedVideoPath]);
       if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
-      setError(err instanceof Error ? err.message : 'Upload failed.');
+      console.error('Upload failed:', err);
+      setError('Upload failed. Please try again.');
       setUploading(false);
     }
   };
