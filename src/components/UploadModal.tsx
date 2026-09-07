@@ -323,7 +323,10 @@ async function uploadLargeFile(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('You must be signed in to upload.');
 
-  const storageEndpoint = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/upload/resumable`;
+  const parsedSupabaseUrl = new URL(supabaseUrl);
+  const storageEndpoint = parsedSupabaseUrl.hostname.endsWith('.supabase.co')
+    ? `https://${parsedSupabaseUrl.hostname.split('.')[0]}.storage.supabase.co/storage/v1/upload/resumable`
+    : new URL('/storage/v1/upload/resumable', parsedSupabaseUrl).toString();
 
   await new Promise<void>((resolve, reject) => {
     const upload = new tus.Upload(file, {
@@ -337,7 +340,6 @@ async function uploadLargeFile(
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
       chunkSize: 6 * 1024 * 1024,
-      uploadLengthDeferred: true,
       metadata: {
         bucketName: 'user-videos',
         objectName: bucketPath,
