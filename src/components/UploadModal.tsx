@@ -330,7 +330,7 @@ async function uploadLargeFile(
   const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
   const metadata = [
     `bucketName ${b64('user-videos')}`,
-    `objectPath ${b64(bucketPath)}`,
+    `objectName ${b64(bucketPath)}`,
     `contentType ${b64(mimeType)}`,
   ].join(',');
 
