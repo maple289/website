@@ -24,14 +24,18 @@ Revoke EXECUTE from PUBLIC, `anon` and `authenticated` on all three.
   keep working. Only direct REST invocation is removed.
 */
 
-REVOKE EXECUTE ON FUNCTION public.get_user_storage_folder(uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.get_user_storage_folder(uuid) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_user_storage_folder(uuid) FROM authenticated;
+DO $$
+BEGIN
+  IF to_regprocedure('public.get_user_storage_folder(uuid)') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.get_user_storage_folder(uuid) FROM PUBLIC, anon, authenticated';
+  END IF;
 
-REVOKE EXECUTE ON FUNCTION public.get_root_folder() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.get_root_folder() FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_root_folder() FROM authenticated;
+  IF to_regprocedure('public.get_root_folder()') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.get_root_folder() FROM PUBLIC, anon, authenticated';
+  END IF;
 
-REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon;
-REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM authenticated;
+  IF to_regprocedure('public.handle_new_user()') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated';
+  END IF;
+END;
+$$;
