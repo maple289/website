@@ -108,13 +108,15 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       const storagePath = `${user.id}/videos/${videoId}/${fileId}.${extension}`;
       const bucketPath = `${pathPrefix}${storagePath}`;
 
+      const mimeType = file.type || guessMimeType(extension);
+
       const { error: uploadErr } = await supabase.storage
         .from('user-videos')
-        .upload(bucketPath, file, { contentType: file.type });
+        .upload(bucketPath, file, { contentType: mimeType });
 
       if (uploadErr) {
         console.error('Video upload failed:', uploadErr);
-        setError('We could not upload that video. Please check the file and try again.');
+        setError(uploadErr.message || 'We could not upload that video. Please check the file and try again.');
         setUploading(false);
         return;
       }
@@ -154,7 +156,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         preview_path: previewPath,
         visibility,
         file_size: file.size,
-        mime_type: file.type,
+        mime_type: mimeType,
         processing_status: 'processing',
       });
 
@@ -291,4 +293,20 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       </div>
     </div>
   );
+}
+
+function guessMimeType(ext: string): string {
+  const map: Record<string, string> = {
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+    mkv: 'video/x-matroska',
+    avi: 'video/x-msvideo',
+    m4v: 'video/x-m4v',
+    ogv: 'video/ogg',
+    wmv: 'video/x-ms-wmv',
+    flv: 'video/x-flv',
+    '3gp': 'video/3gpp',
+  };
+  return map[ext] ?? 'video/mp4';
 }
