@@ -341,7 +341,10 @@ async function uploadLargeFile(
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`Upload failed (${xhr.status}).`));
+      else {
+        const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 200)}` : '';
+        reject(new Error(`Upload failed (${xhr.status})${detail}`));
+      }
     };
     xhr.onerror = () => reject(new Error('Network error during upload.'));
     xhr.send(formData);
