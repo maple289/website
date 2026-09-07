@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle } from 'lucide-react';
+import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
+import { fetchStorageSettings, saveStorageSettings } from '@/lib/storageSettings';
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
 const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
@@ -542,19 +543,56 @@ function StorageTab() {
   const [userCount, setUserCount] = useState(0);
   const [videoCount, setVideoCount] = useState(0);
   const [photoCount, setPhotoCount] = useState(0);
+  const [videosPath, setVideosPath] = useState('');
+  const [imagesPath, setImagesPath] = useState('');
+  const [savedVideosPath, setSavedVideosPath] = useState('');
+  const [savedImagesPath, setSavedImagesPath] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
-    const { count: uCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-    setUserCount(uCount ?? 0);
-    const { count: vCount } = await supabase.from('videos').select('*', { count: 'exact', head: true });
-    setVideoCount(vCount ?? 0);
-    const { count: pCount } = await supabase.from('photos').select('*', { count: 'exact', head: true });
-    setPhotoCount(pCount ?? 0);
+    const [settings, uRes, vRes, pRes] = await Promise.all([
+      fetchStorageSettings(),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('videos').select('*', { count: 'exact', head: true }),
+      supabase.from('photos').select('*', { count: 'exact', head: true }),
+    ]);
+    if (settings) {
+      setVideosPath(settings.videos_base_path);
+      setImagesPath(settings.images_base_path);
+      setSavedVideosPath(settings.videos_base_path);
+      setSavedImagesPath(settings.images_base_path);
+      setUpdatedAt(settings.updated_at);
+    }
+    setUserCount(uRes.count ?? 0);
+    setVideoCount(vRes.count ?? 0);
+    setPhotoCount(pRes.count ?? 0);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    setSettingsError(null);
+    setSettingsSaved(false);
+    const result = await saveStorageSettings(videosPath, imagesPath);
+    if (!result.ok) {
+      setSettingsError(result.error);
+      setSavingSettings(false);
+      return;
+    }
+    setSavedVideosPath(result.settings.videos_base_path);
+    setSavedImagesPath(result.settings.images_base_path);
+    setUpdatedAt(result.settings.updated_at);
+    setSettingsSaved(true);
+    setSavingSettings(false);
+  };
+
+  const hasUnsavedChanges = videosPath !== savedVideosPath || imagesPath !== savedImagesPath;
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>;
@@ -563,11 +601,87 @@ function StorageTab() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold tracking-[-0.03em]">Video Storage Configuration</h2>
-        <p className="mt-1 text-sm text-[#888]">Video files are stored in a private Supabase bucket. The physical disk location is configured on the server through Docker, so it cannot be changed from the website.</p>
+        <h2 className="text-xl font-semibold tracking-[-0.03em]">Storage Settings</h2>
+        <p className="mt-1 text-sm text-[#888]">Configure the physical disk and folder locations where user-uploaded videos and images are stored. These locations are used when saving new uploads and persist across restarts.</p>
       </div>
 
+      {/* Storage Settings Section */}
       <div className="rounded-2xl border border-[#272727] bg-[#161616] p-6">
+        <div className="mb-5 flex items-center gap-2">
+          <HardDrive size={18} className="text-[#ff737b]" />
+          <h3 className="text-sm font-semibold tracking-[-0.01em]">Storage Locations</h3>
+        </div>
+
+        {/* Videos location */}
+        <div className="mb-5">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">User Videos Storage Location</label>
+          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+            <FolderTree className="ml-3.5 text-[#888]" size={17} />
+            <input
+              value={videosPath}
+              onChange={(e) => { setVideosPath(e.target.value); setSettingsSaved(false); }}
+              placeholder="/mnt/storage/videos"
+              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+            />
+          </div>
+          <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded videos will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/videos</code>).</p>
+        </div>
+
+        {/* Images location */}
+        <div className="mb-5">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">User Images Storage Location</label>
+          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+            <FolderTree className="ml-3.5 text-[#888]" size={17} />
+            <input
+              value={imagesPath}
+              onChange={(e) => { setImagesPath(e.target.value); setSettingsSaved(false); }}
+              placeholder="/mnt/storage/images"
+              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+            />
+          </div>
+          <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded images will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/images</code>).</p>
+        </div>
+
+        {/* Validation info */}
+        <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#1a2a4a] bg-[#001338]/50 px-4 py-3">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[#4b86ff]" />
+          <p className="text-xs leading-5 text-[#9ab3d4]">
+            When you save, the server validates that each folder exists and is writable. If a folder does not exist or cannot be written to, an error message will appear and the setting will not be saved.
+          </p>
+        </div>
+
+        {settingsError && (
+          <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{settingsError}</div>
+        )}
+        {settingsSaved && !settingsError && (
+          <div className="mb-4 rounded-lg border border-emerald-600/30 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-400">Storage locations saved successfully. New uploads will use these paths.</div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSaveSettings}
+            disabled={savingSettings || !hasUnsavedChanges}
+            className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-5 text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {savingSettings ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save Storage Locations
+          </button>
+          {hasUnsavedChanges && (
+            <button
+              onClick={() => { setVideosPath(savedVideosPath); setImagesPath(savedImagesPath); setSettingsError(null); setSettingsSaved(false); }}
+              className="h-11 rounded-xl border border-[#3a3a3a] px-4 text-sm font-medium text-[#ccc] transition hover:bg-[#272727]"
+            >
+              Revert
+            </button>
+          )}
+          {updatedAt && !hasUnsavedChanges && (
+            <span className="text-xs text-[#6a6a6a]">Last updated {new Date(updatedAt).toLocaleString()}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Bucket info */}
+      <div className="mt-4 rounded-2xl border border-[#272727] bg-[#161616] p-6">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]">
             <HardDrive size={20} />

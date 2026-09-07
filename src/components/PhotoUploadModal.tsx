@@ -3,6 +3,7 @@ import { Globe, Image as ImageIcon, Loader2, Lock, Upload, X } from 'lucide-reac
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { createImageVariants, createStorageId, fileExtension, isSupportedImage } from '@/lib/imageStorage';
+import { fetchStorageBasePath } from '@/lib/storageSettings';
 
 type PhotoUploadModalProps = {
   onClose: () => void;
@@ -50,15 +51,18 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
 
     try {
       const photoId = createStorageId();
-      const basePath = `${user.id}/photos/${photoId}`;
-      const storagePath = `${basePath}/original.${fileExtension(file)}`;
-      const previewPath = `${basePath}/preview.webp`;
-      const thumbnailPath = `${basePath}/thumbnail.webp`;
+      const imagesBase = await fetchStorageBasePath('images');
+      const pathPrefix = imagesBase ? `${imagesBase}/` : '';
+      const dbBasePath = `${user.id}/photos/${photoId}`;
+      const bucketBasePath = `${pathPrefix}${dbBasePath}`;
+      const storagePath = `${dbBasePath}/original.${fileExtension(file)}`;
+      const previewPath = `${dbBasePath}/preview.webp`;
+      const thumbnailPath = `${dbBasePath}/thumbnail.webp`;
       const variants = await createImageVariants(file);
       const files = [
-        { path: storagePath, body: file, contentType: file.type },
-        { path: previewPath, body: variants.preview, contentType: 'image/webp' },
-        { path: thumbnailPath, body: variants.thumbnail, contentType: 'image/webp' },
+        { path: `${bucketBasePath}/original.${fileExtension(file)}`, body: file, contentType: file.type },
+        { path: `${bucketBasePath}/preview.webp`, body: variants.preview, contentType: 'image/webp' },
+        { path: `${bucketBasePath}/thumbnail.webp`, body: variants.thumbnail, contentType: 'image/webp' },
       ];
 
       for (const item of files) {

@@ -8,6 +8,7 @@ import { EditVideoModal } from '@/components/EditVideoModal';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { StorageImage } from '@/components/StorageImage';
 import { useAuth } from '@/hooks/useAuth';
+import { resolveBucketPath } from '@/lib/storageSettings';
 
 export function VideoLibrary() {
   const { user } = useAuth();
@@ -52,8 +53,8 @@ export function VideoLibrary() {
       setError('Failed to delete video.');
       return;
     }
-    await supabase.storage.from('user-videos').remove([deletingVideo.storage_path]);
-    if (deletingVideo.preview_path) await supabase.storage.from('user-images').remove([deletingVideo.preview_path]);
+    await supabase.storage.from('user-videos').remove([await resolveBucketPath(deletingVideo.storage_path, 'videos')]);
+    if (deletingVideo.preview_path) await supabase.storage.from('user-images').remove([await resolveBucketPath(deletingVideo.preview_path, 'images')]);
     setDeletingVideo(null);
     load();
   };

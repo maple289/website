@@ -86,11 +86,22 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Prepend the admin-configured base path for the videos bucket, if set.
+    const { data: basePath } = await adminClient
+      .from("storage_settings")
+      .select("videos_base_path")
+      .eq("id", 1)
+      .maybeSingle();
+    const videosBase = basePath?.videos_base_path ?? "";
+    const fullStoragePath = videosBase
+      ? `${videosBase}/${video.storage_path}`
+      : video.storage_path;
+
     // Create a signed URL (valid for 1 hour) for the file
     const { data: signedData, error: signedErr } = await adminClient
       .storage
       .from("user-videos")
-      .createSignedUrl(video.storage_path, 3600);
+      .createSignedUrl(fullStoragePath, 3600);
 
     if (signedErr || !signedData?.signedUrl) {
       return new Response(JSON.stringify({ error: "Could not generate video URL" }), {

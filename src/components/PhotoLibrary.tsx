@@ -7,6 +7,7 @@ import { StorageImage } from '@/components/StorageImage';
 import { PhotoUploadModal } from '@/components/PhotoUploadModal';
 import { PhotoViewer } from '@/components/PhotoViewer';
 import { useAuth } from '@/hooks/useAuth';
+import { resolveBucketPath } from '@/lib/storageSettings';
 
 export function PhotoLibrary() {
   const { user } = useAuth();
@@ -45,7 +46,11 @@ export function PhotoLibrary() {
       setError('Could not delete the photo.');
       return;
     }
-    await supabase.storage.from('user-images').remove([photo.storage_path, photo.preview_path, photo.thumbnail_path]);
+    await supabase.storage.from('user-images').remove([
+      await resolveBucketPath(photo.storage_path, 'images'),
+      await resolveBucketPath(photo.preview_path, 'images'),
+      await resolveBucketPath(photo.thumbnail_path, 'images'),
+    ]);
     load();
   };
 

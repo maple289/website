@@ -3,6 +3,7 @@ import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, Re
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
+import { fetchStorageBasePath } from '@/lib/storageSettings';
 
 type UploadModalProps = {
   onClose: () => void;
@@ -100,11 +101,14 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       const videoId = createStorageId();
       const sourceExtension = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
       const extension = sourceExtension.replace(/[^a-z0-9]/g, '') || 'mp4';
+      const videosBase = await fetchStorageBasePath('videos');
+      const pathPrefix = videosBase ? `${videosBase}/` : '';
+      const bucketPath = `${pathPrefix}${user.id}/videos/${videoId}/${createStorageId()}.${extension}`;
       const storagePath = `${user.id}/videos/${videoId}/${createStorageId()}.${extension}`;
 
       const { error: uploadErr } = await supabase.storage
         .from('user-videos')
-        .upload(storagePath, file, { contentType: file.type });
+        .upload(bucketPath, file, { contentType: file.type });
 
       if (uploadErr) {
         console.error('Video upload failed:', uploadErr);
@@ -112,26 +116,30 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         setUploading(false);
         return;
       }
-      uploadedVideoPath = storagePath;
+      uploadedVideoPath = bucketPath;
 
       let previewPath: string | null = null;
+      let previewBucketPath: string | null = null;
       if (previewImage) {
         const previewSource = await dataUrlToBlob(previewImage);
         const { preview } = await createImageVariants(previewSource);
+        const imagesBase = await fetchStorageBasePath('images');
+        const imgPrefix = imagesBase ? `${imagesBase}/` : '';
         previewPath = `${user.id}/video-previews/${videoId}/${createStorageId()}.webp`;
+        previewBucketPath = `${imgPrefix}${previewPath}`;
         const { error: previewErr } = await supabase.storage
           .from('user-images')
-          .upload(previewPath, preview, { contentType: 'image/webp' });
+          .upload(previewBucketPath, preview, { contentType: 'image/webp' });
 
         if (previewErr) {
-          await supabase.storage.from('user-videos').remove([storagePath]);
+          await supabase.storage.from('user-videos').remove([bucketPath]);
           uploadedVideoPath = null;
           console.error('Preview upload failed:', previewErr);
           setError('We could not upload the preview image. Please try a different image.');
           setUploading(false);
           return;
         }
-        uploadedPreviewPath = previewPath;
+        uploadedPreviewPath = previewBucketPath;
       }
 
       const { error: dbErr } = await supabase.from('videos').insert({
@@ -148,8 +156,8 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       });
 
       if (dbErr) {
-        await supabase.storage.from('user-videos').remove([storagePath]);
-        if (previewPath) await supabase.storage.from('user-images').remove([previewPath]);
+        await supabase.storage.from('user-videos').remove([bucketPath]);
+        if (previewBucketPath) await supabase.storage.from('user-images').remove([previewBucketPath]);
         uploadedVideoPath = null;
         uploadedPreviewPath = null;
         console.error('Saving the video record failed:', dbErr);

@@ -5,6 +5,7 @@ import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
 import { StorageImage } from '@/components/StorageImage';
+import { resolveBucketPath } from '@/lib/storageSettings';
 
 type EditVideoModalProps = {
   video: Video;
@@ -90,9 +91,10 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
         const previewSource = await dataUrlToBlob(previewUrl);
         const { preview } = await createImageVariants(previewSource);
         nextPreviewPath = `${video.owner_id}/video-previews/${video.id}/${createStorageId()}.webp`;
+        const previewBucketPath = await resolveBucketPath(nextPreviewPath, 'images');
         const { error: uploadError } = await supabase.storage
           .from('user-images')
-          .upload(nextPreviewPath, preview, { contentType: 'image/webp' });
+          .upload(previewBucketPath, preview, { contentType: 'image/webp' });
         if (uploadError) {
           console.error('Preview upload failed:', uploadError);
           setError('We could not upload the preview image. Please try a different image.');
@@ -121,14 +123,14 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
       .eq('id', video.id);
 
     if (error) {
-      if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
+      if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([await resolveBucketPath(uploadedPreviewPath, 'images')]);
       console.error('Saving video changes failed:', error);
       setError('We could not save your changes. Please try again.');
       setSaving(false);
       return;
     }
     if (previewChanged && video.preview_path && video.preview_path !== nextPreviewPath) {
-      await supabase.storage.from('user-images').remove([video.preview_path]);
+      await supabase.storage.from('user-images').remove([await resolveBucketPath(video.preview_path, 'images')]);
     }
     onSaved();
   };

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ImgHTMLAttributes, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { resolveBucketPath } from '@/lib/storageSettings';
 
 type StorageImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   storagePath?: string | null;
@@ -15,12 +16,14 @@ export function StorageImage({ storagePath, legacyUrl, fallback = null, ...image
     setSource(storagePath ? null : legacyUrl ?? null);
 
     if (storagePath) {
-      supabase.storage
-        .from('user-images')
-        .createSignedUrl(storagePath, 3600)
-        .then(({ data, error }) => {
-          if (active) setSource(error ? legacyUrl ?? null : data.signedUrl);
-        });
+      resolveBucketPath(storagePath, 'images').then((fullPath) => {
+        supabase.storage
+          .from('user-images')
+          .createSignedUrl(fullPath, 3600)
+          .then(({ data, error }) => {
+            if (active) setSource(error ? legacyUrl ?? null : data.signedUrl);
+          });
+      });
     }
 
     return () => { active = false; };
