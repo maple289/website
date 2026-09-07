@@ -19,7 +19,7 @@ export function PublicPhotoGallery() {
   }, []);
 
   return (
-    <section className="pb-14">
+    <section className="pt-8 pb-14 sm:pt-10">
       <div className="mb-7"><p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6971]">Public Gallery</p><h2 className="text-[27px] font-semibold tracking-[-0.04em] sm:text-[34px]">Discover photos</h2></div>
       {loading ? <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#ff3d46]" /></div> : photos.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-16 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={36} /><p className="text-sm text-[#888]">No public photos yet.</p></div>

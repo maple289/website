@@ -94,13 +94,13 @@ function AppContent() {
             <div className="flex h-8 w-11 items-center justify-center rounded-[10px] bg-[#ff3d46] shadow-[0_0_24px_rgba(255,61,70,0.22)]">
               <Youtube size={23} fill="white" strokeWidth={1.5} />
             </div>
-            <span className="hidden text-[21px] font-semibold tracking-[-0.06em] sm:inline">streamly</span>
+            <span className="hidden text-[21px] font-semibold tracking-[-0.06em] sm:inline">Videos</span>
           </div>
           {/* Search bar */}
           <div className="mx-auto hidden max-w-[690px] flex-1 items-center md:flex">
             <div className="flex h-11 flex-1 items-center overflow-hidden rounded-l-full border border-[#3f3f3f] bg-[#121212] transition focus-within:border-[#4b86ff]">
               <Search className="ml-4 text-[#a7a7a7]" size={20} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search videos" aria-label="Search videos" className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#888]" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" aria-label="Search" className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#888]" />
               {search && <button aria-label="Clear search" onClick={() => setSearch('')} className="mr-2 rounded-full p-1 hover:bg-[#303030]"><X size={17} /></button>}
             </div>
             <button aria-label="Search" className="flex h-11 w-16 items-center justify-center rounded-r-full border border-l-0 border-[#3f3f3f] bg-[#222] transition hover:bg-[#303030]"><Search size={21} /></button>
