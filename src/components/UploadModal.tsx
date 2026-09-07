@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
-import * as tus from 'tus-js-client';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
@@ -114,7 +113,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       const mimeType = file.type || guessMimeType(extension);
 
       if (file.size > 50 * 1024 * 1024) {
-        await uploadResumable(file, bucketPath, mimeType, setUploadProgress);
+        await uploadLargeFile(file, bucketPath, mimeType, setUploadProgress);
       } else {
         const { error: uploadErr } = await supabase.storage
           .from('user-videos')
@@ -312,51 +311,35 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   );
 }
 
-async function uploadResumable(
+async function uploadLargeFile(
   file: File,
   bucketPath: string,
   mimeType: string,
   onProgress?: (pct: number) => void,
 ): Promise<void> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
-  const match = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/);
-  const projectId = match?.[1] ?? '';
-  if (!projectId) throw new Error('Could not determine Supabase project ID for resumable upload.');
+  const { data, error: signedErr } = await supabase.storage
+    .from('user-videos')
+    .createSignedUploadUrl(bucketPath);
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('You must be signed in to upload large files.');
+  if (signedErr || !data) {
+    throw new Error(signedErr?.message || 'Could not create upload URL.');
+  }
 
-  return new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(file, {
-      endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      headers: {
-        authorization: `Bearer ${session.access_token}`,
-        'x-upsert': 'false',
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        bucketName: 'user-videos',
-        objectName: bucketPath,
-        contentType: mimeType,
-        cacheControl: '3600',
-      },
-      chunkSize: 6 * 1024 * 1024,
-      onError: (error) => reject(error),
-      onProgress: (bytesUploaded, bytesTotal) => {
-        const pct = Math.round((bytesUploaded / bytesTotal) * 100);
-        onProgress?.(pct);
-      },
-      onSuccess: () => resolve(),
-    });
-
-    upload.findPreviousUploads().then((previousUploads) => {
-      if (previousUploads.length) {
-        upload.resumeFromPreviousUpload(previousUploads[0]);
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', data.signedUrl);
+    xhr.setRequestHeader('Content-Type', mimeType);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        onProgress?.(Math.round((e.loaded / e.total) * 100));
       }
-      upload.start();
-    });
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed (${xhr.status}).`));
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload.'));
+    xhr.send(file);
   });
 }
 
