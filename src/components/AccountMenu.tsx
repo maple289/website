@@ -59,9 +59,9 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
               <ShieldCheck size={18} /> Admin Console
             </a>
           )}
-          <button className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#d4d4d4] transition hover:bg-[#262626]">
+          <a href="#/settings" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#d4d4d4] transition hover:bg-[#262626]">
             <Settings size={18} /> Settings
-          </button>
+          </a>
           <div className="my-1 h-px bg-[#2e2e2e]" />
           <button
             onClick={async () => { await signOut(); setOpen(false); }}

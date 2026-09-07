@@ -10,6 +10,7 @@ import { UploadModal } from '@/components/UploadModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 import { PhotoLibrary } from '@/components/PhotoLibrary';
+import { SettingsPage } from '@/components/SettingsPage';
 import { fetchFileServerUrl } from '@/lib/storageSettings';
 
 function App() {
@@ -20,13 +21,14 @@ function App() {
   );
 }
 
-type Route = 'home' | 'library' | 'photos' | 'admin';
+type Route = 'home' | 'library' | 'photos' | 'admin' | 'settings';
 
 function getRoute(): Route {
   const hash = window.location.hash;
   if (hash === '#/admin') return 'admin';
   if (hash === '#/library') return 'library';
   if (hash === '#/photos') return 'photos';
+  if (hash === '#/settings') return 'settings';
   return 'home';
 }
 
@@ -57,7 +59,7 @@ function AppContent() {
       window.location.hash = '';
       setRoute('home');
     }
-    if (!loading && !user && route === 'admin') {
+    if (!loading && !user && (route === 'admin' || route === 'settings')) {
       window.location.hash = '';
       setRoute('home');
     }
@@ -68,11 +70,14 @@ function AppContent() {
     else if (r === 'library') window.location.hash = '#/library';
     else if (r === 'photos') window.location.hash = '#/photos';
     else if (r === 'admin') window.location.hash = '#/admin';
+    else if (r === 'settings') window.location.hash = '#/settings';
     setRoute(r);
     setSidebarOpen(false);
   };
 
   const openSignIn = () => { setAuthMode('signin'); setAuthOpen(true); };
+
+  const isAuthed = !!user;
 
   // Admin route — always allow AdminPage to handle its own access control
   if (route === 'admin') {
@@ -84,7 +89,15 @@ function AppContent() {
     );
   }
 
-  const isAuthed = !!user;
+  // Settings route — requires authentication
+  if (route === 'settings' && isAuthed) {
+    return (
+      <>
+        <SettingsPage />
+        <AuthModal open={authOpen} initialMode={authMode} onClose={() => setAuthOpen(false)} />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#033C8D_0%,#0062C7_50%,#001338_100%)] text-[#f1f1f1]">
@@ -142,7 +155,7 @@ function AppContent() {
             {isAdmin && (
               <NavItem icon={<ShieldCheck size={20} />} label="Admin Console" onClick={() => navigate('admin')} />
             )}
-            <NavItem icon={<Settings size={20} />} label="Settings" />
+            <NavItem icon={<Settings size={20} />} label="Settings" active={route === 'settings'} onClick={() => navigate('settings')} />
           </nav>
           <div className="absolute bottom-6 left-6 right-6 rounded-2xl border border-[#2e2e2e] bg-[#191919] p-4">
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff6670]"><Upload size={18} /></div>
