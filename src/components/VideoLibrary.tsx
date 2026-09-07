@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Film, Globe, Library, Loader as Loader2, Lock, Pencil, Play, Plus, Trash2, Upload, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { Film, Globe, Library, Loader as Loader2, Lock, Pencil, Play, Plus, Trash2, Upload, TriangleAlert as AlertTriangle, Loader as LoaderIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { formatBytes, timeAgo } from '@/lib/types';
@@ -43,6 +43,13 @@ export function VideoLibrary() {
 
   useEffect(() => { load(); }, [user]);
 
+  // Auto-refresh while any video is still processing
+  useEffect(() => {
+    if (!videos.some((v) => v.processing_status === 'processing')) return;
+    const interval = setInterval(() => load(), 5000);
+    return () => clearInterval(interval);
+  }, [videos]);
+
   const confirmDelete = async () => {
     if (!deletingVideo) return;
     const { error: dbErr } = await supabase
@@ -53,7 +60,11 @@ export function VideoLibrary() {
       setError('Failed to delete video.');
       return;
     }
-    await supabase.storage.from('user-videos').remove([await resolveBucketPath(deletingVideo.storage_path, 'videos')]);
+    const pathsToRemove = [await resolveBucketPath(deletingVideo.storage_path, 'videos')];
+    if (deletingVideo.processed_storage_path && deletingVideo.processed_storage_path !== deletingVideo.storage_path) {
+      pathsToRemove.push(await resolveBucketPath(deletingVideo.processed_storage_path, 'videos'));
+    }
+    await supabase.storage.from('user-videos').remove(pathsToRemove);
     if (deletingVideo.preview_path) await supabase.storage.from('user-images').remove([await resolveBucketPath(deletingVideo.preview_path, 'images')]);
     setDeletingVideo(null);
     load();
@@ -144,9 +155,11 @@ export function VideoLibrary() {
 }
 
 function VideoCard({ video, onPlay, onEdit, onDelete }: { video: Video; onPlay: () => void; onEdit: () => void; onDelete: () => void }) {
+  const isProcessing = video.processing_status === 'processing';
+  const isError = video.processing_status === 'error';
   return (
     <article className="group min-w-0">
-      <div className="relative aspect-video cursor-pointer overflow-hidden rounded-xl bg-[#202020]" onClick={onPlay}>
+      <div className={`relative aspect-video overflow-hidden rounded-xl bg-[#202020] ${isProcessing ? '' : 'cursor-pointer'}`} onClick={isProcessing ? undefined : onPlay}>
         <StorageImage
           storagePath={video.preview_path}
           legacyUrl={video.preview_url}
@@ -155,22 +168,55 @@ function VideoCard({ video, onPlay, onEdit, onDelete }: { video: Video; onPlay: 
           fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>
-        </div>
+        {!isProcessing && !isError && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>
+          </div>
+        )}
+        {isProcessing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <div className="flex flex-col items-center gap-2">
+              <LoaderIcon size={28} className="animate-spin text-[#ff3d46]" />
+              <span className="text-xs font-semibold text-white">Processing...</span>
+            </div>
+          </div>
+        )}
+        {isError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+            <div className="flex flex-col items-center gap-2">
+              <AlertCircle size={28} className="text-[#ff3d46]" />
+              <span className="text-xs font-semibold text-white">Processing failed</span>
+            </div>
+          </div>
+        )}
         <span className={`absolute bottom-2 left-2 flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold ${video.visibility === 'public' ? 'bg-emerald-500/90 text-white' : 'bg-black/85 text-[#ccc]'}`}>
           {video.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}
           {video.visibility === 'public' ? 'Public' : 'Private'}
         </span>
+        {video.processing_status && (
+          <span className={`absolute right-2 top-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold ${
+            isProcessing ? 'bg-amber-500/90 text-white' :
+            isError ? 'bg-[#ff3d46]/90 text-white' :
+            'bg-black/70 text-[#ccc]'
+          }`}>
+            {isProcessing ? <LoaderIcon size={10} className="animate-spin" /> :
+             isError ? <AlertCircle size={10} /> :
+             <CheckCircle2 size={10} />}
+            {isProcessing ? 'Processing' : isError ? 'Error' : 'Ready'}
+          </span>
+        )}
       </div>
       <div className="mt-3">
         <h3 className="line-clamp-2 text-[15px] font-semibold leading-[1.45] tracking-[-0.01em] text-[#f1f1f1]">{video.file_name}</h3>
         <p className="mt-1 text-[13px] text-[#858585]">{formatBytes(video.file_size)} · {timeAgo(video.created_at)}</p>
+        {isError && video.processing_error && (
+          <p className="mt-1 text-xs text-[#ff8a90]">{video.processing_error}</p>
+        )}
         <div className="mt-3 flex gap-2">
           <button onClick={onEdit} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white">
             <Pencil size={13} /> Edit
           </button>
-          <button onClick={onPlay} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white">
+          <button onClick={onPlay} disabled={isProcessing} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed">
             <Play size={13} /> Play
           </button>
           <button onClick={onDelete} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#ff3d46]/15 hover:text-[#ff737b]">

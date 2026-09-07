@@ -40,7 +40,7 @@ Deno.serve(async (req: Request) => {
     // Fetch the video record
     const { data: video, error: vErr } = await adminClient
       .from("videos")
-      .select("id, owner_id, storage_path, visibility, mime_type, file_name")
+      .select("id, owner_id, storage_path, visibility, mime_type, file_name, processing_status")
       .eq("id", videoId)
       .single();
 
@@ -70,6 +70,20 @@ Deno.serve(async (req: Request) => {
     if (video.visibility !== "public" && !isOwner) {
       return new Response(JSON.stringify({ error: "Access denied" }), {
         status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Block access to videos that are still processing or failed processing
+    if (video.processing_status === "processing") {
+      return new Response(JSON.stringify({ error: "Video is still being processed" }), {
+        status: 202,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (video.processing_status === "error") {
+      return new Response(JSON.stringify({ error: "Video processing failed" }), {
+        status: 409,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

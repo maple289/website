@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.storage-settings]
 verify_jwt = true
+
+[functions.process-video]
+verify_jwt = true

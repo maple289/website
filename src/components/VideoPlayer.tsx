@@ -24,6 +24,12 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
       if (playable) {
         setUrl(playable);
         setLoading(false);
+      } else if (video.processing_status === 'processing') {
+        setError('This video is still being processed. Please check back in a moment.');
+        setLoading(false);
+      } else if (video.processing_status === 'error') {
+        setError('This video could not be processed and is unavailable.');
+        setLoading(false);
       } else {
         setError('Unable to load this video. It may be private or no longer available.');
         setLoading(false);

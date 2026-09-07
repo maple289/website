@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Film, Globe, Image as ImageIcon, Loader as Loader2, Play } from 'lucide-react';
+import { Film, Globe, Image as ImageIcon, Loader as Loader2, Play, Loader as LoaderIcon, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { timeAgo } from '@/lib/types';
@@ -28,6 +28,13 @@ export function HomePage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Auto-refresh while any public video is still processing
+  useEffect(() => {
+    if (!videos.some((v) => v.processing_status === 'processing')) return;
+    const interval = setInterval(() => load(), 5000);
+    return () => clearInterval(interval);
+  }, [videos]);
 
   const filtered = videos.filter((v) => {
     const term = search.trim().toLowerCase();
@@ -60,7 +67,7 @@ export function HomePage() {
           ) : (
             <div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filtered.map((v) => (
-                <article key={v.id} className="group min-w-0 cursor-pointer" onClick={() => setPlayingVideo(v)}>
+                <article key={v.id} className="group min-w-0 cursor-pointer" onClick={() => v.processing_status === 'processing' ? undefined : setPlayingVideo(v)}>
                   <div className="relative aspect-video overflow-hidden rounded-xl bg-[#202020]">
                     <StorageImage
                       storagePath={v.preview_path}
@@ -70,12 +77,31 @@ export function HomePage() {
                       fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>
-                    </div>
+                    {v.processing_status !== 'processing' && (
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>
+                      </div>
+                    )}
+                    {v.processing_status === 'processing' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <div className="flex flex-col items-center gap-2">
+                          <LoaderIcon size={28} className="animate-spin text-[#ff3d46]" />
+                          <span className="text-xs font-semibold text-white">Processing...</span>
+                        </div>
+                      </div>
+                    )}
                     <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/85 px-2 py-1 text-[11px] font-semibold text-white">
                       <Globe size={11} /> Public
                     </span>
+                    {v.processing_status && (
+                      <span className={`absolute right-2 top-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold ${
+                        v.processing_status === 'processing' ? 'bg-amber-500/90 text-white' :
+                        'bg-black/70 text-[#ccc]'
+                      }`}>
+                        {v.processing_status === 'processing' ? <LoaderIcon size={10} className="animate-spin" /> : <CheckCircle2 size={10} />}
+                        {v.processing_status === 'processing' ? 'Processing' : 'Ready'}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-4 flex gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#3a3a3a] to-[#222] text-sm font-semibold text-[#ccc]">

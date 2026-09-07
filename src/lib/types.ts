@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 export type Video = {
   id: string;
   owner_id: string;
@@ -10,6 +12,16 @@ export type Video = {
   file_size: number | null;
   mime_type: string | null;
   created_at: string;
+  processing_status: 'processing' | 'ready' | 'error';
+  processed_storage_path: string | null;
+  processing_error: string | null;
+  video_codec: string | null;
+  video_bitrate: number | null;
+  resolution_width: number | null;
+  resolution_height: number | null;
+  frame_rate: number | null;
+  duration_seconds: number | null;
+  container_format: string | null;
 };
 
 export type Photo = {
@@ -69,4 +81,22 @@ export async function getPlayableUrl(videoId: string, token?: string): Promise<s
   if (!res.ok) return null;
   const data = await res.json();
   return data.url ?? null;
+}
+
+const processVideoUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-video`;
+
+export function triggerVideoProcessing(videoId: string): void {
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+  supabase.auth.getSession().then(({ data }) => {
+    const token = data.session?.access_token ?? anonKey;
+    fetch(processVideoUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ video_id: videoId }),
+    }).catch((err) => console.error('Failed to trigger video processing:', err));
+  });
 }
