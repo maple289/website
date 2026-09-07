@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
 import { fetchStorageBasePath } from '@/lib/storageSettings';
-import { triggerVideoProcessing } from '@/lib/types';
+
 
 type UploadModalProps = {
   onClose: () => void;
@@ -172,7 +172,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         visibility,
         file_size: file.size,
         mime_type: mimeType,
-        processing_status: 'processing',
+        processing_status: 'ready',
       });
 
       if (dbErr) {
@@ -185,9 +185,6 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         setUploading(false);
         return;
       }
-
-      // Trigger server-side video processing (async, non-blocking)
-      triggerVideoProcessing(videoId);
 
       onUploaded();
     } catch (err: unknown) {
