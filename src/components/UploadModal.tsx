@@ -325,10 +325,16 @@ async function uploadLargeFile(
     throw new Error(signedErr?.message || 'Could not create upload URL.');
   }
 
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/upload/sign/${bucketPath}?token=${encodeURIComponent(data.token)}`;
+
+  const formData = new FormData();
+  formData.append('cacheControl', '3600');
+  formData.append('', file, bucketPath.split('/').pop() ?? 'video');
+
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', data.signedUrl);
-    xhr.setRequestHeader('Content-Type', mimeType);
+    xhr.open('PUT', uploadUrl);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         onProgress?.(Math.round((e.loaded / e.total) * 100));
@@ -339,7 +345,7 @@ async function uploadLargeFile(
       else reject(new Error(`Upload failed (${xhr.status}).`));
     };
     xhr.onerror = () => reject(new Error('Network error during upload.'));
-    xhr.send(file);
+    xhr.send(formData);
   });
 }
 
