@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import * as tus from 'tus-js-client';
 import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -322,81 +323,35 @@ async function uploadLargeFile(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('You must be signed in to upload.');
 
-  const authHeaders: Record<string, string> = {
-    Authorization: `Bearer ${session.access_token}`,
-    apikey: anonKey,
-  };
+  const projectId = new URL(supabaseUrl).hostname.split('.')[0];
+  const storageEndpoint = `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`;
 
-  const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
-  const metadata = [
-    `bucketName ${b64('user-videos')}`,
-    `objectName ${b64(bucketPath)}`,
-    `contentType ${b64(mimeType)}`,
-  ].join(',');
-
-  const createRes = await fetch(`${supabaseUrl}/storage/v1/upload/resumable`, {
-    method: 'POST',
-    headers: {
-      ...authHeaders,
-      'Tus-Resumable': '1.0.0',
-      'Upload-Length': String(file.size),
-      'Upload-Metadata': metadata,
-      'Content-Length': '0',
-    },
-  });
-
-  if (!createRes.ok) {
-    const detail = await createRes.text().catch(() => '');
-    throw new Error(`Could not start upload (${createRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`);
-  }
-
-  const uploadLocation = createRes.headers.get('Location');
-  if (!uploadLocation) throw new Error('Upload started but no upload URL was returned.');
-
-  const uploadUrl = uploadLocation.startsWith('http')
-    ? uploadLocation
-    : `${supabaseUrl}${uploadLocation}`;
-
-  const CHUNK_SIZE = 8 * 1024 * 1024;
-  let offset = 0;
-
-  while (offset < file.size) {
-    const end = Math.min(offset + CHUNK_SIZE, file.size);
-    const chunk = file.slice(offset, end);
-
-    const chunkRes = await new Promise<Response>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PATCH', uploadUrl);
-      xhr.setRequestHeader('Tus-Resumable', '1.0.0');
-      xhr.setRequestHeader('Upload-Offset', String(offset));
-      xhr.setRequestHeader('Content-Type', 'application/offset+octet-stream');
-      xhr.setRequestHeader('Authorization', authHeaders.Authorization);
-      xhr.setRequestHeader('apikey', authHeaders.apikey);
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const sent = offset + e.loaded;
-          onProgress?.(Math.round((sent / file.size) * 100));
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(new Response(xhr.responseText, { status: xhr.status }));
-        } else {
-          const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 200)}` : '';
-          reject(new Error(`Upload failed at ${offset} bytes (${xhr.status})${detail}`));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Network error during upload.'));
-      xhr.send(chunk);
+  await new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: storageEndpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        apikey: anonKey,
+        'x-upsert': 'false',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      metadata: {
+        bucketName: 'user-videos',
+        objectName: bucketPath,
+        contentType: mimeType,
+        cacheControl: '3600',
+      },
+      onError: (error) => reject(error),
+      onProgress: (bytesUploaded, bytesTotal) => {
+        onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100));
+      },
+      onSuccess: () => resolve(),
     });
-
-    if (!chunkRes.ok) {
-      const detail = await chunkRes.text().catch(() => '');
-      throw new Error(`Upload failed at ${offset} bytes (${chunkRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`);
-    }
-
-    offset = end;
-  }
+    upload.start();
+  });
 }
 
 function guessMimeType(ext: string): string {
