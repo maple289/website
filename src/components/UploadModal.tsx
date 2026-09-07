@@ -317,24 +317,23 @@ async function uploadLargeFile(
   mimeType: string,
   onProgress?: (pct: number) => void,
 ): Promise<void> {
-  const { data, error: signedErr } = await supabase.storage
-    .from('user-videos')
-    .createSignedUploadUrl(bucketPath);
-
-  if (signedErr || !data) {
-    throw new Error(signedErr?.message || 'Could not create upload URL.');
-  }
-
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/upload/sign/${bucketPath}?token=${encodeURIComponent(data.token)}`;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('You must be signed in to upload.');
+
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/user-videos/${bucketPath}`;
 
   const formData = new FormData();
   formData.append('cacheControl', '3600');
-  formData.append('', file, bucketPath.split('/').pop() ?? 'video');
+  formData.append('', file);
 
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', uploadUrl);
+    xhr.open('POST', uploadUrl);
+    xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+    xhr.setRequestHeader('apikey', anonKey);
+    xhr.setRequestHeader('x-upsert', 'false');
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         onProgress?.(Math.round((e.loaded / e.total) * 100));
