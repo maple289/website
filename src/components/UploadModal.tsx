@@ -323,8 +323,7 @@ async function uploadLargeFile(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('You must be signed in to upload.');
 
-  const projectId = new URL(supabaseUrl).hostname.split('.')[0];
-  const storageEndpoint = `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`;
+  const storageEndpoint = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/upload/resumable`;
 
   await new Promise<void>((resolve, reject) => {
     const upload = new tus.Upload(file, {
