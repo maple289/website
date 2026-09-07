@@ -114,7 +114,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       const mimeType = file.type || guessMimeType(extension);
 
       if (file.size > 50 * 1024 * 1024) {
-        await uploadResumable(file, bucketPath, mimeType);
+        await uploadResumable(file, bucketPath, mimeType, setUploadProgress);
       } else {
         const { error: uploadErr } = await supabase.storage
           .from('user-videos')
@@ -292,7 +292,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
-          {uploadting && uploadProgress > 0 && (
+          {uploading && uploadProgress > 0 && (
             <div className="mb-4">
               <div className="h-2 w-full overflow-hidden rounded-full bg-[#2a2a2a]">
                 <div className="h-full rounded-full bg-[#ff3d46] transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
@@ -312,7 +312,12 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   );
 }
 
-async function uploadResumable(file: File, bucketPath: string, mimeType: string): Promise<void> {
+async function uploadResumable(
+  file: File,
+  bucketPath: string,
+  mimeType: string,
+  onProgress?: (pct: number) => void,
+): Promise<void> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
   const match = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/);
   const projectId = match?.[1] ?? '';
@@ -341,7 +346,7 @@ async function uploadResumable(file: File, bucketPath: string, mimeType: string)
       onError: (error) => reject(error),
       onProgress: (bytesUploaded, bytesTotal) => {
         const pct = Math.round((bytesUploaded / bytesTotal) * 100);
-        setUploadProgress(pct);
+        onProgress?.(pct);
       },
       onSuccess: () => resolve(),
     });
