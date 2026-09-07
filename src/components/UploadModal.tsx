@@ -100,12 +100,13 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     let uploadedPreviewPath: string | null = null;
     try {
       const videoId = createStorageId();
+      const fileId = createStorageId();
       const sourceExtension = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
       const extension = sourceExtension.replace(/[^a-z0-9]/g, '') || 'mp4';
       const videosBase = await fetchStorageBasePath('videos');
       const pathPrefix = videosBase ? `${videosBase}/` : '';
-      const bucketPath = `${pathPrefix}${user.id}/videos/${videoId}/${createStorageId()}.${extension}`;
-      const storagePath = `${user.id}/videos/${videoId}/${createStorageId()}.${extension}`;
+      const storagePath = `${user.id}/videos/${videoId}/${fileId}.${extension}`;
+      const bucketPath = `${pathPrefix}${storagePath}`;
 
       const { error: uploadErr } = await supabase.storage
         .from('user-videos')
