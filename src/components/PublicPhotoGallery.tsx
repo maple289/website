@@ -27,7 +27,7 @@ export function PublicPhotoGallery() {
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {photos.map((photo, index) => (
             <button key={photo.id} onClick={() => setViewingIndex(index)} className="overflow-hidden rounded-xl bg-[#202020] text-left">
-              <div className="aspect-[4/3]"><StorageImage storagePath={photo.preview_path} alt={photo.file_name} className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /></div>
+              <div className="aspect-[4/3]"><StorageImage storagePath={photo.preview_path} alt={photo.file_name} className="h-full w-full object-contain" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /></div>
               <div className="p-3"><h3 className="truncate text-sm font-semibold">{photo.file_name}</h3><p className="mt-1 text-xs text-[#777]">{photo.owner_email ?? 'Unknown'} · {timeAgo(photo.created_at)}</p></div>
             </button>
           ))}

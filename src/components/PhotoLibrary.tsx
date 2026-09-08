@@ -68,7 +68,7 @@ export function PhotoLibrary() {
           {photos.map((photo, index) => (
             <article key={photo.id} className="overflow-hidden rounded-2xl border border-[#272727] bg-[#161616]">
               <button onClick={() => setViewingIndex(index)} className="block aspect-[4/3] w-full overflow-hidden bg-[#202020]">
-                <StorageImage storagePath={photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
+                <StorageImage storagePath={photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="h-full w-full object-contain" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
               </button>
               <div className="p-4"><h3 className="truncate text-sm font-semibold">{photo.file_name}</h3><p className="mt-1 text-xs text-[#777]">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>
                 <div className="mt-3 flex gap-2">

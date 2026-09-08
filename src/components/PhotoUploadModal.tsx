@@ -19,6 +19,7 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -160,10 +161,29 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="flex min-h-52 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#3a3a3a] bg-[#121212] hover:border-[#555]"
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (uploading) return;
+              event.dataTransfer.dropEffect = 'copy';
+              setDragOver(true);
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+              setDragOver(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragOver(false);
+              if (uploading) return;
+              const droppedFile = event.dataTransfer.files?.[0];
+              if (droppedFile) selectFile(droppedFile);
+            }}
+            disabled={uploading}
+            className={`flex min-h-52 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-[#121212] transition ${dragOver ? 'border-[#ff3d46] bg-[#ff3d46]/5' : 'border-[#3a3a3a] hover:border-[#555]'}`}
           >
             {previewUrl ? <img src={previewUrl} alt="Selected" className="max-h-72 w-full object-contain" /> : (
-              <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Choose an image</p><p className="mt-1 text-xs">JPEG, PNG, WebP, GIF, AVIF · up to 25 MB</p></div>
+              <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Drag and drop an image here or click to browse</p><p className="mt-1 text-xs">JPEG, PNG, WebP, GIF, AVIF · up to 25 MB</p></div>
             )}
           </button>
           <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const f = event.target.files?.[0]; if (f) selectFile(f); event.target.value = ''; }} />
