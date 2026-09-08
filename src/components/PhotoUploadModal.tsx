@@ -99,13 +99,14 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
 
       if (databaseError) {
         console.error('Saving the photo record failed:', databaseError);
-        throw new Error('upload-failed');
+        throw new Error(databaseError.message || 'Failed to save photo record.');
       }
       onUploaded();
     } catch (uploadError) {
       if (uploadedPaths.length > 0) await supabase.storage.from('user-images').remove(uploadedPaths);
       console.error('Photo upload failed:', uploadError);
-      setError('We could not upload that photo. Please check the file and try again.');
+      const msg = uploadError instanceof Error ? uploadError.message : 'We could not upload that photo. Please check the file and try again.';
+      setError(msg);
       setUploading(false);
     }
   };
@@ -122,7 +123,7 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
           <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
+        <form onSubmit={handleSubmit} action="#" className="px-6 pb-7 pt-5">
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -132,7 +133,7 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
               <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Choose an image</p><p className="mt-1 text-xs">JPEG, PNG, WebP, GIF, AVIF · up to 25 MB</p></div>
             )}
           </button>
-          <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" className="hidden" onChange={(event) => event.target.files?.[0] && selectFile(event.target.files[0])} />
+          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const f = event.target.files?.[0]; if (f) selectFile(f); event.target.value = ''; }} />
 
           {file && (
             <>
