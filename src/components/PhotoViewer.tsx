@@ -61,7 +61,7 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
 
       <div className="flex max-h-[90vh] max-w-full flex-col items-center" onClick={(e) => e.stopPropagation()}>
         <StorageImage
-          storagePath={photo.preview_path ?? photo.storage_path}
+          storagePath={photo.storage_path}
           alt={photo.file_name}
           className="max-h-[82vh] max-w-full object-contain"
           fallback={<div className="text-sm text-[#888]">Unable to load photo.</div>}
