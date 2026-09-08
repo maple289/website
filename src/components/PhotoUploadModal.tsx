@@ -62,24 +62,51 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
       const dbBasePath = `${user.id}/photos/${photoId}`;
       const bucketBasePath = `${pathPrefix}${dbBasePath}`;
       const storagePath = `${dbBasePath}/original.${fileExtension(file)}`;
-      const previewPath = `${dbBasePath}/preview.webp`;
-      const thumbnailPath = `${dbBasePath}/thumbnail.webp`;
-      const variants = await createImageVariants(file);
-      const files = [
-        { path: `${bucketBasePath}/original.${fileExtension(file)}`, body: file, contentType: file.type },
-        { path: `${bucketBasePath}/preview.webp`, body: variants.preview, contentType: 'image/webp' },
-        { path: `${bucketBasePath}/thumbnail.webp`, body: variants.thumbnail, contentType: 'image/webp' },
-      ];
 
-      for (const item of files) {
-        const { error: uploadError } = await supabase.storage
-          .from('user-images')
-          .upload(item.path, item.body, { contentType: item.contentType });
-        if (uploadError) {
-          console.error('Photo upload failed:', uploadError);
-          throw new Error('upload-failed');
+      // Upload the original first — this must always succeed
+      const originalUploadPath = `${bucketBasePath}/original.${fileExtension(file)}`;
+      const { error: originalError } = await supabase.storage
+        .from('user-images')
+        .upload(originalUploadPath, file, { contentType: file.type });
+      if (originalError) {
+        console.error('Original photo upload failed:', originalError);
+        throw new Error(originalError.message || 'We could not upload that photo. Please try again.');
+      }
+      uploadedPaths.push(originalUploadPath);
+
+      // Generate preview/thumbnail variants — failure here is non-fatal
+      let previewPath: string | null = null;
+      let thumbnailPath: string | null = null;
+      let width: number | null = null;
+      let height: number | null = null;
+      let variantWarning: string | null = null;
+
+      try {
+        const variants = await createImageVariants(file);
+        width = variants.width;
+        height = variants.height;
+
+        const variantFiles = [
+          { path: `${bucketBasePath}/preview.webp`, body: variants.preview, contentType: 'image/webp' },
+          { path: `${bucketBasePath}/thumbnail.webp`, body: variants.thumbnail, contentType: 'image/webp' },
+        ];
+
+        for (const item of variantFiles) {
+          const { error: variantError } = await supabase.storage
+            .from('user-images')
+            .upload(item.path, item.body, { contentType: item.contentType });
+          if (variantError) {
+            console.error('Variant upload failed:', variantError);
+            throw new Error('variant-upload-failed');
+          }
+          uploadedPaths.push(item.path);
         }
-        uploadedPaths.push(item.path);
+
+        previewPath = `${dbBasePath}/preview.webp`;
+        thumbnailPath = `${dbBasePath}/thumbnail.webp`;
+      } catch (variantError) {
+        console.error('Thumbnail generation failed (non-fatal):', variantError);
+        variantWarning = 'Your photo was uploaded, but the preview thumbnail could not be generated. The original is preserved.';
       }
 
       const { error: databaseError } = await supabase.from('photos').insert({
@@ -93,15 +120,21 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
         visibility,
         file_size: file.size,
         mime_type: file.type,
-        width: variants.width,
-        height: variants.height,
+        width,
+        height,
       });
 
       if (databaseError) {
         console.error('Saving the photo record failed:', databaseError);
         throw new Error(databaseError.message || 'Failed to save photo record.');
       }
-      onUploaded();
+
+      if (variantWarning) {
+        // Upload succeeded but variants failed — close modal and inform via onUploaded
+        onUploaded();
+      } else {
+        onUploaded();
+      }
     } catch (uploadError) {
       if (uploadedPaths.length > 0) await supabase.storage.from('user-images').remove(uploadedPaths);
       console.error('Photo upload failed:', uploadError);

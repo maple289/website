@@ -9,7 +9,7 @@ import { PhotoViewer } from '@/components/PhotoViewer';
 export function PublicPhotoGallery() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewing, setViewing] = useState<Photo | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.from('photos').select('*').eq('visibility', 'public').order('created_at', { ascending: false }).then(({ data }) => {
@@ -25,15 +25,17 @@ export function PublicPhotoGallery() {
         <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-16 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={36} /><p className="text-sm text-[#888]">No public photos yet.</p></div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {photos.map((photo) => (
-            <button key={photo.id} onClick={() => setViewing(photo)} className="overflow-hidden rounded-xl bg-[#202020] text-left">
+          {photos.map((photo, index) => (
+            <button key={photo.id} onClick={() => setViewingIndex(index)} className="overflow-hidden rounded-xl bg-[#202020] text-left">
               <div className="aspect-[4/3]"><StorageImage storagePath={photo.preview_path} alt={photo.file_name} className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /></div>
               <div className="p-3"><h3 className="truncate text-sm font-semibold">{photo.file_name}</h3><p className="mt-1 text-xs text-[#777]">{photo.owner_email ?? 'Unknown'} · {timeAgo(photo.created_at)}</p></div>
             </button>
           ))}
         </div>
       )}
-      {viewing && <PhotoViewer photo={viewing} onClose={() => setViewing(null)} />}
+      {viewingIndex !== null && viewingIndex < photos.length && (
+        <PhotoViewer photos={photos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
+      )}
     </section>
   );
 }

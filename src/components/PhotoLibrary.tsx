@@ -15,7 +15,7 @@ export function PhotoLibrary() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [viewing, setViewing] = useState<Photo | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -65,10 +65,10 @@ export function PhotoLibrary() {
         <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">Your photo library is empty</p><button onClick={() => setShowUpload(true)} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button></div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {photos.map((photo) => (
+          {photos.map((photo, index) => (
             <article key={photo.id} className="overflow-hidden rounded-2xl border border-[#272727] bg-[#161616]">
-              <button onClick={() => setViewing(photo)} className="block aspect-[4/3] w-full overflow-hidden bg-[#202020]">
-                <StorageImage storagePath={photo.thumbnail_path} alt={photo.file_name} className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
+              <button onClick={() => setViewingIndex(index)} className="block aspect-[4/3] w-full overflow-hidden bg-[#202020]">
+                <StorageImage storagePath={photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="h-full w-full object-cover transition duration-500 hover:scale-[1.03]" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
               </button>
               <div className="p-4"><h3 className="truncate text-sm font-semibold">{photo.file_name}</h3><p className="mt-1 text-xs text-[#777]">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>
                 <div className="mt-3 flex gap-2">
@@ -81,7 +81,9 @@ export function PhotoLibrary() {
         </div>
       )}
       {showUpload && <PhotoUploadModal onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />}
-      {viewing && <PhotoViewer photo={viewing} onClose={() => setViewing(null)} />}
+      {viewingIndex !== null && viewingIndex < photos.length && (
+        <PhotoViewer photos={photos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
+      )}
     </div>
   );
 }
