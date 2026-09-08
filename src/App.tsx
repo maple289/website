@@ -44,6 +44,7 @@ function AppContent() {
   const [showUpload, setShowUpload] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [fileServerUrl, setFileServerUrl] = useState('');
+  const [homeTab, setHomeTab] = useState<'videos' | 'photos'>('videos');
 
   useEffect(() => {
     if (user) fetchFileServerUrl().then(setFileServerUrl);
@@ -80,6 +81,7 @@ function AppContent() {
   const openSignIn = () => { setAuthMode('signin'); setAuthOpen(true); };
 
   const isAuthed = !!user;
+  const uploadsPhoto = route === 'photos' || (route === 'home' && homeTab === 'photos');
 
   // Admin route — always allow AdminPage to handle its own access control
   if (route === 'admin') {
@@ -131,11 +133,11 @@ function AppContent() {
             {isAuthed && (
               <>
                 <button
-                  onClick={() => route === 'photos' ? setShowPhotoUpload(true) : setShowUpload(true)}
-                  aria-label="Upload"
+                  onClick={() => uploadsPhoto ? setShowPhotoUpload(true) : setShowUpload(true)}
+                  aria-label={uploadsPhoto ? 'Upload photo' : 'Upload video'}
                   className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition hover:bg-[#272727]"
                 >
-                  <Upload size={20} /> <span className="hidden sm:inline">{route === 'photos' ? 'Upload photo' : 'Upload video'}</span>
+                  <Upload size={20} /> <span className="hidden sm:inline">{uploadsPhoto ? 'Upload photo' : 'Upload video'}</span>
                 </button>
                 <button aria-label="Notifications" className="relative rounded-full p-3 transition hover:bg-[#272727]"><Bell size={21} /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ff3d46]" /></button>
               </>
@@ -170,7 +172,7 @@ function AppContent() {
 
       {/* Main content */}
       <main className={`pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {route === 'library' && isAuthed ? <VideoLibrary /> : route === 'photos' && isAuthed ? <PhotoLibrary /> : <HomePage />}
+        {route === 'library' && isAuthed ? <VideoLibrary /> : route === 'photos' && isAuthed ? <PhotoLibrary /> : <HomePage tab={homeTab} onTabChange={setHomeTab} />}
       </main>
 
       {/* Auth modal */}

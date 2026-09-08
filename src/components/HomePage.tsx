@@ -9,8 +9,12 @@ import { PublicPhotoGallery } from '@/components/PublicPhotoGallery';
 
 type Tab = 'videos' | 'photos';
 
-export function HomePage() {
-  const [tab, setTab] = useState<Tab>('videos');
+type HomePageProps = {
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
+};
+
+export function HomePage({ tab, onTabChange }: HomePageProps) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [search] = useState('');
@@ -45,8 +49,8 @@ export function HomePage() {
     <div className="mx-auto max-w-[1560px] px-5 pb-14 lg:px-8">
       {/* Tab switcher */}
       <div className="flex gap-1 border-b border-[#1a2a4a] pt-6">
-        <TabButton active={tab === 'videos'} onClick={() => setTab('videos')} icon={<Film size={18} />} label="Videos" />
-        <TabButton active={tab === 'photos'} onClick={() => setTab('photos')} icon={<ImageIcon size={18} />} label="Photos" />
+        <TabButton active={tab === 'videos'} onClick={() => onTabChange('videos')} icon={<Film size={18} />} label="Videos" />
+        <TabButton active={tab === 'photos'} onClick={() => onTabChange('photos')} icon={<ImageIcon size={18} />} label="Photos" />
       </div>
 
       {tab === 'videos' ? (
