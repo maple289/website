@@ -10,6 +10,7 @@ import { UploadModal } from '@/components/UploadModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 import { PhotoLibrary } from '@/components/PhotoLibrary';
+import { PhotoUploadModal } from '@/components/PhotoUploadModal';
 import { SettingsPage } from '@/components/SettingsPage';
 import { fetchFileServerUrl } from '@/lib/storageSettings';
 
@@ -41,6 +42,7 @@ function AppContent() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showUpload, setShowUpload] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [fileServerUrl, setFileServerUrl] = useState('');
 
   useEffect(() => {
@@ -129,11 +131,11 @@ function AppContent() {
             {isAuthed && (
               <>
                 <button
-                  onClick={() => setShowUpload(true)}
+                  onClick={() => route === 'photos' ? setShowPhotoUpload(true) : setShowUpload(true)}
                   aria-label="Upload"
                   className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition hover:bg-[#272727]"
                 >
-                  <Upload size={20} /> <span className="hidden sm:inline">Upload video</span>
+                  <Upload size={20} /> <span className="hidden sm:inline">{route === 'photos' ? 'Upload photo' : 'Upload video'}</span>
                 </button>
                 <button aria-label="Notifications" className="relative rounded-full p-3 transition hover:bg-[#272727]"><Bell size={21} /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ff3d46]" /></button>
               </>
@@ -177,6 +179,11 @@ function AppContent() {
       {/* Upload modal */}
       {showUpload && isAuthed && (
         <UploadModal onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} />
+      )}
+
+      {/* Photo upload modal */}
+      {showPhotoUpload && isAuthed && (
+        <PhotoUploadModal onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} />
       )}
 
     </div>

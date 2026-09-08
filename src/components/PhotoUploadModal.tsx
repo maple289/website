@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Upload, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +19,12 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const selectFile = (selectedFile: File) => {
     if (!isSupportedImage(selectedFile)) {
@@ -106,7 +112,7 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
