@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, FolderOpen, Chrome as Home, Images, Library, Menu, Search, Settings, Upload, X, Youtube, ShieldCheck } from 'lucide-react';
+import { Bell, FolderOpen, Chrome as Home, Images, Menu, Search, Settings, Upload, Video, X, Youtube, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -150,7 +150,7 @@ function AppContent() {
         <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[72px] z-30 h-[calc(100vh-72px)] w-64 border-r border-[#1a2a4a] bg-[#001338] p-3 transition-transform duration-300 lg:translate-x-0`}>
           <nav className="space-y-1 text-sm">
             <NavItem icon={<Home size={20} />} label="Home" active={route === 'home'} onClick={() => navigate('home')} />
-            <NavItem icon={<Library size={20} />} label="My Library" active={route === 'library'} onClick={() => navigate('library')} />
+            <NavItem icon={<Video size={20} />} label="My Videos" active={route === 'library'} onClick={() => navigate('library')} />
             <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
             <NavItem icon={<FolderOpen size={20} />} label="File Storage" onClick={() => { if (fileServerUrl) window.open(fileServerUrl, '_blank', 'noopener,noreferrer'); }} />
             <div className="my-4 h-px bg-[#272727]" />
