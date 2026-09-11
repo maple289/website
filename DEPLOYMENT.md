@@ -99,6 +99,10 @@ firewalls. Studio should be accessed through an SSH tunnel or the server console
 
 When a domain is ready, set `APP_ADDRESS` and `VITE_SUPABASE_URL` to that domain,
 update the matching Supabase URLs, and redeploy. Caddy will then manage HTTPS.
+When IIS exposes the frontend below a path such as `/video/`, set
+`VITE_BASE_PATH=/video/`. Keep `VITE_SUPABASE_URL` at the public origin without
+the path because Supabase APIs remain under `/auth/v1`, `/rest/v1`, and the
+other root API routes.
 
 ## Updates and rollback
 
