@@ -37,3 +37,4 @@ $$;
 
 REVOKE ALL ON FUNCTION public.get_file_server_url() FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.get_file_server_url() TO authenticated;
+
