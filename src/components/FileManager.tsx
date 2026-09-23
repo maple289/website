@@ -102,7 +102,7 @@ export function FileManager() {
         const meta = metaRows.find((item) => item.object_path === path);
         const isFolder = !object.id;
         return { name: object.name, path, isFolder, size: meta?.file_size ?? object.metadata?.size ?? 0, updatedAt: meta?.updated_at ?? object.updated_at ?? object.created_at ?? new Date().toISOString(), mimeType: meta?.mime_type ?? object.metadata?.mimetype ?? '', favorite: meta?.is_favorite ?? false, trashedAt: meta?.trashed_at ?? null };
-      }).filter((item) => view === 'trash' ? !!item.trashedAt : !item.trashedAt);
+      }).filter((item) => !item.trashedAt);
       setEntries(built);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load files. Apply the latest database migration and try again.');
