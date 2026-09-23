@@ -1,0 +1,57 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: streamly-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: [self-hosted, linux, x64, streamly-production]
+    timeout-minutes: 45
+    env:
+      STREAMLY_ENV_FILE: /srv/streamly/app.env
+      STREAMLY_RUNTIME_DIR: /srv/streamly/supabase
+      STREAMLY_BACKUP_DIR: /srv/streamly/backups
+      STREAMLY_DEPLOY_LOCK: /srv/streamly/deploy.lock
+      STREAMLY_DEPLOY_STATE: /srv/streamly/last-deployed-sha
+      STREAMLY_HEALTH_URL: http://127.0.0.1/healthz
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check out validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Skip superseded commit
+        id: current
+        shell: bash
+        run: |
+          remote_sha=$(git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" refs/heads/main | cut -f1)
+          if [ "$remote_sha" = "$DEPLOY_SHA" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping $DEPLOY_SHA because main is now $remote_sha"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Back up, migrate, and deploy
+        if: steps.current.outputs.deploy == 'true'
+        run: ./scripts/automated-deploy.sh

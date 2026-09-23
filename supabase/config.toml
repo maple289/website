@@ -1,0 +1,17 @@
+[functions.admin-users]
+verify_jwt = true
+
+[functions.serve-media]
+verify_jwt = true
+
+[functions.approve-registration]
+verify_jwt = true
+
+[functions.notify-admin-registration]
+verify_jwt = false
+
+[functions.storage-settings]
+verify_jwt = true
+
+[functions.process-video]
+verify_jwt = true

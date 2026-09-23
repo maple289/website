@@ -1,0 +1,82 @@
+export type Video = {
+  id: string;
+  owner_id: string;
+  owner_email: string | null;
+  file_name: string;
+  storage_path: string;
+  preview_url: string | null;
+  preview_path: string | null;
+  visibility: 'public' | 'private';
+  file_size: number | null;
+  mime_type: string | null;
+  created_at: string;
+  processing_status: 'processing' | 'ready' | 'error';
+  processed_storage_path: string | null;
+  processing_error: string | null;
+  video_codec: string | null;
+  video_bitrate: number | null;
+  resolution_width: number | null;
+  resolution_height: number | null;
+  frame_rate: number | null;
+  duration_seconds: number | null;
+  container_format: string | null;
+};
+
+export type Photo = {
+  id: string;
+  owner_id: string;
+  owner_email: string | null;
+  file_name: string;
+  storage_path: string;
+  preview_path: string;
+  thumbnail_path: string;
+  visibility: 'public' | 'private';
+  file_size: number | null;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+};
+
+export type AppConfig = {
+  root_folder: string;
+  updated_at: string;
+};
+
+export function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
+  const years = Math.floor(months / 12);
+  return `${years} year${years > 1 ? 's' : ''} ago`;
+}
+
+const serveMediaUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-media`;
+
+export async function getPlayableUrl(videoId: string, token?: string): Promise<string | null> {
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+  const headers: Record<string, string> = {
+    apikey: anonKey,
+    Authorization: `Bearer ${token ?? anonKey}`,
+  };
+
+  const res = await fetch(`${serveMediaUrl}?id=${encodeURIComponent(videoId)}`, { headers });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.url ?? null;
+}
