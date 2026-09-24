@@ -15,8 +15,10 @@ type Entry = {
 };
 type Metadata = { object_path: string; is_folder: boolean; is_favorite: boolean; file_size: number; mime_type: string; trashed_at: string | null; created_at: string; updated_at: string };
 type UploadItem = { file: File; state: 'waiting' | 'uploading' | 'done' | 'error'; message?: string; progress?: number };
+type SearchRow = { object_path: string; name: string; location: string; is_folder: boolean; file_size: number; mime_type: string; updated_at: string; is_favorite: boolean };
 
 const BUCKET = 'user-files';
+const SEARCH_PAGE_SIZE = 50;
 const formatSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : bytes < 1073741824 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1073741824).toFixed(2)} GB`;
 const dateLabel = (value: string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 const kindLabel = (entry: Entry) => entry.isFolder ? 'Folder' : entry.mimeType.startsWith('image/') ? 'Image' : entry.mimeType.startsWith('video/') ? 'Video' : entry.mimeType.startsWith('audio/') ? 'Audio' : entry.mimeType === 'application/pdf' ? 'PDF document' : entry.mimeType.startsWith('text/') ? 'Text file' : entry.name.split('.').pop()?.toUpperCase() || 'File';
@@ -37,6 +39,10 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const [entries, setEntries] = useState<Entry[]>([]);
   const [metadata, setMetadata] = useState<Metadata[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState<Entry[]>([]);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState('');
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [selected, setSelected] = useState<string[]>([]);
@@ -52,6 +58,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const latestSearchTerm = useRef(searchTerm);
   const [dropActive, setDropActive] = useState(false);
 
   const goTo = useCallback((path: string, addHistory = true) => {
@@ -108,12 +115,59 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     } finally { setLoading(false); }
   }, [user, view, folder]);
 
+  const searchAllFiles = useCallback(async (offset = 0) => {
+    const query = searchTerm.trim();
+    if (!user || !query) return;
+    setSearchLoading(true);
+    try {
+      const { data, error: searchError } = await supabase.rpc('search_user_files', {
+        p_query: query,
+        p_limit: SEARCH_PAGE_SIZE + 1,
+        p_offset: offset,
+      });
+      if (searchError) throw searchError;
+      if (latestSearchTerm.current.trim() !== query) return;
+      const rows = (data ?? []) as SearchRow[];
+      const page = rows.slice(0, SEARCH_PAGE_SIZE).map((row) => ({
+        name: row.name,
+        path: row.object_path,
+        isFolder: row.is_folder,
+        size: row.file_size,
+        updatedAt: row.updated_at,
+        mimeType: row.mime_type,
+        favorite: row.is_favorite,
+        trashedAt: null,
+      }));
+      setSearchResults((current) => offset === 0 ? page : [...current, ...page]);
+      setSearchOffset(offset + page.length);
+      setSearchHasMore(rows.length > SEARCH_PAGE_SIZE);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not search your files.');
+      if (offset === 0) setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [searchTerm, user]);
+
   function entryFromMetadata(item: Metadata): Entry {
     const name = item.object_path.split('/').pop() ?? item.object_path;
     return { name, path: item.object_path, isFolder: item.is_folder, size: item.file_size ?? 0, updatedAt: item.updated_at, mimeType: item.mime_type ?? '', favorite: item.is_favorite, trashedAt: item.trashed_at };
   }
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { latestSearchTerm.current = searchTerm; }, [searchTerm]);
+  useEffect(() => {
+    const query = searchTerm.trim();
+    if (!query) {
+      setSearchResults([]);
+      setSearchOffset(0);
+      setSearchHasMore(false);
+      setSearchLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => { void searchAllFiles(0); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm, searchAllFiles]);
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -134,7 +188,8 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     return () => window.removeEventListener('keydown', onKey);
   }, [uploadOpen, dialog, preview]);
 
-  const filtered = useMemo(() => entries.filter((entry) => entry.name.toLowerCase().includes(searchTerm.trim().toLowerCase())), [entries, searchTerm]);
+  const isSearching = Boolean(searchTerm.trim());
+  const filtered = useMemo(() => isSearching ? searchResults : entries, [entries, isSearching, searchResults]);
   const totalBytes = metadata.filter((item) => !item.is_folder && !item.trashed_at).reduce((sum, item) => sum + (item.file_size ?? 0), 0);
   const crumbs = folder ? folder.split('/') : [];
   const title = view === 'files' ? 'My Files' : view === 'recent' ? 'Recent' : view === 'favorites' ? 'Favorites' : view === 'shared' ? 'Shared' : 'Trash';
@@ -144,6 +199,17 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     if (dbError) throw dbError;
   };
   const enterFolder = (entry: Entry) => { if (entry.isFolder) { setView('files'); goTo(folder ? `${folder}/${entry.name}` : entry.name); } else void openPreview(entry); };
+  const openSearchResult = (entry: Entry) => {
+    if (!entry.isFolder) { void openPreview(entry); return; }
+    const relativePath = entry.path.slice(user!.id.length + 1);
+    setView('files');
+    goTo(relativePath);
+  };
+  const resultLocation = (entry: Entry) => {
+    const relativePath = entry.path.slice(user!.id.length + 1);
+    const parent = relativePath.split('/').slice(0, -1).join('/');
+    return parent || 'My Files';
+  };
 
   const openPreview = async (entry: Entry) => {
     if (entry.isFolder) return;
@@ -239,15 +305,20 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const permanentDelete = async (entry: Entry) => {
     if (!user) return;
     setBusy(true);
-    const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
-    const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths);
-    if (removeError) setError(removeError.message);
-    else {
+    try {
+      const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
+      const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths);
+      if (removeError) throw removeError;
+
       const affectedPaths = metadata.filter((row) => row.object_path === entry.path || (entry.isFolder && row.object_path.startsWith(`${entry.path}/`))).map((row) => row.object_path);
       const { error: metaError } = await supabase.from('user_file_metadata').delete().eq('owner_id', user.id).in('object_path', affectedPaths);
-      if (metaError) setError(metaError.message);
+      if (metaError) throw metaError;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not permanently delete this item.');
+    } finally {
+      setBusy(false);
     }
-    setBusy(false); await load();
+    await load();
   };
   const performPathAction = async () => {
     if (!dialog?.entry || !user) return;
@@ -344,9 +415,9 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
           {error && <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
           {view === 'files' && crumbs.length > 0 && <button onClick={() => goTo(crumbs.slice(0, -1).join('/'))} className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft size={16} />Back to {crumbs.length > 1 ? crumbs[crumbs.length - 2] : 'My Files'}</button>}
           <section onDragOver={(event) => { event.preventDefault(); setDropActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false); }} onDrop={(event) => { event.preventDefault(); setDropActive(false); if (event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className={`min-h-[450px] rounded-2xl border bg-white p-4 transition sm:p-5 ${dropActive ? 'border-blue-400 bg-blue-50/70 ring-4 ring-blue-100' : 'border-slate-200'}`}>
-            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-slate-800">{view === 'shared' ? 'Shared with me' : view === 'trash' ? 'Recently deleted' : 'All items'}</h2><p className="mt-0.5 text-xs text-slate-400">{view === 'shared' ? 'Files shared by other people appear here.' : `${filtered.length} ${filtered.length === 1 ? 'item' : 'items'}`}</p></div>{view === 'files' && <button onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Plus size={15} />Add files</button>}</div>
-            {loading ? <div className="flex h-64 items-center justify-center text-blue-600"><LoaderCircle className="animate-spin" /></div> : view === 'shared' ? <EmptyState icon={<Share2 size={28} />} title="File sharing isn’t enabled yet" subtitle="Files in File Manager are private to your account." /> : filtered.length === 0 ? <EmptyState icon={view === 'trash' ? <Trash2 size={28} /> : view === 'favorites' ? <Star size={28} /> : <Folder size={28} />} title={searchTerm ? 'No matching files' : view === 'trash' ? 'Trash is empty' : view === 'favorites' ? 'No favorites yet' : 'This folder is empty'} subtitle={searchTerm ? 'Try another name or clear your search.' : view === 'files' ? 'Upload files or create a folder to get started.' : 'Items you add here will appear in this view.'} /> : (
-              <div className={layout === 'grid' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-slate-100'}>{filtered.map((entry) => <FileCard key={entry.path} entry={entry} layout={layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onFavorite={() => void toggleFavorite(entry)} onRestore={() => void restoreEntry(entry)} onDelete={() => view === 'trash' ? void permanentDelete(entry) : void deleteEntries([entry])} />)}</div>
+            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-slate-800">{isSearching ? `Search results for “${searchTerm.trim()}”` : view === 'shared' ? 'Shared with me' : view === 'trash' ? 'Recently deleted' : 'All items'}</h2><p className="mt-0.5 text-xs text-slate-400">{isSearching ? `${filtered.length}${searchHasMore ? '+' : ''} matching ${filtered.length === 1 ? 'item' : 'items'} across My Files` : view === 'shared' ? 'Files shared by other people appear here.' : `${filtered.length} ${filtered.length === 1 ? 'item' : 'items'}`}</p></div>{view === 'files' && !isSearching && <button onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Plus size={15} />Add files</button>}</div>
+            {(loading && !isSearching) || (isSearching && searchLoading && searchResults.length === 0) ? <div className="flex h-64 items-center justify-center text-blue-600"><LoaderCircle className="animate-spin" /></div> : view === 'shared' && !isSearching ? <EmptyState icon={<Share2 size={28} />} title="File sharing isn’t enabled yet" subtitle="Files in File Manager are private to your account." /> : filtered.length === 0 ? <EmptyState icon={view === 'trash' ? <Trash2 size={28} /> : view === 'favorites' ? <Star size={28} /> : <Folder size={28} />} title={isSearching ? 'No matching files' : view === 'trash' ? 'Trash is empty' : view === 'favorites' ? 'No favorites yet' : 'This folder is empty'} subtitle={isSearching ? 'Try another name or clear your search.' : view === 'files' ? 'Upload files or create a folder to get started.' : 'Items you add here will appear in this view.'} /> : (
+              <><div className={layout === 'grid' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-slate-100'}>{filtered.map((entry) => <FileCard key={entry.path} entry={entry} location={isSearching ? resultLocation(entry) : undefined} layout={layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onFavorite={() => void toggleFavorite(entry)} onRestore={() => void restoreEntry(entry)} onDelete={() => view === 'trash' ? void permanentDelete(entry) : void deleteEntries([entry])} />)}</div>{isSearching && searchHasMore && <div className="mt-5 flex justify-center"><button disabled={searchLoading} onClick={() => void searchAllFiles(searchOffset)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">{searchLoading ? 'Loading…' : 'Load more results'}</button></div>}</>
             )}
             {dropActive && <div className="pointer-events-none fixed inset-4 z-40 flex items-center justify-center rounded-3xl border-2 border-dashed border-blue-400 bg-blue-600/10 text-xl font-semibold text-blue-800">Drop files to upload</div>}
           </section>
@@ -371,12 +442,12 @@ function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: s
   return <div className="flex min-h-[360px] flex-col items-center justify-center px-4 text-center"><div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50 text-slate-300">{icon}</div><h3 className="font-semibold text-slate-800">{title}</h3><p className="mt-1 max-w-sm text-sm text-slate-400">{subtitle}</p></div>;
 }
 
-function FileCard({ entry, layout, selected, onSelect, onOpen, onMenu, onFavorite, onRestore, onDelete }: { entry: Entry; layout: 'grid' | 'list'; selected: boolean; onSelect: (event?: React.MouseEvent) => void; onOpen: () => void; onMenu: (event: React.MouseEvent) => void; onFavorite: () => void; onRestore: () => void; onDelete: () => void }) {
+function FileCard({ entry, location, layout, selected, onSelect, onOpen, onMenu, onFavorite, onRestore, onDelete }: { entry: Entry; location?: string; layout: 'grid' | 'list'; selected: boolean; onSelect: (event?: React.MouseEvent) => void; onOpen: () => void; onMenu: (event: React.MouseEvent) => void; onFavorite: () => void; onRestore: () => void; onDelete: () => void }) {
   const isTrash = !!entry.trashedAt;
   return <article onContextMenu={onMenu} onClick={onOpen} className={layout === 'grid' ? `group relative cursor-pointer rounded-2xl border p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md ${selected ? 'border-blue-300 bg-blue-50/60 ring-2 ring-blue-100' : 'border-slate-100 bg-white'}` : `group flex cursor-pointer items-center gap-3 px-2 py-3 transition hover:bg-slate-50 ${selected ? 'bg-blue-50' : ''}`}>
     {layout === 'grid' && <button onClick={(event) => onSelect(event)} aria-label={selected ? 'Deselect' : 'Select'} className={`absolute left-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-md border transition ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white/90 text-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:border-blue-500'}`}><Check size={14} /></button>}
     <div className={layout === 'grid' ? 'mb-3 flex h-28 items-center justify-center rounded-xl bg-gradient-to-br from-slate-50 to-slate-100' : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100'}>{entry.mimeType.startsWith('image/') && !entry.isFolder && !isTrash ? <SignedThumbnail path={entry.path} name={entry.name} /> : fileIcon(entry, layout === 'grid' ? 38 : 21)}</div>
-    <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><p className="truncate text-sm font-semibold text-slate-800" title={entry.name}>{entry.name}</p>{entry.favorite && <Star size={13} className="shrink-0 fill-amber-400 text-amber-400" />}</div><p className="mt-1 truncate text-xs text-slate-400">{kindLabel(entry)}{!entry.isFolder ? ` · ${formatSize(entry.size)}` : ''}</p>{layout === 'list' && <p className="mt-1 hidden text-xs text-slate-400 sm:block">Modified {dateLabel(entry.updatedAt)}</p>}</div>
+    <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><p className="truncate text-sm font-semibold text-slate-800" title={entry.name}>{entry.name}</p>{entry.favorite && <Star size={13} className="shrink-0 fill-amber-400 text-amber-400" />}</div><p className="mt-1 truncate text-xs text-slate-400">{kindLabel(entry)}{!entry.isFolder ? ` · ${formatSize(entry.size)}` : ''}</p>{location && <p className="mt-1 truncate text-[11px] text-blue-600" title={`My Files / ${location}`}>My Files / {location}</p>}{layout === 'list' && !location && <p className="mt-1 hidden text-xs text-slate-400 sm:block">Modified {dateLabel(entry.updatedAt)}</p>}</div>
     {layout === 'grid' && <p className="truncate text-[11px] text-slate-400">{dateLabel(entry.updatedAt)}</p>}
     {layout === 'list' && <><span className="hidden w-32 text-xs text-slate-500 md:block">{entry.isFolder ? '—' : formatSize(entry.size)}</span><span className="hidden w-32 text-xs text-slate-500 lg:block">{dateLabel(entry.updatedAt)}</span><button onClick={(event) => { event.stopPropagation(); onSelect(event); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="Select item"><Check size={16} /></button></>}
     {isTrash ? <div className="ml-1 flex shrink-0 gap-1"><button onClick={(event) => { event.stopPropagation(); onRestore(); }} title="Restore" className="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"><RotateCcw size={16} /></button><button onClick={(event) => { event.stopPropagation(); onDelete(); }} title="Delete forever" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={16} /></button></div> : <button onClick={(event) => { event.stopPropagation(); onMenu(event); }} onContextMenu={onMenu} className="ml-1 shrink-0 rounded-lg p-2 text-slate-400 opacity-100 hover:bg-slate-100 hover:text-slate-700 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Actions for ${entry.name}`}><MoreHorizontal size={17} /></button>}
