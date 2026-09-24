@@ -54,4 +54,4 @@ jobs:
 
       - name: Back up, migrate, and deploy
         if: steps.current.outputs.deploy == 'true'
-        run: ./scripts/automated-deploy.sh
+        run: sh ./scripts/automated-deploy.sh
