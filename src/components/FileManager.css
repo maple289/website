@@ -1,0 +1,159 @@
+/* Fluent-inspired surfaces, scoped to File Manager. */
+.file-manager {
+  font-family: 'Segoe UI Variable', 'Segoe UI', 'DM Sans', sans-serif;
+  background:
+    radial-gradient(ellipse at 95% 0%, #e4edfc 0%, transparent 55%),
+    linear-gradient(145deg, #f5f7fb, #eef2f8);
+}
+
+.file-manager .fm-sidebar {
+  background: linear-gradient(180deg, #f9fbffed, #f0f4fbe6);
+  border-color: #dce4ef;
+}
+
+.file-manager .fm-nav-item {
+  position: relative;
+  border: 1px solid transparent;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.file-manager .fm-nav-item[data-active='true'] {
+  background: linear-gradient(110deg, #e1edfd, #edf4ff);
+  border-color: #d3e2f5;
+  color: #145a9d;
+  box-shadow: inset 0 1px 0 #ffffffb3, 0 2px 5px #244a7910;
+}
+
+.file-manager .fm-nav-item[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 28%;
+  bottom: 28%;
+  width: 3px;
+  border-radius: 3px;
+  background: #1671ce;
+}
+
+.file-manager .fm-storage {
+  background: linear-gradient(135deg, #ffffffd9, #eaf1fb);
+  border-color: #dbe4ef;
+  box-shadow: inset 0 1px 0 white, 0 4px 16px #25466b08;
+}
+
+.file-manager .fm-surface {
+  background-color: #ffffffc9;
+  border-color: #ffffff;
+  box-shadow: 0 6px 24px #243c6010, 0 1px 3px #243c6008;
+}
+
+.file-manager .fm-surface[data-drag-active='true'] {
+  background-color: #edf5ff;
+  border-color: #6da7e5;
+}
+
+.file-manager .fm-search {
+  background: #fffffff0;
+  border-color: #d9e1eb;
+  border-bottom-color: #acb9ca;
+  box-shadow: 0 2px 5px #263b5906;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.file-manager .fm-search:focus-within {
+  border-bottom-color: #1671ce;
+  box-shadow: inset 0 -2px 0 #1671ce, 0 0 0 3px #1671ce12;
+}
+
+.file-manager .fm-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.file-manager .fm-card--grid {
+  background: linear-gradient(150deg, white, #fafcff);
+  border-color: #e3e9f1;
+  box-shadow: 0 2px 4px #263b5905, inset 0 1px 0 white;
+}
+
+.file-manager .fm-card--list {
+  border-radius: 10px;
+}
+
+.file-manager .fm-icon-tile {
+  background: linear-gradient(145deg, #f1f5fc, #e9eff8);
+  box-shadow: inset 0 1px 0 #ffffffcc;
+}
+
+.file-manager .fm-card[data-folder='true'] .fm-icon-tile {
+  background: radial-gradient(ellipse at 50% 30%, #fffdf5, #fff5da);
+}
+
+.file-manager .fm-card[data-folder='true'] .fm-icon-tile > svg {
+  filter: drop-shadow(0 3px 2px #ac751524);
+  transition: transform 180ms ease;
+}
+
+.file-manager .fm-card[data-selected='true'] {
+  background: linear-gradient(135deg, #edf5ff, #e4efff);
+  border-color: #83b5eb;
+  box-shadow: 0 0 0 2px #c5ddf7;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .file-manager .fm-card--grid:hover {
+    transform: translateY(-3px);
+    border-color: #bfd2e9;
+    box-shadow: 0 8px 18px #23496f12, 0 2px 5px #23496f08;
+  }
+
+  .file-manager .fm-card--list:hover {
+    background-color: #edf4fc;
+  }
+
+  .file-manager .fm-card[data-selected='true']:hover {
+    border-color: #83b5eb;
+    box-shadow: 0 0 0 2px #c5ddf7, 0 8px 18px #23496f12;
+  }
+
+  .file-manager .fm-card[data-folder='true']:hover .fm-icon-tile > svg {
+    transform: translateY(-2px);
+  }
+}
+
+.file-manager .fm-menu,
+.file-manager .fm-dialog,
+.file-manager [role='dialog'] {
+  background: linear-gradient(145deg, white, #f7faff);
+  border: 1px solid #e0e7f0;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px #142a4930, 0 3px 10px #142a4914;
+}
+
+.file-manager .fm-menu > button {
+  border-radius: 8px;
+}
+
+.file-manager button:focus-visible,
+.file-manager input:focus-visible {
+  outline: 2px solid #1671ce;
+  outline-offset: 3px;
+}
+
+.file-manager ::selection {
+  background: #c4dffd;
+  color: #123b69;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-manager .fm-card,
+  .file-manager .fm-icon-tile > svg,
+  .file-manager .fm-nav-item,
+  .file-manager .fm-search {
+    transition: none;
+  }
+
+  .file-manager .fm-card:hover,
+  .file-manager .fm-card[data-folder='true']:hover .fm-icon-tile > svg {
+    transform: none;
+  }
+}
