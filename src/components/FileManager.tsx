@@ -1,3 +1,5 @@
+import { FileDropArea } from '@/components/FileDropArea';
+import { uploadObject } from '@/lib/mediaUploads';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as tus from 'tus-js-client';
 import {
@@ -70,7 +72,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const searchInput = useRef<HTMLInputElement>(null);
   const latestSearchTerm = useRef(searchTerm);
   const listingState = useRef({ version: 0 });
-  const [dropActive, setDropActive] = useState(false);
+  const uploadingBatch = useRef(false);
 
   const { view, folder, sharedFolder, publicFolder, navigate, back, forward } = useFileNavigation(guest, () => {
     listingState.current.version++;
@@ -237,7 +239,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   }, []);
   useEffect(() => {
     if (!uploadOpen && !dialog && !preview) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setUploadOpen(false); setDialog(null); setPreview(null); } };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !uploadingBatch.current) { setUploadOpen(false); setDialog(null); setPreview(null); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [uploadOpen, dialog, preview]);
@@ -325,34 +327,42 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     try { await register(path, true); setDialog(null); await load(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save folder.'); }
     setBusy(false);
   };
+  const latestLoad = useRef(load); latestLoad.current = load;
   const uploadFiles = async (files: FileList | File[]) => {
     if (view === 'shared') { setError('Shared folders are read-only.'); return; }
     const chosen = Array.from(files);
     if (!chosen.length || !user) return;
+    if (uploadingBatch.current) { setError('Please wait for the current upload batch to finish.'); return; }
+    uploadingBatch.current = true;
+    // Capture the destination once; browser navigation cannot redirect this batch.
+    const destination = `${user.id}/${folder ? `${folder}/` : ''}`;
     const offset = uploads.length;
     setUploadOpen(true); setUploads((current) => [...current, ...chosen.map((file) => ({ file, state: 'waiting' as const }))]);
-    for (const [index, file] of chosen.entries()) {
-      const itemIndex = offset + index;
-      setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, state: 'uploading' } : item));
-      const path = `${user.id}/${folder ? `${folder}/` : ''}${file.name}`;
-      let uploadError: { message: string } | null = null;
-      if (file.size > 6 * 1024 * 1024) {
+    try {
+      for (const [index, file] of chosen.entries()) {
+        const itemIndex = offset + index;
+        const update = (patch: Partial<UploadItem>) => setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, ...patch } : item));
+        update({ state: 'uploading', progress: 0 });
+        const path = destination + file.name;
+        let stored = false;
         try {
-          await uploadLargeFile(file, path, (progress) => setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, progress } : item)));
-        } catch (err) {
-          uploadError = { message: err instanceof Error ? err.message : 'Upload failed.' };
+          if (file.size > 10 * 1024 * 1024 * 1024) throw new Error('Files must be 10 GB or smaller.');
+          if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, path, (progress) => update({ progress: Math.min(progress, 99) }));
+          else {
+            const { error: uploadError } = await uploadObject(BUCKET, path, file, file.type || 'application/octet-stream', (progress) => update({ progress: Math.min(progress, 99) }));
+            if (uploadError) throw new Error(uploadError.message);
+          }
+          stored = true;
+          await register(path, false, false, file.size, file.type || 'application/octet-stream');
+          stored = false;
+          update({ state: 'done', progress: 100 });
+          await latestLoad.current();
+        } catch (cause) {
+          if (stored) { try { await supabase.storage.from(BUCKET).remove([path]); } catch { /* Preserve original error. */ } }
+          update({ state: 'error', message: cause instanceof Error ? cause.message : 'Upload failed. Please try again.' });
         }
-      } else {
-        const result = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
-        uploadError = result.error;
       }
-      if (uploadError) setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, state: 'error', message: uploadError.message } : item));
-      else {
-        try { await register(path, false, false, file.size, file.type || 'application/octet-stream'); setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, state: 'done' } : item)); }
-        catch (err) { setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, state: 'error', message: err instanceof Error ? err.message : 'Could not save file details.' } : item)); }
-      }
-    }
-    await load();
+    } finally { uploadingBatch.current = false; }
   };
 
   const listTree = async (path: string): Promise<string[]> => {
@@ -533,6 +543,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const renderFileEntry = (entry: Entry) => <FileCard key={entry.path} entry={entry} shareMode={shareIndicators[entry.path]} location={guest || isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout === 'tree' ? 'list' : layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onRestore={() => void restoreEntry(entry)} onDelete={() => entry.trashedAt ? void permanentDelete(entry) : void deleteEntries([entry])} />;
 
   return (
+    <FileDropArea enabled={!guest && view === 'files' && !uploadOpen && !dialog && !preview && !shareEntry && !details} onFiles={(files) => void uploadFiles(files)}>
     <div className="file-manager min-h-[calc(100vh-72px)] text-slate-800">
       <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1680px]">
         {!guest && <aside className="fm-sidebar hidden w-[248px] shrink-0 border-r border-slate-200 bg-white p-5 md:flex md:flex-col">
@@ -554,14 +565,13 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
           {error && <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
           {view === 'shared' && <div className="mb-3 flex items-center gap-3 text-sm"><button onClick={() => { navigate({ view: 'shared' }); }} className="font-semibold text-blue-700">Shared with me</button>{sharedFolder && <span className="truncate text-slate-500">/ {sharedFolder.split('/').slice(1).join(' / ')}</span>}<button title="Refresh shared items" onClick={() => { if (sharedOffset === 0) void load(); else setSharedOffset(0); }} className="ml-auto rounded-lg p-2 text-blue-600"><RotateCcw size={16} /></button><span className="text-xs text-slate-500">Read-only</span></div>}
           {view === 'files' && crumbs.length > 0 && <button onClick={() => goTo(crumbs.slice(0, -1).join('/'))} className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft size={16} />Back to {crumbs.length > 1 ? crumbs[crumbs.length - 2] : 'My Files'}</button>}
-          <section data-drag-active={dropActive} onDragOver={(event) => { event.preventDefault(); if (!guest) setDropActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false); }} onDrop={(event) => { event.preventDefault(); setDropActive(false); if (!guest && event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className={`fm-surface min-h-[450px] rounded-2xl border bg-white p-4 transition sm:p-5 ${dropActive ? 'border-blue-400 bg-blue-50/70 ring-4 ring-blue-100' : 'border-slate-200'}`}>
+          <section className="fm-surface min-h-[450px] rounded-2xl border border-slate-200 bg-white p-4 transition sm:p-5">
             <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-slate-800">{isSearching ? `Search results for “${searchTerm.trim()}”` : view === 'shared' ? 'Shared with me' : view === 'trash' ? 'Recently deleted' : 'All items'}</h2><p className="mt-0.5 text-xs text-slate-400">{isSearching ? `${filtered.length}${searchHasMore ? '+' : ''} matching ${filtered.length === 1 ? 'item' : 'items'} across your accessible files` : view === 'shared' ? 'Files shared by other people appear here.' : `${filtered.length} ${filtered.length === 1 ? 'item' : 'items'}`}</p></div>{!guest && view === 'files' && !isSearching && <button onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Plus size={15} />Add files</button>}</div>
             {(loading && !isSearching) || (isSearching && searchLoading && searchResults.length === 0) ? <div className="flex h-64 items-center justify-center text-blue-600"><LoaderCircle className="animate-spin" /></div> : filtered.length === 0 ? <EmptyState icon={view === 'trash' ? <Trash2 size={28} /> : view === 'favorites' ? <Star size={28} /> : <Folder size={28} />} title={isSearching ? 'No matching files' : guest ? publicFolder ? 'This public folder is empty' : 'No publicly shared files are available.' : view === 'shared' ? 'No shared items here' : view === 'trash' ? 'Trash is empty' : view === 'favorites' ? 'No favorites yet' : 'This folder is empty'} subtitle={guest ? 'Only content shared with Everyone is shown.' : isSearching ? 'Try another name or clear your search.' : view === 'files' ? 'Upload files or create a folder to get started.' : 'Items you add here will appear in this view.'} /> : (
               <>{layout === 'tree' ? <FileTree key={`${user?.id ?? "public"}:${view}:${folder}:${sharedFolder}:${publicFolder?.path ?? ""}:${isSearching}`} entries={filtered} userId={user?.id ?? ""} query={searchTerm} label={isSearching ? 'Search results' : title} renderEntry={renderFileEntry} onEntriesChange={setTreeEntries} onOpen={enterFolder} onSelect={(entry) => setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path])} selected={selected} /> : <div className={layout === 'grid' ? 'fm-compact-grid' : 'divide-y divide-slate-100'}>{filtered.map(renderFileEntry)}</div>}{isSearching && searchHasMore && <div className="mt-5 flex justify-center"><button disabled={searchLoading} onClick={() => void searchAllFiles(searchOffset)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">{searchLoading ? 'Loading…' : 'Load more results'}</button></div>}</>
             )}
             {view === 'files' && !isSearching && rootHasMore && <button disabled={rootPaging} onClick={() => void loadMoreRoot()} className="mt-4 rounded-xl border border-slate-200 px-4 py-2 text-sm text-blue-700 disabled:opacity-50">{rootPaging ? 'Loading…' : 'Load more items'}</button>}
             {!guest && (view === 'shared' || (view === 'files' && !folder)) && !isSearching && sharedHasMore && <button disabled={loading || rootPaging} onClick={() => { if (view === 'shared') setSharedOffset((offset) => offset + 50); else void loadMoreSharedRoot(); }} className="mt-4 rounded-xl border border-slate-200 px-4 py-2 text-sm text-blue-700 disabled:opacity-50">{loading || rootPaging ? 'Loading…' : 'Load more shared items'}</button>}
-            {dropActive && <div className="pointer-events-none fixed inset-4 z-40 flex items-center justify-center rounded-3xl border-2 border-dashed border-blue-400 bg-blue-600/10 text-xl font-semibold text-blue-800">Drop files to upload</div>}
           </section>
           <div className="mt-4 flex items-center justify-between text-xs text-slate-400"><span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Access is controlled by the owner’s sharing settings.</span><span>{filtered.length} items</span></div>
           <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />
@@ -575,10 +585,11 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
 
       {dialog && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><form onSubmit={(event) => { event.preventDefault(); if (dialog.kind === 'folder') void createFolder(); else void performPathAction(); }} className="fm-dialog w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-900">{dialog.kind === 'folder' ? 'Create a folder' : dialog.kind === 'rename' ? 'Rename item' : dialog.kind === 'copy' ? 'Copy item' : 'Move item'}</h2><button type="button" onClick={() => setDialog(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button></div><label className="mb-2 block text-sm font-medium text-slate-700">{dialog.kind === 'folder' || dialog.kind === 'rename' ? 'Name' : 'Destination folder path'}</label><input autoFocus value={dialog.value} onChange={(event) => setDialog({ ...dialog, value: event.target.value })} placeholder={dialog.kind === 'folder' ? 'New folder' : dialog.kind === 'rename' ? 'New name' : 'For example: Documents/Reports'} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" /><p className="mt-2 text-xs text-slate-500">{dialog.kind === 'folder' ? 'New folders inherit sharing from their parent folder.' : 'Use a path relative to My Files. Leave empty for the root folder.'}</p><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDialog(null)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={busy} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Working…' : 'Continue'}</button></div></form></div>}
 
-      {uploadOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && uploads.every((item) => item.state !== 'uploading')) setUploadOpen(false); }}><div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!guest && event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className="fm-dialog w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8"><div className="mb-6 flex items-start justify-between"><div><h2 className="text-xl font-bold text-slate-900">Upload files</h2><p className="mt-1 text-sm text-slate-500">Add files to {folder.split('/')[folder.split('/').length - 1] || 'My Files'}</p></div><button onClick={() => setUploadOpen(false)} aria-label="Close upload dialog" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X size={19} /></button></div><button onClick={() => uploadInput.current?.click()} className="flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/60 px-6 py-10 text-center transition hover:border-blue-400 hover:bg-blue-50"><span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm"><Upload size={24} /></span><span className="font-semibold text-slate-800">Drop files here to upload</span><span className="mt-1 text-sm text-slate-500">or click to browse · multiple files supported</span></button><input ref={uploadInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />{uploads.length > 0 && <div className="mt-5 max-h-52 space-y-2 overflow-y-auto">{uploads.map((item, index) => <div key={`${item.file.name}-${index}`} className="rounded-xl border border-slate-100 px-3 py-2.5"><div className="flex items-center gap-3"><File size={18} className="shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-800">{item.file.name}</p><p className="text-xs text-slate-400">{item.message ?? (item.state === 'uploading' ? `${item.progress ?? 0}% · ` : '')}{formatSize(item.file.size)}</p></div>{item.state === 'uploading' ? <LoaderCircle className="animate-spin text-blue-600" size={18} /> : item.state === 'done' ? <Check className="text-emerald-500" size={18} /> : item.state === 'error' ? <X className="text-rose-500" size={18} /> : <span className="text-xs text-slate-400">Waiting</span>}</div>{item.state === 'uploading' && <div className="ml-8 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${item.progress ?? 0}%` }} /></div>}</div>)}</div>}<div className="mt-6 flex justify-end"><button onClick={() => setUploadOpen(false)} disabled={uploads.some((item) => item.state === 'uploading')} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{uploads.length && uploads.every((item) => item.state === 'done' || item.state === 'error') ? 'Done' : 'Close'}</button></div></div></div>}
+      {uploadOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && uploads.every((item) => item.state !== 'uploading' && item.state !== 'waiting')) setUploadOpen(false); }}><div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!guest && event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className="fm-dialog w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8"><div className="mb-6 flex items-start justify-between"><div><h2 className="text-xl font-bold text-slate-900">Upload files</h2><p className="mt-1 text-sm text-slate-500">Add files to {folder.split('/')[folder.split('/').length - 1] || 'My Files'}</p></div><button disabled={uploads.some((item) => item.state === 'uploading' || item.state === 'waiting')} onClick={() => setUploadOpen(false)} aria-label="Close upload dialog" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X size={19} /></button></div><button disabled={uploads.some((item) => item.state === 'uploading' || item.state === 'waiting')} onClick={() => uploadInput.current?.click()} className="flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/60 px-6 py-10 text-center transition hover:border-blue-400 hover:bg-blue-50"><span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm"><Upload size={24} /></span><span className="font-semibold text-slate-800">Drop files here to upload</span><span className="mt-1 text-sm text-slate-500">or click to browse · multiple files supported</span></button><input ref={uploadInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />{uploads.length > 0 && <div className="mt-5 max-h-52 space-y-2 overflow-y-auto">{uploads.map((item, index) => <div key={`${item.file.name}-${index}`} className="rounded-xl border border-slate-100 px-3 py-2.5"><div className="flex items-center gap-3"><File size={18} className="shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-800">{item.file.name}</p><p className="text-xs text-slate-400">{item.state === 'done' ? 'Completed · ' : item.state === 'error' ? `Failed: ${item.message} · ` : item.state === 'uploading' ? `Uploading ${item.progress ?? 0}% · ` : 'Waiting · '}{formatSize(item.file.size)}</p></div>{item.state === 'uploading' ? <LoaderCircle className="animate-spin text-blue-600" size={18} /> : item.state === 'done' ? <Check className="text-emerald-500" size={18} /> : item.state === 'error' ? <X className="text-rose-500" size={18} /> : <span className="text-xs text-slate-400">Waiting</span>}</div>{item.state === 'uploading' && <div className="ml-8 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${item.progress ?? 0}%` }} /></div>}</div>)}</div>}<div className="mt-6 flex justify-end"><button onClick={() => setUploadOpen(false)} disabled={uploads.some((item) => item.state === 'uploading' || item.state === 'waiting')} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{uploads.length && uploads.every((item) => item.state === 'done' || item.state === 'error') ? 'Done' : 'Close'}</button></div></div></div>}
 
       {preview && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-3 sm:p-8" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}><div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3"><div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{preview.entry.name}</div><button onClick={() => void download(preview.entry)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Download"><Download size={17} /></button><button onClick={() => setPreview(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Close"><X size={18} /></button></div><div className="flex min-h-[300px] items-center justify-center overflow-auto bg-slate-100 p-3 sm:min-h-[500px]">{preview.entry.mimeType.startsWith('image/') ? <img src={preview.url} alt={preview.entry.name} className="max-h-[75vh] max-w-full object-contain" /> : preview.entry.mimeType.startsWith('video/') ? <video src={preview.url} controls className="max-h-[75vh] max-w-full" /> : preview.entry.mimeType === 'application/pdf' ? <iframe title={preview.entry.name} src={preview.url} className="h-[75vh] w-full rounded-lg bg-white" /> : preview.text !== undefined ? <pre className="max-h-[75vh] w-full overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white p-5 text-sm text-slate-800">{preview.text}</pre> : <div className="text-center"><div className="mb-3 flex justify-center">{fileIcon(preview.entry, 48)}</div><p className="font-semibold text-slate-800">Preview isn’t available</p><p className="mt-1 text-sm text-slate-500">{kindLabel(preview.entry)} · {formatSize(preview.entry.size)}</p><button onClick={() => void download(preview.entry)} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Download file</button></div>}</div></div></div>}
     </div>
+    </FileDropArea>
   );
 }
 

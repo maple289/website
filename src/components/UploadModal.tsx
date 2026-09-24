@@ -1,19 +1,21 @@
+import { BatchUploadModal } from '@/components/BatchUploadModal';
 import { useEffect, useRef, useState } from 'react';
-import * as tus from 'tus-js-client';
 import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
-import { fetchStorageBasePath } from '@/lib/storageSettings';
+import { isSupportedImage } from '@/lib/imageStorage';
+import { uploadVideo } from '@/lib/mediaUploads';
 
 
 type UploadModalProps = {
   onClose: () => void;
   onUploaded: () => void;
+  initialFiles?: File[];
+  onItemUploaded?: () => void;
 };
 
-export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
+export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded }: UploadModalProps) {
   const { user } = useAuth();
+  const [batchFiles, setBatchFiles] = useState<File[]>(initialFiles ?? []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -28,11 +30,11 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !uploading) onClose();
+      if (e.key === 'Escape' && !uploading && !batchFiles.length) onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [uploading, onClose]);
+  }, [uploading, onClose, batchFiles.length]);
 
   const captureFirstFrame = (videoFile: File) => {
     const url = URL.createObjectURL(videoFile);
@@ -107,96 +109,15 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
     setUploading(true);
     setUploadProgress(0);
-    let uploadedVideoPath: string | null = null;
-    let uploadedPreviewPath: string | null = null;
     try {
-      const videoId = createStorageId();
-      const fileId = createStorageId();
-      const sourceExtension = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
-      const extension = sourceExtension.replace(/[^a-z0-9]/g, '') || 'mp4';
-      const videosBase = await fetchStorageBasePath('videos');
-      const pathPrefix = videosBase ? `${videosBase}/` : '';
-      const storagePath = `${user.id}/videos/${videoId}/${fileId}.${extension}`;
-      const bucketPath = `${pathPrefix}${storagePath}`;
-
-      const mimeType = file.type || guessMimeType(extension);
-
-      if (file.size > 50 * 1024 * 1024) {
-        await uploadLargeFile(file, bucketPath, mimeType, setUploadProgress);
-      } else {
-        const { error: uploadErr } = await supabase.storage
-          .from('user-videos')
-          .upload(bucketPath, file, { contentType: mimeType, upsert: false });
-
-        if (uploadErr) {
-          console.error('Video upload failed:', uploadErr);
-          setError(uploadErr.message || 'We could not upload that video. Please check the file and try again.');
-          setUploading(false);
-          return;
-        }
-      }
-      uploadedVideoPath = bucketPath;
-
-      let previewPath: string | null = null;
-      let previewBucketPath: string | null = null;
-      if (previewImage) {
-        const previewSource = await dataUrlToBlob(previewImage);
-        const { preview } = await createImageVariants(previewSource);
-        const imagesBase = await fetchStorageBasePath('images');
-        const imgPrefix = imagesBase ? `${imagesBase}/` : '';
-        previewPath = `${user.id}/video-previews/${videoId}/${createStorageId()}.webp`;
-        previewBucketPath = `${imgPrefix}${previewPath}`;
-        const { error: previewErr } = await supabase.storage
-          .from('user-images')
-          .upload(previewBucketPath, preview, { contentType: 'image/webp' });
-
-        if (previewErr) {
-          await supabase.storage.from('user-videos').remove([bucketPath]);
-          uploadedVideoPath = null;
-          console.error('Preview upload failed:', previewErr);
-          setError('We could not upload the preview image. Please try a different image.');
-          setUploading(false);
-          return;
-        }
-        uploadedPreviewPath = previewBucketPath;
-      }
-
-      const { error: dbErr } = await supabase.from('videos').insert({
-        id: videoId,
-        owner_id: user.id,
-        owner_email: user.email ?? '',
-        file_name: fileName.trim(),
-        storage_path: storagePath,
-        preview_url: null,
-        preview_path: previewPath,
-        visibility,
-        file_size: file.size,
-        mime_type: mimeType,
-        processing_status: 'ready',
-      });
-
-      if (dbErr) {
-        await supabase.storage.from('user-videos').remove([bucketPath]);
-        if (previewBucketPath) await supabase.storage.from('user-images').remove([previewBucketPath]);
-        uploadedVideoPath = null;
-        uploadedPreviewPath = null;
-        console.error('Saving the video record failed:', dbErr);
-        setError('We could not save this video. Please try again.');
-        setUploading(false);
-        return;
-      }
-
+      await uploadVideo({ file, user, fileName, visibility, previewImage, onProgress: setUploadProgress });
+      if (!onItemUploaded) window.dispatchEvent(new CustomEvent('media-uploaded', { detail: 'video' }));
       onUploaded();
-    } catch (err: unknown) {
-      if (uploadedVideoPath) await supabase.storage.from('user-videos').remove([uploadedVideoPath]);
-      if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([uploadedPreviewPath]);
-      console.error('Upload failed:', err);
-      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
-      setError(msg);
-      setUploading(false);
-      setUploadProgress(0);
-    }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed.'); }
+    finally { setUploading(false); }
   };
+
+  if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="video" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -207,7 +128,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><Film size={20} /></div>
             <h2 className="text-lg font-semibold tracking-[-0.02em]">Upload Video</h2>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button disabled={uploading} onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
@@ -219,15 +140,15 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(false);
-                if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]);
+                if (e.dataTransfer.files.length) setBatchFiles(Array.from(e.dataTransfer.files));
               }}
               onClick={() => fileInputRef.current?.click()}
               className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-12 transition ${dragOver ? 'border-[#ff3d46] bg-[#ff3d46]/5' : 'border-[#3a3a3a] hover:border-[#555]'}`}
             >
               <Upload size={36} className="mb-3 text-[#666]" />
-              <p className="text-sm font-medium text-[#ccc]">Drag and drop a video here</p>
+              <p className="text-sm font-medium text-[#ccc]">Drag and drop videos here</p>
               <p className="mt-1 text-xs text-[#777]">or click to browse — MP4, WebM, MOV</p>
-              <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} />
+              <input ref={fileInputRef} type="file" multiple accept="video/*" className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length > 1) setBatchFiles(files); else if (files[0]) handleFileSelect(files[0]); e.target.value = ''; }} />
             </div>
           ) : (
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#3a3a3a] bg-[#121212] p-3">
@@ -306,7 +227,7 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
           )}
 
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" disabled={uploading} onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
               {uploading ? <><Loader2 size={16} className="animate-spin" /> {uploadProgress > 0 ? `Uploading ${uploadProgress}%...` : 'Uploading...'}</> : <><Upload size={16} /> Upload</>}
             </button>
@@ -315,64 +236,4 @@ export function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       </div>
     </div>
   );
-}
-
-async function uploadLargeFile(
-  file: File,
-  bucketPath: string,
-  mimeType: string,
-  onProgress?: (pct: number) => void,
-): Promise<void> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('You must be signed in to upload.');
-
-  const parsedSupabaseUrl = new URL(supabaseUrl);
-  const storageEndpoint = parsedSupabaseUrl.hostname.endsWith('.supabase.co')
-    ? `https://${parsedSupabaseUrl.hostname.split('.')[0]}.storage.supabase.co/storage/v1/upload/resumable`
-    : new URL('/storage/v1/upload/resumable', parsedSupabaseUrl).toString();
-
-  await new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(file, {
-      endpoint: storageEndpoint,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      headers: {
-        authorization: `Bearer ${session.access_token}`,
-        apikey: anonKey,
-        'x-upsert': 'false',
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      chunkSize: 6 * 1024 * 1024,
-      metadata: {
-        bucketName: 'user-videos',
-        objectName: bucketPath,
-        contentType: mimeType,
-        cacheControl: '3600',
-      },
-      onError: (error) => reject(error),
-      onProgress: (bytesUploaded, bytesTotal) => {
-        onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100));
-      },
-      onSuccess: () => resolve(),
-    });
-    upload.start();
-  });
-}
-
-function guessMimeType(ext: string): string {
-  const map: Record<string, string> = {
-    mp4: 'video/mp4',
-    mov: 'video/quicktime',
-    webm: 'video/webm',
-    mkv: 'video/x-matroska',
-    avi: 'video/x-msvideo',
-    m4v: 'video/x-m4v',
-    ogv: 'video/ogg',
-    wmv: 'video/x-ms-wmv',
-    flv: 'video/x-flv',
-    '3gp': 'video/3gpp',
-  };
-  return map[ext] ?? 'video/mp4';
 }

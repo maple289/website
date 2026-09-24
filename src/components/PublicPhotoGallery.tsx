@@ -12,10 +12,13 @@ export function PublicPhotoGallery({ searchTerm }: { searchTerm: string }) {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    supabase.from('photos').select('*').eq('visibility', 'public').order('created_at', { ascending: false }).then(({ data }) => {
-      setPhotos(data ?? []);
-      setLoading(false);
-    });
+    let active = true;
+    const load = () => { void supabase.from('photos').select('*').eq('visibility', 'public').order('created_at', { ascending: false }).then(({ data }) => {
+      if (active) { setPhotos(data ?? []); setLoading(false); }
+    }); };
+    const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'photo') load(); };
+    load(); window.addEventListener('media-uploaded', refresh);
+    return () => { active = false; window.removeEventListener('media-uploaded', refresh); };
   }, []);
 
   const filteredPhotos = photos.filter((photo) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Film, FolderOpen, Globe, Image as ImageIcon, Loader as Loader2, Play, Loader as LoaderIcon, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
@@ -21,7 +21,7 @@ export function HomePage({ tab, searchTerm, onTabChange, onFiles }: HomePageProp
   const [loading, setLoading] = useState(true);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('videos')
@@ -30,16 +30,21 @@ export function HomePage({ tab, searchTerm, onTabChange, onFiles }: HomePageProp
       .order('created_at', { ascending: false });
     if (!error) setVideos(data ?? []);
     setLoading(false);
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'video') void load(); };
+    window.addEventListener('media-uploaded', refresh);
+    return () => window.removeEventListener('media-uploaded', refresh);
+  }, [load]);
 
   // Auto-refresh while any public video is still processing
   useEffect(() => {
     if (!videos.some((v) => v.processing_status === 'processing')) return;
     const interval = setInterval(() => load(), 5000);
     return () => clearInterval(interval);
-  }, [videos]);
+  }, [videos, load]);
 
   const filtered = videos.filter((v) => {
     const term = searchTerm.trim().toLowerCase();

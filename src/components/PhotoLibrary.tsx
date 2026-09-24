@@ -1,3 +1,4 @@
+import { FileDropArea } from '@/components/FileDropArea';
 import { useCallback, useEffect, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +18,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const [error, setError] = useState<string | null>(null);
   const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
   const [success, setSuccess] = useState('');
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
@@ -34,6 +36,12 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   }, [user]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'photo') void load(); };
+    window.addEventListener('media-uploaded', refresh);
+    return () => window.removeEventListener('media-uploaded', refresh);
+  }, [load]);
 
   const filteredPhotos = photos.filter((photo) => {
     const term = searchTerm.trim().toLowerCase();
@@ -63,15 +71,16 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   };
 
   return (
+    <FileDropArea enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div className="mx-auto max-w-[1560px] px-5 py-8 lg:px-8">
       <div className="mb-7 flex items-center justify-between gap-4">
         <div><h1 className="text-2xl font-semibold tracking-[-0.04em]">My Photos</h1><p className="mt-1 text-sm text-[#888]">Originals, previews, and thumbnails are stored separately.</p></div>
-        <button onClick={() => setShowUpload(true)} className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-4 text-sm font-semibold text-white"><Upload size={17} /> Upload photo</button>
+        <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-4 text-sm font-semibold text-white"><Upload size={17} /> Upload photo</button>
       </div>
       {success && <div role="status" className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}
       {error && <div className="mb-5 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
       {loading ? <div className="flex justify-center py-24"><Loader2 className="animate-spin text-[#ff3d46]" /></div> : filteredPhotos.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">{searchTerm ? 'No matching photos' : 'Your photo library is empty'}</p>{!searchTerm && <button onClick={() => setShowUpload(true)} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button>}</div>
+        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">{searchTerm ? 'No matching photos' : 'Your photo library is empty'}</p>{!searchTerm && <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button>}</div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredPhotos.map((photo, index) => (
@@ -91,10 +100,11 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
         </div>
       )}
       {editingPhoto && <EditPhotoModal key={editingPhoto.id} photo={editingPhoto} onClose={() => setEditingPhoto(null)} onSaved={(updated) => { setPhotos((current) => current.map((photo) => photo.id === updated.id ? updated : photo)); setEditingPhoto(null); setError(null); setSuccess('Photo changes saved.'); }} />}
-      {showUpload && <PhotoUploadModal onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />}
+      {showUpload && <PhotoUploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />}
       {viewingIndex !== null && viewingIndex < filteredPhotos.length && (
         <PhotoViewer photos={filteredPhotos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
       )}
     </div>
+    </FileDropArea>
   );
 }

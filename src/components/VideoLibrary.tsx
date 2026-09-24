@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { FileDropArea } from '@/components/FileDropArea';
+import { useCallback, useEffect, useState } from 'react';
 import { Film, Globe, Library, Loader as Loader2, Lock, Pencil, Play, Plus, Trash2, Upload, TriangleAlert as AlertTriangle, Loader as LoaderIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
@@ -15,12 +16,13 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [editingVideo, setEditingVideo] = useState<Video | null>(null);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
   const [deletingVideo, setDeletingVideo] = useState<Video | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     if (!user) {
@@ -39,16 +41,22 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       setVideos(data ?? []);
     }
     setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { load(); }, [load]);
 
   // Auto-refresh while any video is still processing
   useEffect(() => {
     if (!videos.some((v) => v.processing_status === 'processing')) return;
     const interval = setInterval(() => load(), 5000);
     return () => clearInterval(interval);
-  }, [videos]);
+  }, [videos, load]);
+
+  useEffect(() => {
+    const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'video') void load(); };
+    window.addEventListener('media-uploaded', refresh);
+    return () => window.removeEventListener('media-uploaded', refresh);
+  }, [load]);
 
   const filteredVideos = videos.filter((video) => {
     const term = searchTerm.trim().toLowerCase();
@@ -76,6 +84,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   };
 
   return (
+    <FileDropArea enabled={!!user && !showUpload && !editingVideo && !playingVideo && !deletingVideo} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -83,7 +92,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
           <p className="mt-1 text-sm text-[#888]">{filteredVideos.length} of {videos.length} {videos.length === 1 ? 'video' : 'videos'} — manage your uploaded content</p>
         </div>
         <button
-          onClick={() => setShowUpload(true)}
+          onClick={() => { setDroppedFiles([]); setShowUpload(true); }}
           className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] px-4 text-sm font-semibold text-white transition hover:bg-[#ff5962]"
         >
           <Upload size={18} /> Upload video
@@ -101,7 +110,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
           <Library className="mx-auto mb-3 text-[#555]" size={36} />
           <p className="text-base font-medium text-[#aaa]">{searchTerm ? 'No matching videos' : 'Your library is empty'}</p>
           <p className="mt-1 text-sm text-[#888]">{searchTerm ? 'Try a different search.' : 'Upload your first video to get started.'}</p>
-          {!searchTerm && <button onClick={() => setShowUpload(true)} className="mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962] mx-auto"><Plus size={18} /> Upload video</button>}
+          {!searchTerm && <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962] mx-auto"><Plus size={18} /> Upload video</button>}
         </div>
       ) : (
         <div className="grid gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -118,7 +127,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       )}
 
       {showUpload && (
-        <UploadModal onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />
+        <UploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />
       )}
 
       {editingVideo && (
@@ -154,6 +163,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
         </div>
       )}
     </div>
+    </FileDropArea>
   );
 }
 

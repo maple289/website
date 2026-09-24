@@ -1,17 +1,20 @@
+import { BatchUploadModal } from '@/components/BatchUploadModal';
 import { useEffect, useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Upload, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { createImageVariants, createStorageId, fileExtension, isSupportedImage } from '@/lib/imageStorage';
-import { fetchStorageBasePath } from '@/lib/storageSettings';
+import { isSupportedImage } from '@/lib/imageStorage';
+import { uploadPhoto } from '@/lib/mediaUploads';
 
 type PhotoUploadModalProps = {
   onClose: () => void;
   onUploaded: () => void;
+  initialFiles?: File[];
+  onItemUploaded?: () => void;
 };
 
-export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps) {
+export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUploaded }: PhotoUploadModalProps) {
   const { user } = useAuth();
+  const [batchFiles, setBatchFiles] = useState<File[]>(initialFiles ?? []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -22,10 +25,10 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
   const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !uploading && !batchFiles.length) onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, uploading, batchFiles.length]);
 
   const selectFile = (selectedFile: File) => {
     if (!isSupportedImage(selectedFile)) {
@@ -54,96 +57,15 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
     }
 
     setUploading(true);
-    const uploadedPaths: string[] = [];
-
     try {
-      const photoId = createStorageId();
-      const imagesBase = await fetchStorageBasePath('images');
-      const pathPrefix = imagesBase ? `${imagesBase}/` : '';
-      const dbBasePath = `${user.id}/photos/${photoId}`;
-      const bucketBasePath = `${pathPrefix}${dbBasePath}`;
-      const storagePath = `${dbBasePath}/original.${fileExtension(file)}`;
-
-      // Upload the original first — this must always succeed
-      const originalUploadPath = `${bucketBasePath}/original.${fileExtension(file)}`;
-      const { error: originalError } = await supabase.storage
-        .from('user-images')
-        .upload(originalUploadPath, file, { contentType: file.type });
-      if (originalError) {
-        console.error('Original photo upload failed:', originalError);
-        throw new Error(originalError.message || 'We could not upload that photo. Please try again.');
-      }
-      uploadedPaths.push(originalUploadPath);
-
-      // Generate preview/thumbnail variants — failure here is non-fatal
-      let previewPath: string | null = null;
-      let thumbnailPath: string | null = null;
-      let width: number | null = null;
-      let height: number | null = null;
-      let variantWarning: string | null = null;
-
-      try {
-        const variants = await createImageVariants(file);
-        width = variants.width;
-        height = variants.height;
-
-        const variantFiles = [
-          { path: `${bucketBasePath}/preview.webp`, body: variants.preview, contentType: 'image/webp' },
-          { path: `${bucketBasePath}/thumbnail.webp`, body: variants.thumbnail, contentType: 'image/webp' },
-        ];
-
-        for (const item of variantFiles) {
-          const { error: variantError } = await supabase.storage
-            .from('user-images')
-            .upload(item.path, item.body, { contentType: item.contentType });
-          if (variantError) {
-            console.error('Variant upload failed:', variantError);
-            throw new Error('variant-upload-failed');
-          }
-          uploadedPaths.push(item.path);
-        }
-
-        previewPath = `${dbBasePath}/preview.webp`;
-        thumbnailPath = `${dbBasePath}/thumbnail.webp`;
-      } catch (variantError) {
-        console.error('Thumbnail generation failed (non-fatal):', variantError);
-        variantWarning = 'Your photo was uploaded, but the preview thumbnail could not be generated. The original is preserved.';
-      }
-
-      const { error: databaseError } = await supabase.from('photos').insert({
-        id: photoId,
-        owner_id: user.id,
-        owner_email: user.email ?? '',
-        file_name: fileName.trim(),
-        storage_path: storagePath,
-        preview_path: previewPath,
-        thumbnail_path: thumbnailPath,
-        visibility,
-        file_size: file.size,
-        mime_type: file.type,
-        width,
-        height,
-      });
-
-      if (databaseError) {
-        console.error('Saving the photo record failed:', databaseError);
-        throw new Error(databaseError.message || 'Failed to save photo record.');
-      }
-
-      if (variantWarning) {
-        // Upload succeeded but variants failed — close modal and inform via onUploaded
-        onUploaded();
-      } else {
-        onUploaded();
-      }
-    } catch (uploadError) {
-      if (uploadedPaths.length > 0) await supabase.storage.from('user-images').remove(uploadedPaths);
-      console.error('Photo upload failed:', uploadError);
-      const msg = uploadError instanceof Error ? uploadError.message : 'We could not upload that photo. Please check the file and try again.';
-      setError(msg);
-      setUploading(false);
-    }
+      await uploadPhoto({ file, user, fileName, visibility, onProgress: () => {} });
+      if (!onItemUploaded) window.dispatchEvent(new CustomEvent('media-uploaded', { detail: 'photo' }));
+      onUploaded();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed.'); }
+    finally { setUploading(false); }
   };
+
+  if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="photo" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -154,7 +76,7 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><ImageIcon size={20} /></div>
             <h2 className="text-lg font-semibold">Upload Photo</h2>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button disabled={uploading} onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} action="#" className="px-6 pb-7 pt-5">
@@ -176,17 +98,16 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
               event.preventDefault();
               setDragOver(false);
               if (uploading) return;
-              const droppedFile = event.dataTransfer.files?.[0];
-              if (droppedFile) selectFile(droppedFile);
+              if (event.dataTransfer.files.length) setBatchFiles(Array.from(event.dataTransfer.files));
             }}
             disabled={uploading}
             className={`flex min-h-52 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-[#121212] transition ${dragOver ? 'border-[#ff3d46] bg-[#ff3d46]/5' : 'border-[#3a3a3a] hover:border-[#555]'}`}
           >
             {previewUrl ? <img src={previewUrl} alt="Selected" className="max-h-72 w-full object-contain" /> : (
-              <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Drag and drop an image here or click to browse</p><p className="mt-1 text-xs">JPEG, PNG, WebP, GIF, AVIF · up to 25 MB</p></div>
+              <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Drag and drop images here or click to browse</p><p className="mt-1 text-xs">JPEG, PNG, WebP, GIF, AVIF · up to 25 MB</p></div>
             )}
           </button>
-          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const f = event.target.files?.[0]; if (f) selectFile(f); event.target.value = ''; }} />
+          <input ref={inputRef} type="file" multiple accept="image/*" className="hidden" onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length > 1) setBatchFiles(files); else if (files[0]) selectFile(files[0]); event.target.value = ''; }} />
 
           {file && (
             <>
@@ -202,7 +123,7 @@ export function PhotoUploadModal({ onClose, onUploaded }: PhotoUploadModalProps)
 
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] hover:bg-[#272727]">Cancel</button>
+            <button type="button" disabled={uploading} onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white disabled:opacity-60">
               {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Upload
             </button>

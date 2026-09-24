@@ -1,3 +1,4 @@
+import { FileDropArea } from '@/components/FileDropArea';
 import { useEffect, useRef, useState } from 'react';
 import { Bell, FolderOpen, Chrome as Home, Images, Menu, Search, Settings, Upload, Video, X, Youtube, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
@@ -44,6 +45,7 @@ function AppContent() {
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [droppedMedia, setDroppedMedia] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [homeTab, setHomeTab] = useState<'videos' | 'photos'>('videos');
@@ -132,7 +134,7 @@ function AppContent() {
             {isAuthed && (
               <>
                 <button
-                  onClick={() => uploadsPhoto ? setShowPhotoUpload(true) : setShowUpload(true)}
+                  onClick={() => { setDroppedMedia([]); if (uploadsPhoto) setShowPhotoUpload(true); else setShowUpload(true); }}
                   aria-label={uploadsPhoto ? 'Upload photo' : 'Upload video'}
                   className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition hover:bg-[#272727]"
                 >
@@ -166,14 +168,14 @@ function AppContent() {
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff6670]"><Upload size={18} /></div>
             <p className="text-sm font-medium">Share your story</p>
             <p className="mt-1 text-xs leading-5 text-[#888]">Upload a video and inspire the world.</p>
-            <button onClick={() => setShowUpload(true)} className="mt-3 text-xs font-semibold text-[#ff6971] hover:text-[#ff9ba0]">Upload now</button>
+            <button onClick={() => { setDroppedMedia([]); setShowUpload(true); }} className="mt-3 text-xs font-semibold text-[#ff6971] hover:text-[#ff9ba0]">Upload now</button>
           </div>
         </aside>
       )}
 
       {/* Main content */}
       <main className={`pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {route === 'files' ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab !== 'files') { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && <FileManager key={user?.id ?? 'guest'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('files')} />}
+        {route === 'files' ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab !== 'files') { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && <FileManager key={user?.id ?? 'guest'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('files')} /></FileDropArea>}
       </main>
 
       {/* Auth modal */}
@@ -181,12 +183,12 @@ function AppContent() {
 
       {/* Upload modal */}
       {showUpload && isAuthed && (
-        <UploadModal onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} />
+        <UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} />
       )}
 
       {/* Photo upload modal */}
       {showPhotoUpload && isAuthed && (
-        <PhotoUploadModal onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} />
+        <PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} />
       )}
 
     </div>
