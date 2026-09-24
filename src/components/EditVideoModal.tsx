@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Film, Globe, Image as ImageIcon, Loader2, Lock, Pencil, Upload, X } from 'lucide-react';
+import { Film, Image as ImageIcon, Loader2, Pencil, Upload, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
 import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
+import { MediaEditFields } from '@/components/MediaEditFields';
 import { StorageImage } from '@/components/StorageImage';
 import { resolveBucketPath } from '@/lib/storageSettings';
 import { useVideoVolume } from '@/hooks/useVideoVolume';
@@ -199,25 +200,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
             </div>
           )}
 
-          {/* Video name */}
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Video Name</label>
-          <input
-            value={fileName}
-            onChange={(e) => setFileName(e.target.value)}
-            className="mb-4 h-11 w-full rounded-xl border border-[#3a3a3a] bg-[#121212] px-4 text-sm outline-none transition focus:border-[#4b86ff]"
-            placeholder="Video name"
-          />
-
-          {/* Visibility */}
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Visibility</label>
-          <div className="mb-5 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setVisibility('private')} className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition ${visibility === 'private' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999] hover:border-[#4a4a4a]'}`}>
-              <Lock size={15} /> Private
-            </button>
-            <button type="button" onClick={() => setVisibility('public')} className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition ${visibility === 'public' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999] hover:border-[#4a4a4a]'}`}>
-              <Globe size={15} /> Public
-            </button>
-          </div>
+          <MediaEditFields kind="Video" name={fileName} onNameChange={setFileName} visibility={visibility} onVisibilityChange={setVisibility} disabled={saving} />
 
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
