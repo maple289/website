@@ -1,13 +1,11 @@
-/* Fluent-inspired surfaces, scoped to File Manager. */
+/* Compact, light File Manager surfaces. All rules are scoped. */
 .file-manager {
   font-family: 'Segoe UI Variable', 'Segoe UI', 'DM Sans', sans-serif;
-  background:
-    radial-gradient(ellipse at 95% 0%, #e4edfc 0%, transparent 55%),
-    linear-gradient(145deg, #f5f7fb, #eef2f8);
+  background: linear-gradient(150deg, #f7f9fc, #eef3f8);
 }
 
 .file-manager .fm-sidebar {
-  background: linear-gradient(180deg, #f9fbffed, #f0f4fbe6);
+  background: #f7f9fc;
   border-color: #dce4ef;
 }
 
@@ -18,7 +16,7 @@
 }
 
 .file-manager .fm-nav-item[data-active='true'] {
-  background: linear-gradient(110deg, #e1edfd, #edf4ff);
+  background: #eaf1fc;
   border-color: #d3e2f5;
   color: #145a9d;
   box-shadow: inset 0 1px 0 #ffffffb3, 0 2px 5px #244a7910;
@@ -36,15 +34,16 @@
 }
 
 .file-manager .fm-storage {
-  background: linear-gradient(135deg, #ffffffd9, #eaf1fb);
+  background: #fff;
   border-color: #dbe4ef;
   box-shadow: inset 0 1px 0 white, 0 4px 16px #25466b08;
 }
 
 .file-manager .fm-surface {
-  background-color: #ffffffc9;
-  border-color: #ffffff;
-  box-shadow: 0 6px 24px #243c6010, 0 1px 3px #243c6008;
+  background-color: #fff;
+  border-color: #e6ebf2;
+  box-shadow: 0 2px 12px #243c6005;
+  border-radius: 16px;
 }
 
 .file-manager .fm-surface[data-drag-active='true'] {
@@ -70,14 +69,14 @@
 }
 
 .file-manager .fm-card--grid {
-  background: linear-gradient(150deg, white, #fafcff);
+  background: #fff;
   border-color: #e3e9f1;
   box-shadow: 0 2px 4px #263b5905, inset 0 1px 0 white;
 }
 
 .file-manager .fm-compact-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(132px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
   gap: 10px;
 }
 
@@ -158,12 +157,12 @@
 }
 
 .file-manager .fm-icon-tile {
-  background: linear-gradient(145deg, #f1f5fc, #e9eff8);
-  box-shadow: inset 0 1px 0 #ffffffcc;
+  background: #f6f8fb;
+  overflow: hidden;
 }
 
 .file-manager .fm-card[data-folder='true'] .fm-icon-tile {
-  background: radial-gradient(ellipse at 50% 30%, #fffdf5, #fff5da);
+  background: #fff8e8;
 }
 
 .file-manager .fm-card[data-folder='true'] .fm-icon-tile > svg {
@@ -172,16 +171,16 @@
 }
 
 .file-manager .fm-card[data-selected='true'] {
-  background: linear-gradient(135deg, #edf5ff, #e4efff);
+  background: #edf4ff;
   border-color: #83b5eb;
   box-shadow: 0 0 0 2px #c5ddf7;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .file-manager .fm-card--grid:hover {
-    transform: translateY(-3px);
+    transform: translateY(-1px);
     border-color: #bfd2e9;
-    box-shadow: 0 8px 18px #23496f12, 0 2px 5px #23496f08;
+    box-shadow: 0 3px 10px #23496f0d;
   }
 
   .file-manager .fm-card--list:hover {
@@ -194,7 +193,7 @@
   }
 
   .file-manager .fm-card[data-folder='true']:hover .fm-icon-tile > svg {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
   }
 }
 
@@ -235,3 +234,32 @@
     transform: none;
   }
 }
+
+.file-manager .fm-sidebar { width: 210px; padding: 20px 14px; border-color: #e5eaf1; }
+.file-manager .fm-card--grid[data-folder='true'] { background: #fffdf7; border-color: #eee9da; }
+.file-manager .fm-card--grid[data-selected='true'] { background: #edf4ff; border-color: #6d9fdf; }
+.file-manager .fm-card--list { border: 1px solid transparent; margin: 2px 0; padding: 8px 10px; }
+.file-manager .fm-card--list[data-selected='true'] { border-color: #6d9fdf; }
+.file-manager .fm-card--grid .fm-icon-tile { height: 60px; }
+.file-manager .fm-card--grid .fm-item-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; min-height: 2.7em; }
+.file-manager .fm-item-kind { color: #718096; }
+.file-manager .fm-tree .fm-card--list { padding: 4px 6px; margin: 0; }
+.file-manager .fm-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid #e6ebf2; border-radius: 14px; background: #ffffffb3; }
+.file-manager .fm-toolbar .fm-search { box-shadow: none; border-color: #e3e8ef; background: #f8fafc; min-width: min(220px, 100%); }
+.file-manager .fm-view-switch { background: #f1f4f8; border: 0; gap: 2px; }
+.file-manager .fm-view-switch button { transition: background-color 160ms, box-shadow 160ms; }
+.file-manager .fm-view-switch button[aria-pressed='true'] { background: white; color: #2463ae; box-shadow: 0 1px 4px #213e631a; }
+.file-manager .fm-breadcrumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; color: #687b90; font-size: 12px; }
+.file-manager .fm-breadcrumbs button { padding: 4px 6px; border-radius: 6px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-manager .fm-breadcrumbs button:hover { color: #245f9f; background: #eaf1fa; }
+.file-manager .fm-breadcrumbs [aria-current='page'] { color: #263d56; font-weight: 600; }
+.file-manager .fm-video-poster { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #edf1f7; }
+.file-manager .fm-play-badge { position: absolute; bottom: 5px; right: 5px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #253954c9; color: white; }
+.fm-drop-area[data-drag-active='true'] .fm-surface { background: #eff6ff; border: 1px dashed #84ace0; box-shadow: 0 0 0 4px #d9e9fc80; }
+.fm-drop-message { position: fixed; top: 72px; background: transparent; }
+.fm-drop-message > span { padding: 20px 28px; border: 1px dashed #8cadd4; border-radius: 16px; background: #f8fbfff2; color: #245f9f; font-size: 18px; font-weight: 600; box-shadow: 0 8px 28px #2749710d; }
+@media (max-width: 1100px) { .file-manager .fm-sidebar { width: 180px; padding: 16px 10px; } .file-manager .fm-main { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 640px) { .file-manager .fm-main { padding: 16px 12px; } .file-manager .fm-surface { padding: 12px; } .file-manager .fm-compact-grid { grid-template-columns: repeat(auto-fill, minmax(min(125px, 100%), 1fr)); gap: 8px; } .file-manager .fm-toolbar { gap: 8px; padding: 8px; } .file-manager .fm-toolbar .fm-search { flex-basis: 100%; } .file-manager .fm-breadcrumbs button { max-width: 130px; } }
+@media (min-width: 1024px) { .fm-drop-message { left: 256px; } }
+@media (max-width: 1100px) { .file-manager .fm-card--list > span { width: 80px; } }
+@media (prefers-reduced-motion: reduce) { .file-manager .fm-view-switch button { transition: none; } }
