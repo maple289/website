@@ -1,3 +1,4 @@
+import { MediaReactions } from './MediaReactions';
 import { useEffect, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -34,10 +35,11 @@ export function PublicPhotoGallery({ searchTerm }: { searchTerm: string }) {
       ) : (
         <div className="mg-grid">
           {filteredPhotos.map((photo, index) => (
-            <button key={photo.id} onClick={() => setViewingIndex(index)} className="mg-card text-left">
-              <div className="mg-thumbnail"><StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /><span className="mg-badge mg-privacy public"><Globe size={11} />Public</span></div>
-              <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{photo.owner_email ?? 'Unknown'} · {timeAgo(photo.created_at)}</p></div>
-            </button>
+            <article key={photo.id} className="mg-card text-left" onClick={() => setViewingIndex(index)}>
+              <button onClick={() => setViewingIndex(index)} className="mg-thumbnail" aria-label={`Open ${photo.file_name}`}>
+              <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /><span className="mg-badge mg-privacy public"><Globe size={11} />Public</span></button>
+              <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{photo.owner_email ?? 'Unknown'} · {timeAgo(photo.created_at)}</p><MediaReactions mediaType="photo" mediaId={photo.id} /></div>
+            </article>
           ))}
         </div>
       )}

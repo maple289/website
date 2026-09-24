@@ -168,3 +168,22 @@ still uses the existing email approval/invitation flow. Names are stored on
 pending requests and copied to the profile when an approved invitation creates
 the account. Account settings can edit or clear only the caller's names; admin
 editing continues to require the existing server-side administrator check.
+
+## Video and photo reactions
+
+Apply `20260924040000_add_media_reactions.sql` before deploying the reaction UI.
+It depends on the optional profile-name migration above. No additional Edge
+Function or Realtime publication is required.
+
+Reaction rows use user IDs, a unique user/media key, and cascading foreign keys.
+Client roles cannot read or write the table directly. The RPCs enforce the same
+public/owner/admin scope as the current video and photo SELECT policies; if
+those media policies change, update `can_access_reaction_media` accordingly.
+Only authenticated users can mutate their own reactions. Details return current
+profile names (first, last, then email prefix), never the full email column.
+
+The frontend shares optimistic updates between cards and viewers, rolling back
+failed saves. Near-visible media counts are fetched in batches of up to 100 and
+refreshed every 20 seconds while the page is visible, plus on window focus.
+Other users' changes therefore appear on the next refresh. Detail lists use
+50-user cursor pages and refresh from current profiles while open.

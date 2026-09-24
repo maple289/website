@@ -1,3 +1,4 @@
+import { MediaReactions } from './MediaReactions';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { Photo } from '@/lib/types';
@@ -5,7 +6,7 @@ import { StorageImage } from '@/components/StorageImage';
 import './PhotoViewer.css';
 
 type PhotoViewerProps = { photos: Photo[]; startIndex: number; onClose: () => void };
-const controls = 'input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="menu"], [role="combobox"]';
+const controls = 'input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="menu"], [role="combobox"], [data-reaction-control]';
 
 function ViewerPhoto({ photo, current }: { photo: Photo; current: boolean }) {
   const [failed, setFailed] = useState(false);
@@ -84,8 +85,9 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
     if (!element) return;
     let lastEvent = 0, lastMove = -Infinity, total = 0, consumed = false;
     const wheel = (event: WheelEvent) => {
-      event.preventDefault(); // Includes trackpad pinch: never zoom/scroll the page behind the viewer.
       const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[data-reaction-control]')) return;
+      event.preventDefault(); // Includes trackpad pinch: never zoom/scroll the page behind the viewer.
       if (event.ctrlKey || target?.closest(controls) || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       const now = performance.now();
       if (now - lastEvent > 180) { consumed = false; total = 0; }
@@ -158,5 +160,6 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
       })}
     </div>
     <div className="pv-info" aria-live="polite" aria-atomic="true"><p title={photo.file_name}>{photo.file_name}</p>{hasMultiple && <span>{index + 1} of {photos.length}</span>}</div>
+    <div className="pv-reactions" data-reaction-control><MediaReactions mediaType="photo" mediaId={photo.id} /></div>
   </div>;
 }

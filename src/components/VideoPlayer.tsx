@@ -1,3 +1,4 @@
+import { MediaReactions } from './MediaReactions';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Play, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -51,7 +52,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} />
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#0a0a0a] shadow-2xl">
+      <div className="relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#0a0a0a] shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4">
           <h3 className="truncate text-base font-semibold tracking-[-0.02em]">{video.file_name}</h3>
           <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={20} /></button>
@@ -68,6 +69,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
             <video ref={videoRef} src={url ?? undefined} controls autoPlay className="h-full w-full" />
           )}
         </div>
+        <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} /></div>
       </div>
     </div>
   );

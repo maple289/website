@@ -1,0 +1,26 @@
+.media-reactions { width: 100%; min-width: 0; margin-top: 8px; color: #52677e; font-size: 12px; }
+.reaction-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.reaction-summary button { display: inline-flex; gap: 4px; align-items: center; justify-content: center; min-height: 40px; padding: 4px 8px; border: 1px solid #dbe4ef; border-radius: 20px; background: #f7f9fc; color: #425b76; transition: background 160ms, border-color 160ms; touch-action: manipulation; }
+.reaction-summary button:hover { background: #eaf2ff; border-color: #9cbce2; }
+.reaction-summary .is-selected, .reaction-summary .reaction-add:has(span[aria-hidden]) { background: #e7effe; border-color: #83a8de; color: #2458a3; }
+.reaction-summary button:disabled { opacity: .55; cursor: default; }
+.reaction-summary button:focus-visible, .reaction-dialog button:focus-visible { outline: 2px solid #3579ca; outline-offset: 2px; }
+.reaction-error { color: #bd3447; font-size: 12px; margin: 6px 0; }
+.reaction-overlay { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 16px; background: #071121a6; overscroll-behavior: contain; }
+.reaction-dialog { width: 100%; max-width: 460px; max-height: 90dvh; overflow-y: auto; background: #fff; color: #223348; border: 1px solid #dfe7ef; border-radius: 18px; padding: 18px; box-shadow: 0 20px 80px #0004; overscroll-behavior: contain; }
+.reaction-dialog header, .reaction-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.reaction-dialog h2 { font-size: 19px; font-weight: 650; }.reaction-dialog h3 { margin: 14px 0 8px; font-weight: 600; }
+.reaction-dialog p { font-size: 13px; margin: 10px 0; }.reaction-dialog button { min-height: 44px; min-width: 44px; border-radius: 10px; padding: 6px 10px; transition: background 160ms; touch-action: manipulation; }
+.reaction-dialog button:hover { background: #edf3fb; }.reaction-dialog button:disabled { opacity: .5; cursor: default; }
+.reaction-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.reaction-picker button { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 1px solid #e2e8f1; font-size: 12px; }.reaction-picker span { font-size: 25px; }
+.reaction-dialog button[aria-pressed=true] { background: #e8f0ff; box-shadow: inset 0 0 0 1px #759bd5; color: #245ba8; }
+.reaction-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; }.reaction-tabs button { padding: 6px 8px; font-size: 13px; }
+.reaction-people { max-height: 30dvh; min-height: 55px; overflow-y: auto; overscroll-behavior: contain; }.reaction-people li { padding: 9px 2px; border-bottom: 1px solid #eef2f7; font-size: 14px; overflow-wrap: anywhere; }
+.reaction-dialog footer { margin-top: 10px; font-size: 12px; }.reaction-dialog footer button { border: 1px solid #dfe7ef; }
+.pv-reactions { flex-shrink: 0; width: min(100%, 700px); max-height: 20dvh; overflow-y: auto; margin-top: 8px; padding: 0 8px; }.pv-reactions .reaction-summary { justify-content: center; }
+.pv-reactions .reaction-error, .video-reactions .reaction-error { color: #ffacb6; }
+.pv-reactions { overscroll-behavior: contain; }
+.video-reactions { padding: 4px 16px 12px; }
+@media (pointer: coarse) { .reaction-summary button { min-height: 44px; min-width: 44px; } }
+@media (prefers-reduced-motion: reduce) { .reaction-summary button, .reaction-dialog button { transition: none; } }

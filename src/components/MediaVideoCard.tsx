@@ -1,3 +1,4 @@
+import { MediaReactions } from './MediaReactions';
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, Film, Globe, LoaderCircle, Lock, Pencil, Play, Trash2 } from 'lucide-react';
 import type { Video } from '@/lib/types';
@@ -38,6 +39,7 @@ export function MediaVideoCard({ video, onPlay, onEdit, onDelete, showOwner = fa
       {showOwner && <p className="mg-meta" title={video.owner_email ?? ''}>{video.owner_email ?? 'Unknown'}</p>}
       <p className="mg-meta">{!showOwner && `${formatBytes(video.file_size)} · `}{timeAgo(video.created_at)}</p>
       {failed && video.processing_error && !showOwner && <p className="mg-error">{video.processing_error}</p>}
+      <MediaReactions mediaType="video" mediaId={video.id} />
       {(onEdit || onDelete) && <div className="mg-actions">
         {onEdit && <button onClick={onEdit}><Pencil size={13} />Edit</button>}
         <button onClick={onPlay} disabled={!ready}><Play size={13} />Play</button>

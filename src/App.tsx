@@ -1,3 +1,4 @@
+import { ReactionProvider } from '@/components/ReactionProvider';
 import '@/components/MediaGallery.css';
 import { FileDropArea } from '@/components/FileDropArea';
 import { useEffect, useRef, useState } from 'react';
@@ -19,7 +20,7 @@ import { FileManager } from '@/components/FileManager';
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <ReactionProvider><AppContent /></ReactionProvider>
     </AuthProvider>
   );
 }
