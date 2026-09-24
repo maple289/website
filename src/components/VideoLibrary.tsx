@@ -10,7 +10,7 @@ import { StorageImage } from '@/components/StorageImage';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveBucketPath } from '@/lib/storageSettings';
 
-export function VideoLibrary() {
+export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   const { user } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +50,11 @@ export function VideoLibrary() {
     return () => clearInterval(interval);
   }, [videos]);
 
+  const filteredVideos = videos.filter((video) => {
+    const term = searchTerm.trim().toLowerCase();
+    return !term || video.file_name.toLowerCase().includes(term);
+  });
+
   const confirmDelete = async () => {
     if (!deletingVideo) return;
     const { error: dbErr } = await supabase
@@ -75,7 +80,7 @@ export function VideoLibrary() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold tracking-[-0.03em]">My Library</h2>
-          <p className="mt-1 text-sm text-[#888]">{videos.length} {videos.length === 1 ? 'video' : 'videos'} — manage your uploaded content</p>
+          <p className="mt-1 text-sm text-[#888]">{filteredVideos.length} of {videos.length} {videos.length === 1 ? 'video' : 'videos'} — manage your uploaded content</p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
@@ -91,18 +96,16 @@ export function VideoLibrary() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>
-      ) : videos.length === 0 ? (
+      ) : filteredVideos.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-20 text-center">
           <Library className="mx-auto mb-3 text-[#555]" size={36} />
-          <p className="text-base font-medium text-[#aaa]">Your library is empty</p>
-          <p className="mt-1 text-sm text-[#888]">Upload your first video to get started.</p>
-          <button onClick={() => setShowUpload(true)} className="mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962] mx-auto">
-            <Plus size={18} /> Upload video
-          </button>
+          <p className="text-base font-medium text-[#aaa]">{searchTerm ? 'No matching videos' : 'Your library is empty'}</p>
+          <p className="mt-1 text-sm text-[#888]">{searchTerm ? 'Try a different search.' : 'Upload your first video to get started.'}</p>
+          {!searchTerm && <button onClick={() => setShowUpload(true)} className="mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962] mx-auto"><Plus size={18} /> Upload video</button>}
         </div>
       ) : (
         <div className="grid gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {videos.map((v) => (
+          {filteredVideos.map((v) => (
             <VideoCard
               key={v.id}
               video={v}

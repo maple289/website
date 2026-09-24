@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, FolderOpen, Chrome as Home, Images, Menu, Search, Settings, Upload, Video, X, Youtube, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
@@ -40,6 +40,8 @@ function AppContent() {
   const [route, setRoute] = useState<Route>(getRoute());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showUpload, setShowUpload] = useState(false);
@@ -117,16 +119,16 @@ function AppContent() {
             <span className="hidden text-[21px] font-semibold tracking-[-0.06em] sm:inline">Videos</span>
           </div>
           {/* Search bar */}
-          <div className="mx-auto hidden max-w-[690px] flex-1 items-center md:flex">
+          <form onSubmit={(event) => event.preventDefault()} role="search" className="mx-auto hidden max-w-[690px] flex-1 items-center md:flex">
             <div className="flex h-11 flex-1 items-center overflow-hidden rounded-l-full border border-[#3f3f3f] bg-[#121212] transition focus-within:border-[#4b86ff]">
               <Search className="ml-4 text-[#a7a7a7]" size={20} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" aria-label="Search" className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#888]" />
-              {search && <button aria-label="Clear search" onClick={() => setSearch('')} className="mr-2 rounded-full p-1 hover:bg-[#303030]"><X size={17} /></button>}
+              {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="mr-2 rounded-full p-1 hover:bg-[#303030]"><X size={17} /></button>}
             </div>
-            <button aria-label="Search" className="flex h-11 w-16 items-center justify-center rounded-r-full border border-l-0 border-[#3f3f3f] bg-[#222] transition hover:bg-[#303030]"><Search size={21} /></button>
-          </div>
+            <button type="submit" aria-label="Search" className="flex h-11 w-16 items-center justify-center rounded-r-full border border-l-0 border-[#3f3f3f] bg-[#222] transition hover:bg-[#303030]"><Search size={21} /></button>
+          </form>
           <div className="ml-auto flex items-center gap-2">
-            <button aria-label="Search" className="rounded-full p-3 hover:bg-[#272727] md:hidden"><Search size={21} /></button>
+            <button aria-label={mobileSearchOpen ? 'Close search' : 'Search'} onClick={() => setMobileSearchOpen((open) => !open)} className="rounded-full p-3 hover:bg-[#272727] md:hidden">{mobileSearchOpen ? <X size={21} /> : <Search size={21} />}</button>
             {isAuthed && (
               <>
                 <button
@@ -143,6 +145,8 @@ function AppContent() {
           </div>
         </div>
       </header>
+
+      {mobileSearchOpen && <form onSubmit={(event) => { event.preventDefault(); mobileSearchRef.current?.blur(); }} role="search" className="fixed inset-x-0 top-[72px] z-40 border-b border-[#1a2a4a] bg-[#001338] p-3 shadow-xl md:hidden"><div className="flex h-11 items-center overflow-hidden rounded-full border border-[#3f3f3f] bg-[#121212] focus-within:border-[#4b86ff]"><Search className="ml-4 shrink-0 text-[#a7a7a7]" size={19} /><input ref={mobileSearchRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search videos, photos, and files" aria-label="Search videos, photos, and files" className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-[#888]" />{search && <button type="button" aria-label="Clear search" onClick={() => { setSearch(''); mobileSearchRef.current?.focus(); }} className="mr-3 rounded-full p-1 text-[#aaa] hover:bg-[#303030]"><X size={17} /></button>}</div></form>}
 
       {/* Sidebar — only for authenticated users */}
       {isAuthed && (
@@ -169,7 +173,7 @@ function AppContent() {
 
       {/* Main content */}
       <main className={`pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {route === 'files' && isAuthed ? <FileManager /> : route === 'library' && isAuthed ? <VideoLibrary /> : route === 'photos' && isAuthed ? <PhotoLibrary /> : <HomePage tab={homeTab} onTabChange={setHomeTab} />}
+        {route === 'files' && isAuthed ? <FileManager searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} />}
       </main>
 
       {/* Auth modal */}

@@ -11,13 +11,13 @@ type Tab = 'videos' | 'photos';
 
 type HomePageProps = {
   tab: Tab;
+  searchTerm: string;
   onTabChange: (tab: Tab) => void;
 };
 
-export function HomePage({ tab, onTabChange }: HomePageProps) {
+export function HomePage({ tab, searchTerm, onTabChange }: HomePageProps) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search] = useState('');
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
 
   const load = async () => {
@@ -41,7 +41,7 @@ export function HomePage({ tab, onTabChange }: HomePageProps) {
   }, [videos]);
 
   const filtered = videos.filter((v) => {
-    const term = search.trim().toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
     return !term || v.file_name.toLowerCase().includes(term) || (v.owner_email ?? '').toLowerCase().includes(term);
   });
 
@@ -65,8 +65,8 @@ export function HomePage({ tab, onTabChange }: HomePageProps) {
           ) : filtered.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center">
               <Film className="mx-auto mb-4 text-[#707070]" size={40} />
-              <p className="text-lg font-medium">No public videos yet</p>
-              <p className="mt-2 text-sm text-[#888]">Videos marked as public by users will appear here.</p>
+              <p className="text-lg font-medium">{searchTerm ? 'No matching videos' : 'No public videos yet'}</p>
+              <p className="mt-2 text-sm text-[#888]">{searchTerm ? 'Try a different search term.' : 'Videos marked as public by users will appear here.'}</p>
             </div>
           ) : (
             <div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -123,7 +123,7 @@ export function HomePage({ tab, onTabChange }: HomePageProps) {
           )}
         </section>
       ) : (
-        <PublicPhotoGallery />
+        <PublicPhotoGallery searchTerm={searchTerm} />
       )}
 
       {playingVideo && (

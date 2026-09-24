@@ -9,7 +9,7 @@ import { PhotoViewer } from '@/components/PhotoViewer';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveBucketPath } from '@/lib/storageSettings';
 
-export function PhotoLibrary() {
+export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +31,11 @@ export function PhotoLibrary() {
   };
 
   useEffect(() => { load(); }, [user]);
+
+  const filteredPhotos = photos.filter((photo) => {
+    const term = searchTerm.trim().toLowerCase();
+    return !term || photo.file_name.toLowerCase().includes(term);
+  });
 
   const toggleVisibility = async (photo: Photo) => {
     const visibility = photo.visibility === 'public' ? 'private' : 'public';
@@ -61,11 +66,11 @@ export function PhotoLibrary() {
         <button onClick={() => setShowUpload(true)} className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-4 text-sm font-semibold text-white"><Upload size={17} /> Upload photo</button>
       </div>
       {error && <div className="mb-5 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
-      {loading ? <div className="flex justify-center py-24"><Loader2 className="animate-spin text-[#ff3d46]" /></div> : photos.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">Your photo library is empty</p><button onClick={() => setShowUpload(true)} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button></div>
+      {loading ? <div className="flex justify-center py-24"><Loader2 className="animate-spin text-[#ff3d46]" /></div> : filteredPhotos.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">{searchTerm ? 'No matching photos' : 'Your photo library is empty'}</p>{!searchTerm && <button onClick={() => setShowUpload(true)} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button>}</div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {photos.map((photo, index) => (
+          {filteredPhotos.map((photo, index) => (
             <article key={photo.id} className="overflow-hidden rounded-2xl border border-[#272727] bg-[#161616]">
               <button onClick={() => setViewingIndex(index)} className="block aspect-[4/3] w-full overflow-hidden bg-[#202020]">
                 <StorageImage storagePath={photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="h-full w-full object-contain" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
@@ -81,8 +86,8 @@ export function PhotoLibrary() {
         </div>
       )}
       {showUpload && <PhotoUploadModal onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />}
-      {viewingIndex !== null && viewingIndex < photos.length && (
-        <PhotoViewer photos={photos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
+      {viewingIndex !== null && viewingIndex < filteredPhotos.length && (
+        <PhotoViewer photos={filteredPhotos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
       )}
     </div>
   );
