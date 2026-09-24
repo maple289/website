@@ -1,3 +1,4 @@
+import '@/components/MediaGallery.css';
 import { FileDropArea } from '@/components/FileDropArea';
 import { useEffect, useRef, useState } from 'react';
 import { Bell, FolderOpen, Chrome as Home, Images, Menu, Search, Settings, Upload, Video, X, Youtube, ShieldCheck } from 'lucide-react';
@@ -174,8 +175,9 @@ function AppContent() {
       )}
 
       {/* Main content */}
-      <main className={`pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {route === 'files' ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab !== 'files') { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && <FileManager key={user?.id ?? 'guest'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('files')} /></FileDropArea>}
+      <main className={`${route !== 'files' ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
+        {(route === 'library' || route === 'photos') && <div className="mg-page mg-page-nav"><MediaTabs active={route === 'photos' ? 'photos' : 'videos'} onSelect={(tab) => navigate(tab === 'files' ? 'files' : tab === 'photos' ? 'photos' : 'library')} /></div>}
+        {route === 'files' ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab !== 'files') { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && <FileManager key={user?.id ?? 'guest'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('files')} /></FileDropArea>}
       </main>
 
       {/* Auth modal */}
@@ -183,12 +185,12 @@ function AppContent() {
 
       {/* Upload modal */}
       {showUpload && isAuthed && (
-        <UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} />
+        <div className={route !== 'files' ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} /></div></div>
       )}
 
       {/* Photo upload modal */}
       {showPhotoUpload && isAuthed && (
-        <PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} />
+        <div className={route !== 'files' ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} /></div></div>
       )}
 
     </div>

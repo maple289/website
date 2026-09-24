@@ -71,25 +71,26 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   };
 
   return (
-    <FileDropArea enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
-    <div className="mx-auto max-w-[1560px] px-5 py-8 lg:px-8">
-      <div className="mb-7 flex items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-semibold tracking-[-0.04em]">My Photos</h1><p className="mt-1 text-sm text-[#888]">Originals, previews, and thumbnails are stored separately.</p></div>
+    <FileDropArea appearance="media" message="Drop photos here to upload" enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
+    <div className="mg-page">
+      <div className="mg-toolbar">
+        <div><h1 className="text-2xl font-semibold tracking-[-0.04em]">My Photos</h1><p className="mt-1 text-sm text-[#888]">Your photos, organized in one place.</p></div>
         <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-4 text-sm font-semibold text-white"><Upload size={17} /> Upload photo</button>
       </div>
       {success && <div role="status" className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}
       {error && <div className="mb-5 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
       {loading ? <div className="flex justify-center py-24"><Loader2 className="animate-spin text-[#ff3d46]" /></div> : filteredPhotos.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">{searchTerm ? 'No matching photos' : 'Your photo library is empty'}</p>{!searchTerm && <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button>}</div>
+        <div className="mg-empty rounded-2xl border border-dashed py-24 text-center"><ImageIcon className="mx-auto mb-3 text-[#555]" size={38} /><p className="text-[#aaa]">{searchTerm ? 'No matching photos' : 'Your photo library is empty'}</p>{!searchTerm && <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold"><Plus size={17} /> Upload photo</button>}</div>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="mg-grid">
           {filteredPhotos.map((photo, index) => (
-            <article key={photo.id} className="overflow-hidden rounded-2xl border border-[#272727] bg-[#161616]">
-              <button onClick={() => setViewingIndex(index)} className="block aspect-[4/3] w-full overflow-hidden bg-[#202020]">
-                <StorageImage storagePath={photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="h-full w-full object-contain" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
+            <article key={photo.id} className="mg-card">
+              <button onClick={() => setViewingIndex(index)} className="mg-thumbnail">
+                <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
+                <span className={`mg-badge mg-privacy ${photo.visibility}`}>{photo.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</span>
               </button>
-              <div className="p-4"><h3 className="truncate text-sm font-semibold">{photo.file_name}</h3><p className="mt-1 text-xs text-[#777]">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>
+                <div className="mg-actions">
                   <button onClick={() => toggleVisibility(photo)} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs text-[#aaa]">{photo.visibility === 'public' ? <Globe size={13} /> : <Lock size={13} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</button>
                   {photo.owner_id === user?.id && <button onClick={() => { setSuccess(''); setError(null); setEditingPhoto(photo); }} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white"><Pencil size={13} /> Edit</button>}
                   <button onClick={() => remove(photo)} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs text-[#aaa] hover:text-[#ff737b]"><Trash2 size={13} /> Delete</button>
@@ -99,8 +100,8 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
           ))}
         </div>
       )}
-      {editingPhoto && <EditPhotoModal key={editingPhoto.id} photo={editingPhoto} onClose={() => setEditingPhoto(null)} onSaved={(updated) => { setPhotos((current) => current.map((photo) => photo.id === updated.id ? updated : photo)); setEditingPhoto(null); setError(null); setSuccess('Photo changes saved.'); }} />}
-      {showUpload && <PhotoUploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />}
+      {editingPhoto && <div className="mg-dialog"><EditPhotoModal key={editingPhoto.id} photo={editingPhoto} onClose={() => setEditingPhoto(null)} onSaved={(updated) => { setPhotos((current) => current.map((photo) => photo.id === updated.id ? updated : photo)); setEditingPhoto(null); setError(null); setSuccess('Photo changes saved.'); }} /></div>}
+      {showUpload && <div className="mg-dialog"><PhotoUploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} /></div>}
       {viewingIndex !== null && viewingIndex < filteredPhotos.length && (
         <PhotoViewer photos={filteredPhotos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
       )}

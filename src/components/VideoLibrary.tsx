@@ -1,13 +1,12 @@
 import { FileDropArea } from '@/components/FileDropArea';
 import { useCallback, useEffect, useState } from 'react';
-import { Film, Globe, Library, Loader as Loader2, Lock, Pencil, Play, Plus, Trash2, Upload, TriangleAlert as AlertTriangle, Loader as LoaderIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Library, Loader as Loader2, Plus, Trash2, Upload, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
-import { formatBytes, timeAgo } from '@/lib/types';
 import { UploadModal } from '@/components/UploadModal';
 import { EditVideoModal } from '@/components/EditVideoModal';
 import { VideoPlayer } from '@/components/VideoPlayer';
-import { StorageImage } from '@/components/StorageImage';
+import { MediaVideoCard } from '@/components/MediaVideoCard';
 import { useAuth } from '@/hooks/useAuth';
 import { resolveBucketPath } from '@/lib/storageSettings';
 
@@ -22,8 +21,8 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
   const [deletingVideo, setDeletingVideo] = useState<Video | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError(null);
     if (!user) {
       setVideos([]);
@@ -47,8 +46,8 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
 
   // Auto-refresh while any video is still processing
   useEffect(() => {
-    if (!videos.some((v) => v.processing_status === 'processing')) return;
-    const interval = setInterval(() => load(), 5000);
+    if (!videos.length) return;
+    const interval = setInterval(() => void load(true), videos.some((v) => v.processing_status === 'processing') ? 5000 : 15000);
     return () => clearInterval(interval);
   }, [videos, load]);
 
@@ -84,9 +83,9 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   };
 
   return (
-    <FileDropArea enabled={!!user && !showUpload && !editingVideo && !playingVideo && !deletingVideo} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
-    <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <FileDropArea appearance="media" message="Drop videos here to upload" enabled={!!user && !showUpload && !editingVideo && !playingVideo && !deletingVideo} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
+    <div className="mg-page">
+      <div className="mg-toolbar">
         <div>
           <h2 className="text-xl font-semibold tracking-[-0.03em]">My Library</h2>
           <p className="mt-1 text-sm text-[#888]">{filteredVideos.length} of {videos.length} {videos.length === 1 ? 'video' : 'videos'} — manage your uploaded content</p>
@@ -106,16 +105,16 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>
       ) : filteredVideos.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-20 text-center">
+        <div className="mg-empty rounded-2xl border border-dashed py-20 text-center">
           <Library className="mx-auto mb-3 text-[#555]" size={36} />
           <p className="text-base font-medium text-[#aaa]">{searchTerm ? 'No matching videos' : 'Your library is empty'}</p>
           <p className="mt-1 text-sm text-[#888]">{searchTerm ? 'Try a different search.' : 'Upload your first video to get started.'}</p>
           {!searchTerm && <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="mt-5 flex items-center gap-2 rounded-xl bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962] mx-auto"><Plus size={18} /> Upload video</button>}
         </div>
       ) : (
-        <div className="grid gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="mg-grid">
           {filteredVideos.map((v) => (
-            <VideoCard
+            <MediaVideoCard
               key={v.id}
               video={v}
               onPlay={() => setPlayingVideo(v)}
@@ -127,15 +126,15 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       )}
 
       {showUpload && (
-        <UploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} />
+        <div className="mg-dialog"><UploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} /></div>
       )}
 
       {editingVideo && (
-        <EditVideoModal
+        <div className="mg-dialog"><EditVideoModal
           video={editingVideo}
           onClose={() => setEditingVideo(null)}
           onSaved={() => { setEditingVideo(null); load(); }}
-        />
+        /></div>
       )}
 
       {playingVideo && (
@@ -143,7 +142,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       )}
 
       {deletingVideo && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="mg-dialog fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeletingVideo(null)} />
           <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
             <div className="px-6 pt-6">
@@ -164,79 +163,5 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       )}
     </div>
     </FileDropArea>
-  );
-}
-
-function VideoCard({ video, onPlay, onEdit, onDelete }: { video: Video; onPlay: () => void; onEdit: () => void; onDelete: () => void }) {
-  const isProcessing = video.processing_status === 'processing';
-  const isError = video.processing_status === 'error';
-  return (
-    <article className="group min-w-0">
-      <div className={`relative aspect-video overflow-hidden rounded-xl bg-[#202020] ${isProcessing ? '' : 'cursor-pointer'}`} onClick={isProcessing ? undefined : onPlay}>
-        <StorageImage
-          storagePath={video.preview_path}
-          legacyUrl={video.preview_url}
-          alt={video.file_name}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-          fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><Film size={36} /></div>}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-        {!isProcessing && !isError && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff3d46]/90 text-white"><Play size={22} fill="white" /></div>
-          </div>
-        )}
-        {isProcessing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-            <div className="flex flex-col items-center gap-2">
-              <LoaderIcon size={28} className="animate-spin text-[#ff3d46]" />
-              <span className="text-xs font-semibold text-white">Processing...</span>
-            </div>
-          </div>
-        )}
-        {isError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <div className="flex flex-col items-center gap-2">
-              <AlertCircle size={28} className="text-[#ff3d46]" />
-              <span className="text-xs font-semibold text-white">Processing failed</span>
-            </div>
-          </div>
-        )}
-        <span className={`absolute bottom-2 left-2 flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold ${video.visibility === 'public' ? 'bg-emerald-500/90 text-white' : 'bg-black/85 text-[#ccc]'}`}>
-          {video.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}
-          {video.visibility === 'public' ? 'Public' : 'Private'}
-        </span>
-        {video.processing_status && (
-          <span className={`absolute right-2 top-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold ${
-            isProcessing ? 'bg-amber-500/90 text-white' :
-            isError ? 'bg-[#ff3d46]/90 text-white' :
-            'bg-black/70 text-[#ccc]'
-          }`}>
-            {isProcessing ? <LoaderIcon size={10} className="animate-spin" /> :
-             isError ? <AlertCircle size={10} /> :
-             <CheckCircle2 size={10} />}
-            {isProcessing ? 'Processing' : isError ? 'Error' : 'Ready'}
-          </span>
-        )}
-      </div>
-      <div className="mt-3">
-        <h3 className="line-clamp-2 text-[15px] font-semibold leading-[1.45] tracking-[-0.01em] text-[#f1f1f1]">{video.file_name}</h3>
-        <p className="mt-1 text-[13px] text-[#858585]">{formatBytes(video.file_size)} · {timeAgo(video.created_at)}</p>
-        {isError && video.processing_error && (
-          <p className="mt-1 text-xs text-[#ff8a90]">{video.processing_error}</p>
-        )}
-        <div className="mt-3 flex gap-2">
-          <button onClick={onEdit} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white">
-            <Pencil size={13} /> Edit
-          </button>
-          <button onClick={onPlay} disabled={isProcessing} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed">
-            <Play size={13} /> Play
-          </button>
-          <button onClick={onDelete} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#ff3d46]/15 hover:text-[#ff737b]">
-            <Trash2 size={13} /> Delete
-          </button>
-        </div>
-      </div>
-    </article>
   );
 }

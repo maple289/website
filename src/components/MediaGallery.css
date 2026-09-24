@@ -1,0 +1,59 @@
+/* Media pages only. No File Manager selectors or global palette overrides. */
+.media-page { min-height: 100vh; background: linear-gradient(145deg, #f7f9fc, #eef3f8); color: #223348; }
+.media-page .mg-page { width: 100%; max-width: 1680px; margin: 0 auto; padding: 24px; }
+.media-page.mg-overlay-root { min-height: 0; background: none; }
+.media-page .mg-page-nav { padding-bottom: 0; }
+.media-page .mg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 16px; }
+.media-page .mg-card { min-width: 0; overflow: hidden; border: 1px solid #e2e9f1; border-radius: 16px; background: #fff; box-shadow: 0 2px 8px #213e6005; transition: border-color 180ms, box-shadow 180ms, transform 180ms; }
+.media-page .mg-card:hover { border-color: #bdcfe4; box-shadow: 0 6px 18px #233e600c; }
+.media-page .mg-thumbnail { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; background: #eaf0f6; }
+.media-page .mg-video-thumbnail { aspect-ratio: 16 / 9; }
+.media-page .mg-image { display: block; width: 100%; height: 100%; object-fit: contain; transition: opacity 180ms; }
+.media-page .mg-video-thumbnail .mg-image { object-fit: cover; }
+.media-page .mg-placeholder { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; color: #8092a8; }
+.media-page .mg-processing { flex-direction: column; gap: 10px; color: #536d90; font-size: 12px; font-weight: 600; }
+.media-page .mg-play { position: absolute; inset: 0; margin: auto; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #20344cbf; color: white; box-shadow: 0 2px 12px #0002; }
+.media-page .mg-badge { display: inline-flex; gap: 4px; align-items: center; border: 1px solid #e3eaf1; border-radius: 999px; padding: 4px 8px; background: #ffffffed; color: #4b6279; font-size: 10px; font-weight: 600; }
+.media-page .mg-privacy { position: absolute; left: 8px; bottom: 8px; }
+.media-page .mg-badge.public { color: #27755c; background: #f0fbf6ed; }
+.media-page .mg-duration { position: absolute; right: 8px; bottom: 8px; border-radius: 5px; padding: 2px 5px; background: #20344cdb; color: white; font-size: 11px; font-variant-numeric: tabular-nums; }
+.media-page .mg-card-body { padding: 12px; min-width: 0; }
+.media-page .mg-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.4; color: #223348; font-size: 14px; font-weight: 600; }
+.media-page .mg-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: #758497; font-size: 11px; }
+.media-page .mg-state { display: inline-flex; align-items: center; gap: 4px; color: #657d70; font-size: 10px; font-weight: 600; }
+.media-page .mg-state.processing { color: #9a681e; }.media-page .mg-state.failed, .media-page .mg-error { color: #b83b4b; }
+.media-page .mg-error { overflow-wrap: anywhere; font-size: 11px; margin-top: 6px; }
+.media-page .mg-status-row { margin-bottom: 5px; }
+.media-page .mg-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.media-page .mg-actions button { display: inline-flex; justify-content: center; align-items: center; gap: 4px; min-height: 36px; border: 1px solid #e6ebf2; padding: 5px 8px; border-radius: 8px; background: #f8fafc; color: #51677d; font-size: 11px; font-weight: 500; transition: background-color 160ms, border-color 160ms; }
+.media-page .mg-actions button:hover { background: #edf3fb; border-color: #c5d6eb; color: #245f9f; }
+.media-page .mg-actions .mg-delete:hover { background: #fff1f3; color: #b83b4b; }
+.media-page button:disabled { cursor: not-allowed; }.media-page .mg-actions button:disabled { opacity: .45; }
+.media-page .mg-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 20px; padding: 16px; border: 1px solid #e4eaf1; border-radius: 16px; background: #ffffffd9; }
+.media-page .mg-toolbar h1, .media-page .mg-toolbar h2 { font-size: 23px; font-weight: 650; letter-spacing: -.03em; }
+.media-page .mg-toolbar > button { flex-shrink: 0; }
+.media-page .mg-tabs { border-color: #dfe7f1; padding-top: 8px; }
+.media-page .mg-tabs button { min-height: 44px; padding: 12px 16px; color: #6b7d92; }
+.media-page .mg-tabs button[aria-current='page'] { color: #2463ae; border-color: #2463ae; }
+.media-page .mg-tabs button:hover { color: #2463ae; background: #eaf1fa; }
+.media-page .mg-empty { border-color: #d9e2ee; background: #ffffff80; color: #60758c; }
+.media-page [class~='text-[#888]'], .media-page [class~='text-[#aaa]'], .media-page [class~='text-[#777]'] { color: #6b7d92; }
+.media-page button:focus-visible, .media-page input:focus-visible { outline: 2px solid #3579ca; outline-offset: 3px; }
+.media-page .media-drop[data-drag-active='true'] { border-radius: 16px; box-shadow: inset 0 0 0 2px #a5c5e9; background: #eaf3fc; }
+.media-page .media-drop-message { position: fixed; inset: 72px 0 0; background: #eff6fc80; color: #245f9f; font-size: 18px; }
+.media-page .media-drop-message > span { border: 1px dashed #89b1dc; padding: 20px 28px; border-radius: 16px; background: #ffffffed; box-shadow: 0 8px 25px #23466e12; }
+.media-page .mg-dialog [class~='bg-[#181818]'], .media-page .mg-dialog [class~='bg-[#161616]'] { background: #fff; color: #223348; border-color: #dfe7f0; }
+.media-page .mg-dialog [class~='bg-[#121212]'] { background: #f4f7fb; color: #223348; }
+.media-page .mg-dialog [class~='border-[#3a3a3a]'], .media-page .mg-dialog [class~='border-[#3b3b3b]'], .media-page .mg-dialog [class~='border-[#333]'] { border-color: #dfe7f0; }
+.media-page .mg-dialog [class~='text-[#ccc]'], .media-page .mg-dialog [class~='text-[#999]'], .media-page .mg-dialog [class~='text-[#9a9a9a]'] { color: #5d728a; }
+.media-page .mg-dialog [role='alert'] { color: #a3293c; }
+.media-page .mg-dialog p > span.text-white { color: #223348; }
+.media-page .mg-dialog [class~='text-[#a7a7a7]'], .media-page .mg-dialog [class~='text-[#a5a5a5]'] { color: #63768d; }
+.media-page .mg-dialog [class~='text-[#ff737b]'] { color: #b63948; }
+.media-page .mg-dialog .text-red-300, .media-page .mg-dialog [class~='text-[#ff8a90]'] { color: #af3547; }
+.media-page .mg-dialog [class~='hover:bg-[#272727]']:hover,
+.media-page .mg-dialog [class~='hover:bg-[#2a2a2a]']:hover { background: #eaf1f9; color: #355778; }
+.media-page [class~='text-emerald-300'] { color: #24785c; }
+@media (min-width: 1024px) { .media-page .media-drop-message { left: 256px; } }
+@media (max-width: 640px) { .media-page .mg-page { padding: 16px 12px; }.media-page .mg-grid { gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); }.media-page .mg-toolbar { padding: 12px; gap: 12px; }.media-page .mg-actions button { min-height: 40px; }.media-page .mg-tabs button { padding: 10px 12px; } }
+@media (prefers-reduced-motion: reduce) { .media-page .mg-card, .media-page .mg-image, .media-page .mg-actions button { transition: none; } }
