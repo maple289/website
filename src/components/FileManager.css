@@ -75,6 +75,84 @@
   box-shadow: 0 2px 4px #263b5905, inset 0 1px 0 white;
 }
 
+.file-manager .fm-compact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(132px, 100%), 1fr));
+  gap: 10px;
+}
+
+.file-manager .fm-card--grid > button:last-child {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  margin: 0;
+  background: #ffffffd9;
+}
+
+.file-manager .fm-card--grid > div:last-child:not(.fm-icon-tile) {
+  margin-top: 3px;
+}
+
+.file-manager .fm-card--list {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.file-manager .fm-tree-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.file-manager .fm-tree-row .fm-card {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-manager .fm-tree-toggle {
+  display: flex;
+  width: 28px;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: #52718f;
+  border-radius: 6px;
+}
+
+.file-manager button.fm-tree-toggle:hover {
+  background: #deebfa;
+}
+
+.file-manager .fm-tree .fm-card--list > span {
+  display: none;
+}
+
+.file-manager .fm-tree .fm-item-kind,
+.file-manager .fm-tree .fm-item-modified {
+  display: none;
+}
+
+.file-manager .fm-tree .fm-icon-tile {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.file-manager .fm-tree [role='treeitem']:focus-visible {
+  outline: none;
+}
+
+.file-manager .fm-tree [role='treeitem']:focus-visible > .fm-tree-row {
+  outline: 2px solid #1671ce;
+  outline-offset: -2px;
+}
+
+.file-manager .fm-tree-row[data-match='true'] {
+  background: #eaf3ff;
+}
+
 .file-manager .fm-card--list {
   border-radius: 10px;
 }

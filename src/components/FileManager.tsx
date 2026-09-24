@@ -2,19 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as tus from 'tus-js-client';
 import {
   ArrowLeft, Check, ChevronRight, Clock3, Cloud, Copy, Download, File, FileArchive, FileAudio, FileImage, FileText,
-  FileVideo, Folder, FolderPlus, Globe, Grid2X2, HardDrive, Info, List, LoaderCircle, MoreHorizontal,
+  FileVideo, Folder, FolderPlus, Globe, Grid2X2, GitBranch, HardDrive, Info, List, LoaderCircle, MoreHorizontal,
   Move, Pencil, Plus, RotateCcw, Search, Share2, Star, Trash2, Upload, X,
 } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { FileShareModal } from '@/components/FileShareModal';
 import './FileManager.css';
+import { FileTree } from '@/components/FileTree';
+import { getFileMetadataTree, loadFileChildren, type FileEntry } from '@/lib/fileTree';
 
 type View = 'files' | 'recent' | 'favorites' | 'shared' | 'trash';
-type Entry = {
-  name: string; path: string; isFolder: boolean; size: number; updatedAt: string;
-  mimeType: string; favorite: boolean; trashedAt: string | null;
-};
+type Entry = FileEntry;
 type Metadata = { object_path: string; is_folder: boolean; is_favorite: boolean; file_size: number; mime_type: string; trashed_at: string | null; created_at: string; updated_at: string };
 type UploadItem = { file: File; state: 'waiting' | 'uploading' | 'done' | 'error'; message?: string; progress?: number };
 type SearchRow = { object_path: string; name: string; location: string; is_folder: boolean; file_size: number; mime_type: string; updated_at: string; is_favorite: boolean };
@@ -22,7 +21,7 @@ type SearchRow = { object_path: string; name: string; location: string; is_folde
 const BUCKET = 'user-files';
 const SEARCH_PAGE_SIZE = 50;
 const formatSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : bytes < 1073741824 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1073741824).toFixed(2)} GB`;
-const dateLabel = (value: string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const dateLabel = (value: string) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 const kindLabel = (entry: Entry) => entry.isFolder ? 'Folder' : entry.mimeType.startsWith('image/') ? 'Image' : entry.mimeType.startsWith('video/') ? 'Video' : entry.mimeType.startsWith('audio/') ? 'Audio' : entry.mimeType === 'application/pdf' ? 'PDF document' : entry.mimeType.startsWith('text/') ? 'Text file' : entry.name.split('.').pop()?.toUpperCase() || 'File';
 const fileIcon = (entry: Entry, size = 24) => {
   if (entry.isFolder) return <Folder size={size} strokeWidth={1.5} className="fill-[#FFD45A] text-[#D99A18] drop-shadow-sm" />;
@@ -51,8 +50,13 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const [searchOffset, setSearchOffset] = useState(0);
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchRevision, setSearchRevision] = useState(0);
   const [error, setError] = useState('');
-  const [layout, setLayout] = useState<'grid' | 'list'>('grid');
+  const [layout, setLayout] = useState<'grid' | 'list' | 'tree'>('grid');
+  const [treeEntries, setTreeEntries] = useState<Entry[]>([]);
+  const [rootHasMore, setRootHasMore] = useState(false);
+  const [rootOffset, setRootOffset] = useState(1000);
+  const [rootPaging, setRootPaging] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry } | null>(null);
   const [details, setDetails] = useState<Entry | null>(null);
@@ -67,6 +71,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const uploadInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const latestSearchTerm = useRef(searchTerm);
+  const listingState = useRef({ version: 0 });
   const [dropActive, setDropActive] = useState(false);
 
   const goTo = useCallback((path: string, addHistory = true) => {
@@ -87,10 +92,12 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
 
   const load = useCallback(async () => {
     if (!user) return;
-    setLoading(true); setError('');
+    const version = ++listingState.current.version;
+    setLoading(true); setError(''); setRootHasMore(false); setRootPaging(false);
     try {
       if (view === 'shared') {
         const { data, error: sharedError } = await supabase.rpc('list_shared_user_files', { p_folder: sharedFolder, p_offset: sharedOffset });
+        if (version !== listingState.current.version) return;
         if (sharedError) throw sharedError;
         const rows = (data ?? []) as Metadata[];
         const page = rows.slice(0, 50).map(entryFromMetadata);
@@ -99,6 +106,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
         return;
       }
       const { data: rows, error: metaError } = await supabase.from('user_file_metadata').select('object_path,is_folder,is_favorite,file_size,mime_type,trashed_at,created_at,updated_at').eq('owner_id', user.id);
+      if (version !== listingState.current.version) return;
       if (metaError) throw metaError;
       const metaRows = (rows ?? []) as Metadata[];
       setMetadata(metaRows);
@@ -118,6 +126,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
       }
       const prefix = folder ? `${user.id}/${folder}` : user.id;
       const { data: objects, error: listError } = await supabase.storage.from(BUCKET).list(prefix, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+      if (version !== listingState.current.version) return;
       if (listError) throw listError;
       const base = `${prefix}/`;
       const built: Entry[] = (objects ?? []).filter((object) => object.name !== '.folder' && object.name !== '.keep').map((object) => {
@@ -127,9 +136,12 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
         return { name: object.name, path, isFolder, size: meta?.file_size ?? object.metadata?.size ?? 0, updatedAt: meta?.updated_at ?? object.updated_at ?? object.created_at ?? new Date().toISOString(), mimeType: meta?.mime_type ?? object.metadata?.mimetype ?? '', favorite: meta?.is_favorite ?? false, trashedAt: meta?.trashed_at ?? null };
       }).filter((item) => !item.trashedAt);
       setEntries(built);
+      setRootHasMore(objects?.length === 1000);
+      setRootOffset(1000);
     } catch (err) {
+      if (version !== listingState.current.version) return;
       setError(err instanceof Error ? err.message : 'Could not load files. Apply the latest database migration and try again.');
-    } finally { setLoading(false); }
+    } finally { if (version === listingState.current.version) { setLoading(false); setSearchRevision((value) => value + 1); } }
   }, [user, view, folder, sharedFolder, sharedOffset]);
 
   const searchAllFiles = useCallback(async (offset = 0) => {
@@ -159,10 +171,11 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
       setSearchOffset(offset + page.length);
       setSearchHasMore(rows.length > SEARCH_PAGE_SIZE);
     } catch (err) {
+      if (latestSearchTerm.current.trim() !== query) return;
       setError(err instanceof Error ? err.message : 'Could not search your files.');
       if (offset === 0) setSearchResults([]);
     } finally {
-      setSearchLoading(false);
+      if (latestSearchTerm.current.trim() === query) setSearchLoading(false);
     }
   }, [searchTerm, user]);
 
@@ -171,7 +184,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     return { name, path: item.object_path, isFolder: item.is_folder, size: item.file_size ?? 0, updatedAt: item.updated_at, mimeType: item.mime_type ?? '', favorite: item.is_favorite, trashedAt: item.trashed_at };
   }
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const state = listingState.current; void load(); return () => { state.version++; }; }, [load]);
   useEffect(() => { latestSearchTerm.current = searchTerm; }, [searchTerm]);
   useEffect(() => {
     const query = searchTerm.trim();
@@ -182,9 +195,10 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
       setSearchLoading(false);
       return;
     }
+    setSearchResults([]); setSearchOffset(0); setSearchHasMore(false); setSearchLoading(true);
     const timer = window.setTimeout(() => { void searchAllFiles(0); }, 300);
     return () => window.clearTimeout(timer);
-  }, [searchTerm, searchAllFiles]);
+  }, [searchTerm, searchAllFiles, searchRevision]);
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -207,11 +221,12 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
 
   const isSearching = Boolean(searchTerm.trim());
   const filtered = useMemo(() => isSearching ? searchResults : entries, [entries, isSearching, searchResults]);
+  const actionEntries = layout === 'tree' ? treeEntries : filtered;
   const owns = (entry: Entry) => entry.path.startsWith(`${user?.id}/`);
   const selectionOwned = selected.length > 0 && selected.every((path) => path.startsWith(`${user?.id}/`));
   useEffect(() => {
     let active = true;
-    const paths = filtered.map((entry) => entry.path);
+    const paths = actionEntries.map((entry) => entry.path);
     setShareIndicators({});
     if (!paths.length) return;
     const readIndicators = async () => {
@@ -226,7 +241,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     };
     void readIndicators();
     return () => { active = false; };
-  }, [filtered, shareVersion]);
+  }, [actionEntries, shareVersion]);
   useEffect(() => {
     if (!preview) return;
     return () => URL.revokeObjectURL(preview.url);
@@ -315,15 +330,27 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   };
 
   const listTree = async (path: string): Promise<string[]> => {
-    const { data, error: listError } = await supabase.storage.from(BUCKET).list(path, { limit: 1000 });
-    if (listError) throw listError;
     const result: string[] = [];
-    for (const object of data ?? []) {
-      if (object.name === '.folder' || object.name === '.keep') { result.push(`${path}/${object.name}`); continue; }
-      const child = `${path}/${object.name}`;
-      if (!object.id) result.push(...await listTree(child)); else result.push(child);
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error: listError } = await supabase.storage.from(BUCKET).list(path, { limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } });
+      if (listError) throw listError;
+      for (const object of data ?? []) {
+        const child = `${path}/${object.name}`;
+        if (object.name === '.folder' || object.name === '.keep' || object.id) result.push(child);
+        else result.push(...await listTree(child));
+      }
+      if ((data?.length ?? 0) < 1000) break;
     }
     return result;
+  };
+  const changeMetadata = async (paths: string[], trashedAt?: string | null) => {
+    for (let offset = 0; offset < paths.length; offset += 100) {
+      const query = trashedAt === undefined
+        ? supabase.from('user_file_metadata').delete()
+        : supabase.from('user_file_metadata').update({ trashed_at: trashedAt, updated_at: new Date().toISOString() });
+      const { error: changeError } = await query.eq('owner_id', user!.id).in('object_path', paths.slice(offset, offset + 100));
+      if (changeError) throw changeError;
+    }
   };
   const deleteEntries = async (items: Entry[]) => {
     if (!user) return;
@@ -331,9 +358,9 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     try {
       for (const item of items) {
         const now = new Date().toISOString();
-        const affectedPaths = metadata.filter((row) => row.object_path === item.path || (item.isFolder && row.object_path.startsWith(`${item.path}/`))).map((row) => row.object_path);
-        const { error: metaError } = await supabase.from('user_file_metadata').update({ trashed_at: now, updated_at: now }).eq('owner_id', user.id).in('object_path', affectedPaths);
-        if (metaError) throw metaError;
+        const affectedPaths = (await getFileMetadataTree(item, user.id)).map((row) => row.object_path);
+        if (!affectedPaths.includes(item.path)) { await register(item.path, item.isFolder, item.favorite, item.size, item.mimeType); affectedPaths.push(item.path); }
+        await changeMetadata(affectedPaths, now);
       }
       setSelected([]); setMenu(null); setDetails(null); await load();
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not move items to Trash.'); }
@@ -341,21 +368,24 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   };
   const restoreEntry = async (entry: Entry) => {
     if (!user) return;
-    const affectedPaths = metadata.filter((row) => row.object_path === entry.path || (entry.isFolder && row.object_path.startsWith(`${entry.path}/`))).map((row) => row.object_path);
-    const { error: restoreError } = await supabase.from('user_file_metadata').update({ trashed_at: null, updated_at: new Date().toISOString() }).eq('owner_id', user.id).in('object_path', affectedPaths);
-    if (restoreError) setError(restoreError.message); else await load();
+    try {
+      const affectedPaths = (await getFileMetadataTree(entry, user.id)).map((row) => row.object_path);
+      await changeMetadata(affectedPaths, null);
+      await load();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not restore this item.'); }
   };
   const permanentDelete = async (entry: Entry) => {
     if (!user) return;
     setBusy(true);
     try {
       const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
-      const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths);
-      if (removeError) throw removeError;
+      for (let offset = 0; offset < paths.length; offset += 1000) {
+        const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths.slice(offset, offset + 1000));
+        if (removeError) throw removeError;
+      }
 
-      const affectedPaths = metadata.filter((row) => row.object_path === entry.path || (entry.isFolder && row.object_path.startsWith(`${entry.path}/`))).map((row) => row.object_path);
-      const { error: metaError } = await supabase.from('user_file_metadata').delete().eq('owner_id', user.id).in('object_path', affectedPaths);
-      if (metaError) throw metaError;
+      const affectedPaths = (await getFileMetadataTree(entry, user.id)).map((row) => row.object_path);
+      await changeMetadata(affectedPaths);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not permanently delete this item.');
     } finally {
@@ -386,7 +416,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
           if (opError) throw opError;
         }
         if (dialog.kind === 'copy') {
-          const descendants = metadata.filter((row) => row.object_path === entry.path || (entry.isFolder && row.object_path.startsWith(`${entry.path}/`)));
+          const descendants = (await getFileMetadataTree(entry, user.id));
           if (entry.isFolder) await register(nextPath, true, entry.favorite);
           else await register(nextPath, false, entry.favorite, entry.size, entry.mimeType);
           for (const row of descendants) {
@@ -396,7 +426,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
             if (copyMetaError) throw copyMetaError;
           }
         } else {
-          const descendants = metadata.filter((row) => row.object_path === entry.path || (entry.isFolder && row.object_path.startsWith(`${entry.path}/`)));
+          const descendants = (await getFileMetadataTree(entry, user.id));
           for (const row of descendants) {
             const target = `${nextPath}${row.object_path.slice(entry.path.length)}`;
             const { error: metaError } = await supabase.from('user_file_metadata').update({ object_path: target, updated_at: new Date().toISOString() }).eq('owner_id', user.id).eq('object_path', row.object_path);
@@ -410,9 +440,9 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     setBusy(false);
   };
 
-  const bulkDownload = async () => { for (const path of selected) { const item = filtered.find((entry) => entry.path === path); if (item) await download(item); } };
+  const bulkDownload = async () => { for (const path of selected) { const item = actionEntries.find((entry) => entry.path === path); if (item) await download(item); } };
   const bulkDelete = async () => {
-    const selectedEntries = filtered.filter((entry) => selected.includes(entry.path) && owns(entry));
+    const selectedEntries = actionEntries.filter((entry) => selected.includes(entry.path) && owns(entry));
     const items = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`)));
     for (const item of items.filter((entry) => entry.trashedAt)) await permanentDelete(item);
     const activeItems = items.filter((entry) => !entry.trashedAt);
@@ -440,6 +470,26 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     menuActions.push(['properties', Info, 'Properties']);
   }
 
+  const changeLayout = (next: 'grid' | 'list' | 'tree') => {
+    if (layout === 'tree' && next !== 'tree') setSelected((current) => current.filter((path) => filtered.some((entry) => entry.path === path)));
+    setLayout(next);
+  };
+  const loadMoreRoot = async () => {
+    if (!user || rootPaging) return;
+    const version = listingState.current.version;
+    setRootPaging(true);
+    try {
+      const page = await loadFileChildren(folder ? `${user.id}/${folder}` : user.id, user.id, rootOffset);
+      if (version !== listingState.current.version) return;
+      setEntries((current) => [...current, ...page.entries]);
+      setRootOffset(page.nextOffset); setRootHasMore(page.hasMore);
+    } catch (err) {
+      if (version === listingState.current.version) setError(err instanceof Error ? err.message : 'Could not load more items.');
+    } finally { if (version === listingState.current.version) setRootPaging(false); }
+  };
+
+  const renderFileEntry = (entry: Entry) => <FileCard key={entry.path} entry={entry} shareMode={shareIndicators[entry.path]} location={isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout === 'tree' ? 'list' : layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onRestore={() => void restoreEntry(entry)} onDelete={() => entry.trashedAt ? void permanentDelete(entry) : void deleteEntries([entry])} />;
+
   return (
     <div className="file-manager min-h-[calc(100vh-72px)] text-slate-800">
       <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1680px]">
@@ -456,16 +506,17 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
             {view !== 'shared' && <div className="flex items-center gap-2"><button onClick={() => moveHistory(-1)} disabled={historyIndex === 0} title="Back" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ArrowLeft size={17} /></button><button onClick={() => moveHistory(1)} disabled={historyIndex >= history.length - 1} title="Forward" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ChevronRight size={17} /></button><button onClick={() => void load()} title="Refresh" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 sm:flex"><RotateCcw size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:hidden" title="New folder"><FolderPlus size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:flex"><FolderPlus size={17} />New folder</button><button onClick={() => { setUploads([]); setUploadOpen(true); }} className="flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700"><Upload size={17} />Upload</button></div>}
           </div>
           <nav className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:hidden">{([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setView(key); setFolder(''); setSharedFolder(''); setSharedOffset(0); setSelected([]); onSearchTermChange(''); }} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${view === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500'}`}><Icon size={14} />{label}</button>)}</nav>
-          <div className="mb-5 flex flex-wrap items-center gap-3"><label className="fm-search flex h-11 min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={17} className="shrink-0 text-slate-400" /><input ref={searchInput} value={searchTerm} onChange={(event) => onSearchTermChange(event.target.value)} placeholder="Search in files" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" /><kbd className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 sm:block">⌘ K</kbd></label><div className="flex rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => setLayout('grid')} aria-label="Grid view" className={`rounded-lg p-2 ${layout === 'grid' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><Grid2X2 size={17} /></button><button onClick={() => setLayout('list')} aria-label="List view" className={`rounded-lg p-2 ${layout === 'list' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><List size={17} /></button></div></div>
-          {selected.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"><span className="mr-auto text-sm font-medium text-blue-800">{selected.length} selected</span>{view !== 'trash' && selectionOwned && <button onClick={() => { const selectedEntries = filtered.filter((item) => selected.includes(item.path) && owns(item)); const targets = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`))); setDialog({ kind: 'move', entry: targets[0], entries: targets, value: folder }); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Move size={14} className="mr-1 inline" />Move</button>}{view !== 'trash' && <button onClick={() => void bulkDownload()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Download size={14} className="mr-1 inline" />Download</button>}{selectionOwned && <button onClick={() => void bulkDelete()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"><Trash2 size={14} className="mr-1 inline" />{view === 'trash' ? 'Delete forever' : 'Delete'}</button>}<button onClick={() => setSelected([])} aria-label="Clear selection" className="rounded-lg p-1.5 text-blue-700 hover:bg-blue-100"><X size={16} /></button></div>}
+          <div className="mb-5 flex flex-wrap items-center gap-3"><label className="fm-search flex h-11 min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={17} className="shrink-0 text-slate-400" /><input ref={searchInput} value={searchTerm} onChange={(event) => onSearchTermChange(event.target.value)} placeholder="Search in files" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" /><kbd className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 sm:block">⌘ K</kbd></label><div className="flex rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => changeLayout('grid')} aria-label="Grid view" aria-pressed={layout === 'grid'} className={`rounded-lg p-2 ${layout === 'grid' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><Grid2X2 size={17} /></button><button onClick={() => changeLayout('list')} aria-label="List view" aria-pressed={layout === 'list'} className={`rounded-lg p-2 ${layout === 'list' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><List size={17} /></button><button onClick={() => changeLayout('tree')} aria-label="Tree View" title="Tree View" aria-pressed={layout === 'tree'} className={`rounded-lg p-2 ${layout === 'tree' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><GitBranch size={17} /></button></div></div>
+          {selected.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"><span className="mr-auto text-sm font-medium text-blue-800">{selected.length} selected</span>{view !== 'trash' && selectionOwned && <button onClick={() => { const selectedEntries = actionEntries.filter((item) => selected.includes(item.path) && owns(item)); const targets = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`))); setDialog({ kind: 'move', entry: targets[0], entries: targets, value: folder }); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Move size={14} className="mr-1 inline" />Move</button>}{view !== 'trash' && <button onClick={() => void bulkDownload()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Download size={14} className="mr-1 inline" />Download</button>}{selectionOwned && <button onClick={() => void bulkDelete()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"><Trash2 size={14} className="mr-1 inline" />{view === 'trash' ? 'Delete forever' : 'Delete'}</button>}<button onClick={() => setSelected([])} aria-label="Clear selection" className="rounded-lg p-1.5 text-blue-700 hover:bg-blue-100"><X size={16} /></button></div>}
           {error && <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
           {view === 'shared' && <div className="mb-3 flex items-center gap-3 text-sm"><button onClick={() => { setSharedFolder(''); setSharedOffset(0); setSelected([]); }} className="font-semibold text-blue-700">Shared with me</button>{sharedFolder && <span className="truncate text-slate-500">/ {sharedFolder.split('/').slice(1).join(' / ')}</span>}<button title="Refresh shared items" onClick={() => { if (sharedOffset === 0) void load(); else setSharedOffset(0); }} className="ml-auto rounded-lg p-2 text-blue-600"><RotateCcw size={16} /></button><span className="text-xs text-slate-500">Read-only</span></div>}
           {view === 'files' && crumbs.length > 0 && <button onClick={() => goTo(crumbs.slice(0, -1).join('/'))} className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft size={16} />Back to {crumbs.length > 1 ? crumbs[crumbs.length - 2] : 'My Files'}</button>}
           <section data-drag-active={dropActive} onDragOver={(event) => { event.preventDefault(); setDropActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false); }} onDrop={(event) => { event.preventDefault(); setDropActive(false); if (event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className={`fm-surface min-h-[450px] rounded-2xl border bg-white p-4 transition sm:p-5 ${dropActive ? 'border-blue-400 bg-blue-50/70 ring-4 ring-blue-100' : 'border-slate-200'}`}>
             <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-slate-800">{isSearching ? `Search results for “${searchTerm.trim()}”` : view === 'shared' ? 'Shared with me' : view === 'trash' ? 'Recently deleted' : 'All items'}</h2><p className="mt-0.5 text-xs text-slate-400">{isSearching ? `${filtered.length}${searchHasMore ? '+' : ''} matching ${filtered.length === 1 ? 'item' : 'items'} across your accessible files` : view === 'shared' ? 'Files shared by other people appear here.' : `${filtered.length} ${filtered.length === 1 ? 'item' : 'items'}`}</p></div>{view === 'files' && !isSearching && <button onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Plus size={15} />Add files</button>}</div>
             {(loading && !isSearching) || (isSearching && searchLoading && searchResults.length === 0) ? <div className="flex h-64 items-center justify-center text-blue-600"><LoaderCircle className="animate-spin" /></div> : filtered.length === 0 ? <EmptyState icon={view === 'trash' ? <Trash2 size={28} /> : view === 'favorites' ? <Star size={28} /> : <Folder size={28} />} title={isSearching ? 'No matching files' : view === 'shared' ? 'No shared items here' : view === 'trash' ? 'Trash is empty' : view === 'favorites' ? 'No favorites yet' : 'This folder is empty'} subtitle={isSearching ? 'Try another name or clear your search.' : view === 'files' ? 'Upload files or create a folder to get started.' : 'Items you add here will appear in this view.'} /> : (
-              <><div className={layout === 'grid' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-slate-100'}>{filtered.map((entry) => <FileCard key={entry.path} entry={entry} shareMode={shareIndicators[entry.path]} location={isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onRestore={() => void restoreEntry(entry)} onDelete={() => entry.trashedAt ? void permanentDelete(entry) : void deleteEntries([entry])} />)}</div>{isSearching && searchHasMore && <div className="mt-5 flex justify-center"><button disabled={searchLoading} onClick={() => void searchAllFiles(searchOffset)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">{searchLoading ? 'Loading…' : 'Load more results'}</button></div>}</>
+              <>{layout === 'tree' ? <FileTree key={`${user!.id}:${view}:${folder}:${sharedFolder}:${isSearching}`} entries={filtered} userId={user!.id} query={searchTerm} label={isSearching ? 'Search results' : title} renderEntry={renderFileEntry} onEntriesChange={setTreeEntries} onOpen={enterFolder} onSelect={(entry) => setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path])} selected={selected} /> : <div className={layout === 'grid' ? 'fm-compact-grid' : 'divide-y divide-slate-100'}>{filtered.map(renderFileEntry)}</div>}{isSearching && searchHasMore && <div className="mt-5 flex justify-center"><button disabled={searchLoading} onClick={() => void searchAllFiles(searchOffset)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">{searchLoading ? 'Loading…' : 'Load more results'}</button></div>}</>
             )}
+            {view === 'files' && !isSearching && rootHasMore && <button disabled={rootPaging} onClick={() => void loadMoreRoot()} className="mt-4 rounded-xl border border-slate-200 px-4 py-2 text-sm text-blue-700 disabled:opacity-50">{rootPaging ? 'Loading…' : 'Load more items'}</button>}
             {view === 'shared' && !isSearching && sharedHasMore && <button disabled={loading} onClick={() => setSharedOffset((offset) => offset + 50)} className="mt-4 rounded-xl border border-slate-200 px-4 py-2 text-sm text-blue-700 disabled:opacity-50">{loading ? 'Loading…' : 'Load more shared items'}</button>}
             {dropActive && <div className="pointer-events-none fixed inset-4 z-40 flex items-center justify-center rounded-3xl border-2 border-dashed border-blue-400 bg-blue-600/10 text-xl font-semibold text-blue-800">Drop files to upload</div>}
           </section>
@@ -494,13 +545,13 @@ function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: s
 
 function FileCard({ entry, location, shareMode, layout, selected, onSelect, onOpen, onMenu, onRestore, onDelete }: { entry: Entry; location?: string; shareMode?: 'users' | 'everyone'; layout: 'grid' | 'list'; selected: boolean; onSelect: (event?: React.MouseEvent) => void; onOpen: () => void; onMenu: (event: React.MouseEvent) => void; onRestore: () => void; onDelete: () => void }) {
   const isTrash = !!entry.trashedAt;
-  return <article data-selected={selected} data-folder={entry.isFolder} onContextMenu={onMenu} onClick={onOpen} className={layout === 'grid' ? `fm-card fm-card--grid group relative cursor-pointer rounded-2xl border p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md ${selected ? 'border-blue-300 bg-blue-50/60 ring-2 ring-blue-100' : 'border-slate-100 bg-white'}` : `fm-card fm-card--list group flex cursor-pointer items-center gap-3 px-2 py-3 transition hover:bg-slate-50 ${selected ? 'bg-blue-50' : ''}`}>
+  return <article data-selected={selected} data-folder={entry.isFolder} onContextMenu={onMenu} onClick={onOpen} className={layout === 'grid' ? `fm-card fm-card--grid group relative cursor-pointer rounded-xl border p-2.5 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md ${selected ? 'border-blue-300 bg-blue-50/60 ring-2 ring-blue-100' : 'border-slate-100 bg-white'}` : `fm-card fm-card--list group flex cursor-pointer items-center gap-3 px-2 py-3 transition hover:bg-slate-50 ${selected ? 'bg-blue-50' : ''}`}>
     {layout === 'grid' && <button onClick={(event) => onSelect(event)} aria-label={selected ? 'Deselect' : 'Select'} className={`absolute left-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-md border transition ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white/90 text-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:border-blue-500'}`}><Check size={14} /></button>}
-    <div className={layout === 'grid' ? 'fm-icon-tile mb-3 flex h-28 items-center justify-center rounded-xl' : 'fm-icon-tile flex h-10 w-10 shrink-0 items-center justify-center rounded-xl'}>{entry.mimeType.startsWith('image/') && !entry.isFolder && !isTrash ? <AuthenticatedThumbnail path={entry.path} name={entry.name} /> : fileIcon(entry, layout === 'grid' ? entry.isFolder ? 48 : 38 : 23)}</div>
-    <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><p className="truncate text-sm font-semibold text-slate-800" title={entry.name}>{entry.name}</p>{shareMode && <span title={shareMode === 'everyone' ? 'Shared with everyone (signed-in users)' : 'Shared with specific users'} className="shrink-0 text-blue-600">{shareMode === 'everyone' ? <Globe size={14} aria-label="Shared with everyone" /> : <Share2 size={14} aria-label="Shared with users" />}</span>}{entry.favorite && <Star size={13} className="shrink-0 fill-amber-400 text-amber-400" />}</div><p className="mt-1 truncate text-xs text-slate-400">{kindLabel(entry)}{!entry.isFolder ? ` · ${formatSize(entry.size)}` : ''}</p>{location && <p className="mt-1 truncate text-[11px] text-blue-600" title={location}>{location}</p>}{layout === 'list' && !location && <p className="mt-1 hidden text-xs text-slate-400 sm:block">Modified {dateLabel(entry.updatedAt)}</p>}</div>
+    <div className={layout === 'grid' ? 'fm-icon-tile mb-2 flex h-16 items-center justify-center rounded-xl' : 'fm-icon-tile flex h-10 w-10 shrink-0 items-center justify-center rounded-xl'}>{entry.mimeType.startsWith('image/') && !entry.isFolder && !isTrash ? <AuthenticatedThumbnail path={entry.path} name={entry.name} /> : fileIcon(entry, layout === 'grid' ? entry.isFolder ? 36 : 30 : 22)}</div>
+    <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><p className="truncate text-sm font-semibold text-slate-800" title={entry.name}>{entry.name}</p>{shareMode && <span title={shareMode === 'everyone' ? 'Shared with everyone (signed-in users)' : 'Shared with specific users'} className="shrink-0 text-blue-600">{shareMode === 'everyone' ? <Globe size={14} aria-label="Shared with everyone" /> : <Share2 size={14} aria-label="Shared with users" />}</span>}{entry.favorite && <Star size={13} className="shrink-0 fill-amber-400 text-amber-400" />}</div><p className="fm-item-kind mt-1 truncate text-xs text-slate-400">{kindLabel(entry)}{!entry.isFolder ? ` · ${formatSize(entry.size)}` : ''}</p>{location && <p className="mt-1 truncate text-[11px] text-blue-600" title={location}>{location}</p>}{layout === 'list' && !location && <p className="fm-item-modified mt-1 hidden text-xs text-slate-400 sm:block">Modified {dateLabel(entry.updatedAt)}</p>}</div>
     {layout === 'grid' && <p className="truncate text-[11px] text-slate-400">{dateLabel(entry.updatedAt)}</p>}
     {layout === 'list' && <><span className="hidden w-32 text-xs text-slate-500 md:block">{entry.isFolder ? '—' : formatSize(entry.size)}</span><span className="hidden w-32 text-xs text-slate-500 lg:block">{dateLabel(entry.updatedAt)}</span><button onClick={(event) => { event.stopPropagation(); onSelect(event); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="Select item"><Check size={16} /></button></>}
-    {isTrash ? <div className="ml-1 flex shrink-0 gap-1"><button onClick={(event) => { event.stopPropagation(); onRestore(); }} title="Restore" className="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"><RotateCcw size={16} /></button><button onClick={(event) => { event.stopPropagation(); onDelete(); }} title="Delete forever" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={16} /></button></div> : <button onClick={(event) => { event.stopPropagation(); onMenu(event); }} onContextMenu={onMenu} className="ml-1 shrink-0 rounded-lg p-2 text-slate-400 opacity-100 hover:bg-slate-100 hover:text-slate-700 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Actions for ${entry.name}`}><MoreHorizontal size={17} /></button>}
+    {isTrash ? <div className="ml-1 flex shrink-0 gap-1"><button onClick={(event) => { event.stopPropagation(); onRestore(); }} title="Restore" className="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"><RotateCcw size={16} /></button><button onClick={(event) => { event.stopPropagation(); onDelete(); }} title="Delete forever" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={16} /></button></div> : <button onClick={(event) => { event.stopPropagation(); onMenu(event); }} onContextMenu={onMenu} className="ml-1 shrink-0 rounded-lg p-2 text-slate-400 opacity-100 hover:bg-slate-100 hover:text-slate-700 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" aria-label={`Actions for ${entry.name}`}><MoreHorizontal size={17} /></button>}
   </article>;
 }
 
