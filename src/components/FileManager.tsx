@@ -13,7 +13,7 @@ import { downloadFile, loadPublicFiles } from '@/lib/publicFiles';
 import { FileTree } from '@/components/FileTree';
 import { getFileMetadataTree, loadFileChildren, type FileEntry } from '@/lib/fileTree';
 
-type View = 'files' | 'recent' | 'favorites' | 'shared' | 'trash';
+import { useFileNavigation } from '@/hooks/useFileNavigation';
 type Entry = FileEntry;
 type Metadata = { object_path: string; is_folder: boolean; is_favorite: boolean; file_size: number; mime_type: string; trashed_at: string | null; created_at: string; updated_at: string };
 type UploadItem = { file: File; state: 'waiting' | 'uploading' | 'done' | 'error'; message?: string; progress?: number };
@@ -37,15 +37,11 @@ const fileIcon = (entry: Entry, size = 24) => {
 export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: string; onSearchTermChange: (value: string) => void }) {
   const { user } = useAuth();
   const guest = !user;
-  const [publicFolder, setPublicFolder] = useState<Entry | null>(null);
-  const [view, setView] = useState<View>('files');
   const [shareEntry, setShareEntry] = useState<Entry | null>(null);
   const [shareIndicators, setShareIndicators] = useState<Record<string, 'users' | 'everyone'>>({});
   const [shareVersion, setShareVersion] = useState(0);
-  const [sharedFolder, setSharedFolder] = useState('');
   const [sharedOffset, setSharedOffset] = useState(0);
   const [sharedHasMore, setSharedHasMore] = useState(false);
-  const [folder, setFolder] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [metadata, setMetadata] = useState<Metadata[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,8 +65,6 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<{ kind: 'folder' | 'rename' | 'move' | 'copy'; entry?: Entry; entries?: Entry[]; value: string } | null>(null);
-  const [history, setHistory] = useState<string[]>(['']);
-  const [historyIndex, setHistoryIndex] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -78,21 +72,26 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const listingState = useRef({ version: 0 });
   const [dropActive, setDropActive] = useState(false);
 
-  const goTo = useCallback((path: string, addHistory = true) => {
-    setFolder(path);
-    setSelected([]);
-    if (addHistory) {
-      const next = history.slice(0, historyIndex + 1);
-      if (next[next.length - 1] !== path) next.push(path);
-      setHistory(next);
-      setHistoryIndex(next.length - 1);
-    }
-  }, [history, historyIndex]);
-  const moveHistory = (offset: number) => {
-    const nextIndex = historyIndex + offset;
-    if (nextIndex < 0 || nextIndex >= history.length) return;
-    setHistoryIndex(nextIndex); setFolder(history[nextIndex]); setView('files'); setSelected([]);
-  };
+  const { view, folder, sharedFolder, publicFolder, navigate, back, forward } = useFileNavigation(guest, () => {
+    listingState.current.version++;
+    setEntries([]); setTreeEntries([]); setSelected([]); setMenu(null); setDetails(null); setPreview(null);
+    setSharedOffset(0); setSharedHasMore(false); setRootHasMore(false); setLoading(true);
+    onSearchTermChange('');
+  });
+  const goTo = (path: string) => navigate({ folder: path });
+
+  useEffect(() => {
+    const onBackspace = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (event.key !== 'Backspace' || event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
+      if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+      if (dialog || preview || uploadOpen || shareEntry || details) return;
+      event.preventDefault();
+      window.history.back();
+    };
+    window.addEventListener('keydown', onBackspace);
+    return () => window.removeEventListener('keydown', onBackspace);
+  }, [dialog, preview, uploadOpen, shareEntry, details]);
 
   const load = useCallback(async () => {
     const version = ++listingState.current.version;
@@ -282,9 +281,9 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   const enterFolder = (entry: Entry) => {
     if (!entry.isFolder) { void openPreview(entry); return; }
     onSearchTermChange('');
-    if (guest) { setPublicFolder(entry); setSelected([]); return; }
-    if (owns(entry)) { setView('files'); goTo(entry.path.split('/').slice(1).join('/')); }
-    else { setSharedFolder(entry.path); setSharedOffset(0); setSelected([]); setView('shared'); }
+    if (guest) { navigate({ publicFolder: entry }); return; }
+    if (owns(entry)) goTo(entry.path.split('/').slice(1).join('/'));
+    else navigate({ view: 'shared', sharedFolder: entry.path });
   };
   const openSearchResult = (entry: Entry) => {
     if (!entry.isFolder) { void openPreview(entry); return; }
@@ -539,21 +538,21 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
         {!guest && <aside className="fm-sidebar hidden w-[248px] shrink-0 border-r border-slate-200 bg-white p-5 md:flex md:flex-col">
           <div className="mb-8 flex items-center gap-3 px-2"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200"><HardDrive size={21} /></div><div><p className="font-semibold text-slate-900">File Manager</p><p className="text-xs text-slate-500">Your private space</p></div></div>
           <nav className="space-y-1">
-            {([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setView(key); setFolder(''); setSharedFolder(''); setSharedOffset(0); setSelected([]); onSearchTermChange(''); }} data-active={view === key} className={`fm-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === key ? 'bg-blue-50 font-semibold text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}><Icon size={18} />{label}{key === 'trash' && metadata.some((item) => item.trashed_at) && <span className="ml-auto h-2 w-2 rounded-full bg-blue-500" />}</button>)}
+            {([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { navigate({ view: key }); }} data-active={view === key} className={`fm-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${view === key ? 'bg-blue-50 font-semibold text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}><Icon size={18} />{label}{key === 'trash' && metadata.some((item) => item.trashed_at) && <span className="ml-auto h-2 w-2 rounded-full bg-blue-500" />}</button>)}
           </nav>
           <div className="fm-storage mt-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="mb-3 flex items-center justify-between text-sm font-semibold"><span className="flex items-center gap-2"><Cloud size={16} className="text-blue-600" />Storage</span><span className="text-xs text-slate-500">Private</span></div><p className="text-lg font-bold text-slate-900">{formatSize(totalBytes)}</p><p className="mt-1 text-xs text-slate-500">Used in File Manager</p><div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-[11px] text-slate-400"><HardDrive size={13} />Up to 10 GB per file</div></div>
         </aside>}
         <main className="fm-main min-w-0 flex-1 px-4 py-5 sm:px-7 lg:px-9">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0">{!guest && view !== 'shared' && <div className="mb-1 flex items-center gap-2 text-xs text-slate-400"><button onClick={() => { setView('files'); goTo(''); }} className="hover:text-blue-600">My Files</button>{crumbs.map((part, index) => <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-2"><ChevronRight size={13} /><button className="max-w-32 truncate hover:text-blue-600" onClick={() => goTo(crumbs.slice(0, index + 1).join('/'))}>{part}</button></span>)}</div>}<h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">{view === 'files' && crumbs.length ? crumbs[crumbs.length - 1] : title}</h1></div>
-            {!guest && view !== 'shared' && <div className="flex items-center gap-2"><button onClick={() => moveHistory(-1)} disabled={historyIndex === 0} title="Back" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ArrowLeft size={17} /></button><button onClick={() => moveHistory(1)} disabled={historyIndex >= history.length - 1} title="Forward" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ChevronRight size={17} /></button><button onClick={() => void load()} title="Refresh" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 sm:flex"><RotateCcw size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:hidden" title="New folder"><FolderPlus size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:flex"><FolderPlus size={17} />New folder</button><button onClick={() => { setUploads([]); setUploadOpen(true); }} className="flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700"><Upload size={17} />Upload</button></div>}
+            <div className="min-w-0">{!guest && view !== 'shared' && <div className="mb-1 flex items-center gap-2 text-xs text-slate-400"><button onClick={() => { goTo(''); }} className="hover:text-blue-600">My Files</button>{crumbs.map((part, index) => <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-2"><ChevronRight size={13} /><button className="max-w-32 truncate hover:text-blue-600" onClick={() => goTo(crumbs.slice(0, index + 1).join('/'))}>{part}</button></span>)}</div>}<h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">{view === 'files' && crumbs.length ? crumbs[crumbs.length - 1] : title}</h1></div>
+            {!guest && view !== 'shared' && <div className="flex items-center gap-2"><button onClick={back} title="Back" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ArrowLeft size={17} /></button><button onClick={forward} title="Forward" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ChevronRight size={17} /></button><button onClick={() => void load()} title="Refresh" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 sm:flex"><RotateCcw size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:hidden" title="New folder"><FolderPlus size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:flex"><FolderPlus size={17} />New folder</button><button onClick={() => { setUploads([]); setUploadOpen(true); }} className="flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700"><Upload size={17} />Upload</button></div>}
           </div>
-          {!guest && <nav className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:hidden">{([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setView(key); setFolder(''); setSharedFolder(''); setSharedOffset(0); setSelected([]); onSearchTermChange(''); }} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${view === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500'}`}><Icon size={14} />{label}</button>)}</nav>}
+          {!guest && <nav className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:hidden">{([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { navigate({ view: key }); }} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${view === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500'}`}><Icon size={14} />{label}</button>)}</nav>}
           <div className="mb-5 flex flex-wrap items-center gap-3"><label className="fm-search flex h-11 min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={17} className="shrink-0 text-slate-400" /><input ref={searchInput} value={searchTerm} onChange={(event) => onSearchTermChange(event.target.value)} placeholder="Search in files" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" /><kbd className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 sm:block">⌘ K</kbd></label><div className="flex rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => changeLayout('grid')} aria-label="Grid view" aria-pressed={layout === 'grid'} className={`rounded-lg p-2 ${layout === 'grid' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><Grid2X2 size={17} /></button><button onClick={() => changeLayout('list')} aria-label="List view" aria-pressed={layout === 'list'} className={`rounded-lg p-2 ${layout === 'list' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><List size={17} /></button><button onClick={() => changeLayout('tree')} aria-label="Tree View" title="Tree View" aria-pressed={layout === 'tree'} className={`rounded-lg p-2 ${layout === 'tree' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><GitBranch size={17} /></button></div></div>
           {selected.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"><span className="mr-auto text-sm font-medium text-blue-800">{selected.length} selected</span>{view !== 'trash' && selectionOwned && <button onClick={() => { const selectedEntries = actionEntries.filter((item) => selected.includes(item.path) && owns(item)); const targets = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`))); setDialog({ kind: 'move', entry: targets[0], entries: targets, value: folder }); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Move size={14} className="mr-1 inline" />Move</button>}{view !== 'trash' && <button onClick={() => void bulkDownload()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Download size={14} className="mr-1 inline" />Download</button>}{selectionOwned && <button onClick={() => void bulkDelete()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"><Trash2 size={14} className="mr-1 inline" />{view === 'trash' ? 'Delete forever' : 'Delete'}</button>}<button onClick={() => setSelected([])} aria-label="Clear selection" className="rounded-lg p-1.5 text-blue-700 hover:bg-blue-100"><X size={16} /></button></div>}
-          {guest && <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-blue-600"><Globe size={16} /><span>Publicly shared content · Read-only</span><button className="underline" onClick={() => { setPublicFolder(null); onSearchTermChange(''); setSelected([]); }}>Public files</button>{publicFolder?.ancestors?.map((ancestor) => <button key={ancestor.id} className="underline" onClick={() => { setPublicFolder(ancestor); onSearchTermChange(''); setSelected([]); }}>{ancestor.name}</button>)}{publicFolder && <span>/ {publicFolder.name}</span>}<button title="Refresh" onClick={() => void load()}><RotateCcw size={16} /></button></div>}
+          {guest && <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-blue-600"><Globe size={16} /><span>Publicly shared content · Read-only</span><button className="underline" onClick={() => { navigate({}); }}>Public files</button>{publicFolder?.ancestors?.map((ancestor) => <button key={ancestor.id} className="underline" onClick={() => { navigate({ publicFolder: ancestor }); }}>{ancestor.name}</button>)}{publicFolder && <span>/ {publicFolder.name}</span>}<button title="Refresh" onClick={() => void load()}><RotateCcw size={16} /></button></div>}
           {error && <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
-          {view === 'shared' && <div className="mb-3 flex items-center gap-3 text-sm"><button onClick={() => { setSharedFolder(''); setSharedOffset(0); setSelected([]); }} className="font-semibold text-blue-700">Shared with me</button>{sharedFolder && <span className="truncate text-slate-500">/ {sharedFolder.split('/').slice(1).join(' / ')}</span>}<button title="Refresh shared items" onClick={() => { if (sharedOffset === 0) void load(); else setSharedOffset(0); }} className="ml-auto rounded-lg p-2 text-blue-600"><RotateCcw size={16} /></button><span className="text-xs text-slate-500">Read-only</span></div>}
+          {view === 'shared' && <div className="mb-3 flex items-center gap-3 text-sm"><button onClick={() => { navigate({ view: 'shared' }); }} className="font-semibold text-blue-700">Shared with me</button>{sharedFolder && <span className="truncate text-slate-500">/ {sharedFolder.split('/').slice(1).join(' / ')}</span>}<button title="Refresh shared items" onClick={() => { if (sharedOffset === 0) void load(); else setSharedOffset(0); }} className="ml-auto rounded-lg p-2 text-blue-600"><RotateCcw size={16} /></button><span className="text-xs text-slate-500">Read-only</span></div>}
           {view === 'files' && crumbs.length > 0 && <button onClick={() => goTo(crumbs.slice(0, -1).join('/'))} className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft size={16} />Back to {crumbs.length > 1 ? crumbs[crumbs.length - 2] : 'My Files'}</button>}
           <section data-drag-active={dropActive} onDragOver={(event) => { event.preventDefault(); if (!guest) setDropActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false); }} onDrop={(event) => { event.preventDefault(); setDropActive(false); if (!guest && event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className={`fm-surface min-h-[450px] rounded-2xl border bg-white p-4 transition sm:p-5 ${dropActive ? 'border-blue-400 bg-blue-50/70 ring-4 ring-blue-100' : 'border-slate-200'}`}>
             <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-slate-800">{isSearching ? `Search results for “${searchTerm.trim()}”` : view === 'shared' ? 'Shared with me' : view === 'trash' ? 'Recently deleted' : 'All items'}</h2><p className="mt-0.5 text-xs text-slate-400">{isSearching ? `${filtered.length}${searchHasMore ? '+' : ''} matching ${filtered.length === 1 ? 'item' : 'items'} across your accessible files` : view === 'shared' ? 'Files shared by other people appear here.' : `${filtered.length} ${filtered.length === 1 ? 'item' : 'items'}`}</p></div>{!guest && view === 'files' && !isSearching && <button onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Plus size={15} />Add files</button>}</div>

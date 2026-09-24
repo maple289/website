@@ -29,7 +29,7 @@ function getRoute(): Route {
   if (hash === '#/admin') return 'admin';
   if (hash === '#/library') return 'library';
   if (hash === '#/photos') return 'photos';
-  if (hash === '#/files') return 'files';
+  if (hash.split('?')[0] === '#/files') return 'files';
   if (hash === '#/settings') return 'settings';
   return 'home';
 }
