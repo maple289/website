@@ -1,3 +1,4 @@
+import { ProfileNameFields } from './ProfileNameFields';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
@@ -12,6 +13,8 @@ const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-
 type Tab = 'users' | 'storage';
 
 type Profile = {
+  first_name: string | null;
+  last_name: string | null;
   id: string;
   email: string | null;
   role: string;
@@ -19,6 +22,8 @@ type Profile = {
 };
 
 type PendingRegistration = {
+  first_name: string | null;
+  last_name: string | null;
   id: string;
   email: string;
   status: string;
@@ -107,7 +112,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
   const load = async () => {
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase.from('profiles').select('id, email, role, created_at').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('profiles').select('id, email, role, created_at, first_name, last_name').order('created_at', { ascending: false });
     if (error) {
       setError('Could not load users. Please try again.');
     } else {
@@ -146,7 +151,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
 
   const filtered = profiles.filter((p) => {
     const term = search.trim().toLowerCase();
-    return !term || (p.email ?? '').toLowerCase().includes(term);
+    return !term || [p.email, p.first_name, p.last_name, [p.first_name, p.last_name].filter(Boolean).join(' ')].some((value) => (value ?? '').toLowerCase().includes(term));
   });
 
   return (
@@ -163,7 +168,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by email..."
+              placeholder="Search email or name..."
               className="h-full w-full bg-transparent text-sm outline-none placeholder:text-[#6a6a6a]"
             />
             {search && <button onClick={() => setSearch('')} className="rounded-full p-1 hover:bg-[#272727]"><X size={16} /></button>}
@@ -190,7 +195,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
           <button onClick={() => setShowAdd(true)} className="mt-4 text-sm font-semibold text-[#ff6971] hover:text-[#ff9ba0]">Add the first user</button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[#272727]">
+        <div className="overflow-x-auto rounded-2xl border border-[#272727]">
           <table className="w-full text-left text-sm">
             <thead className="bg-[#181818] text-[#888]">
               <tr>
@@ -208,7 +213,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#3a3a3a] to-[#222] text-sm font-semibold text-[#ccc]">
                         {(p.email ?? '?').charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-[#e8e8e8]">{p.email ?? 'Unknown'}</span>
+                      <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{p.email ?? 'Unknown'}</p><p className="mt-1 text-xs text-[#999]">First Name: {p.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {p.last_name || '—'}</p></div>
                     </div>
                   </td>
                   <td className="px-5 py-4">
@@ -332,7 +337,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
   const load = async () => {
     const { data, error } = await supabase
       .from('pending_registrations')
-      .select('id, email, status, created_at')
+      .select('id, email, status, created_at, first_name, last_name')
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
     if (!error && data) {
@@ -387,7 +392,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
         <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-amber-500/20">
+      <div className="overflow-x-auto rounded-2xl border border-amber-500/20">
         <table className="w-full text-left text-sm">
           <thead className="bg-amber-500/5 text-[#888]">
             <tr>
@@ -404,7 +409,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">
                       {(reg.email ?? '?').charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-[#e8e8e8]">{reg.email}</span>
+                    <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{reg.email}</p><p className="mt-1 text-xs text-[#999]">First Name: {reg.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {reg.last_name || '—'}</p></div>
                   </div>
                 </td>
                 <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
@@ -773,6 +778,8 @@ function StatCard({ label, value, icon, active }: { label: string; value: string
 type AuthHeadersFn = () => Promise<Record<string, string>>;
 
 function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => void; onCreated: () => void; getAuthHeaders: AuthHeadersFn }) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
@@ -792,7 +799,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
       const res = await fetch(adminFnUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email: email.trim(), password, role }),
+        body: JSON.stringify({ email: email.trim(), password, role, first_name: firstName.trim(), last_name: lastName.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -810,7 +817,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+      <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><UserPlus size={20} /></div>
@@ -819,6 +826,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
           <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
+          <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={saving} />
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Email</label>
           <div className="mb-4 flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
             <Mail className="ml-3.5 text-[#888]" size={17} />
@@ -865,6 +873,8 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
 }
 
 function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profile; onClose: () => void; onSaved: () => void; getAuthHeaders: AuthHeadersFn }) {
+  const [firstName, setFirstName] = useState(user.first_name ?? '');
+  const [lastName, setLastName] = useState(user.last_name ?? '');
   const [email, setEmail] = useState(user.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -873,16 +883,15 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email.trim() && !password) {
-      setError('Enter a new email or password to update.');
-      return;
-    }
     setSaving(true);
     try {
       const headers = await getAuthHeaders();
       const body: Record<string, string> = { id: user.id };
       if (email.trim() && email.trim() !== user.email) body.email = email.trim();
       if (password) body.password = password;
+      if (firstName.trim() !== (user.first_name ?? '')) body.first_name = firstName.trim();
+      if (lastName.trim() !== (user.last_name ?? '')) body.last_name = lastName.trim();
+      if (Object.keys(body).length === 1) { onClose(); return; }
       const res = await fetch(adminFnUrl, {
         method: 'PUT',
         headers,
@@ -904,7 +913,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+      <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><Pencil size={20} /></div>
@@ -916,6 +925,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
           <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
+          <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={saving} />
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Email</label>
           <div className="mb-4 flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
             <Mail className="ml-3.5 text-[#888]" size={17} />
@@ -939,7 +949,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
               className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
             />
           </div>
-          <p className="mb-5 text-xs text-[#6a6a6a]">Fill in only the fields you want to change.</p>
+          <p className="mb-5 text-xs text-[#6a6a6a]">Leave password blank to keep it. Clear a name to remove it.</p>
 
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 

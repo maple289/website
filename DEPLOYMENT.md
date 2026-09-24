@@ -155,3 +155,16 @@ For every validated commit, the runner:
 
 No GitHub secrets are required for deployment. Supabase and application secrets
 remain in `/srv/streamly/supabase/.env` and `/srv/streamly/app.env` on Ubuntu.
+
+## Optional profile names
+
+This release requires migration `20260924030000_add_optional_profile_names.sql`
+and updated `admin-users` and `approve-registration` Edge Functions alongside the
+frontend. The normal deployment procedure includes all three; when deploying
+manually, apply the migration before enabling the updated functions and frontend.
+
+Existing accounts retain nullable names and need no profile update. Registration
+still uses the existing email approval/invitation flow. Names are stored on
+pending requests and copied to the profile when an approved invitation creates
+the account. Account settings can edit or clear only the caller's names; admin
+editing continues to require the existing server-side administrator check.

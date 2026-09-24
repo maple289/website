@@ -1,3 +1,4 @@
+import { ProfileNameFields } from './ProfileNameFields';
 import { useEffect, useState } from 'react';
 import { Loader2, Mail, Lock, Eye, EyeOff, X, Youtube } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +12,8 @@ type AuthModalProps = {
 export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   const { signIn, requestRegistration } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,6 +32,8 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   useEffect(() => {
     if (!open) {
       setEmail('');
+      setFirstName('');
+      setLastName('');
       setPassword('');
       setShowPassword(false);
       setError(null);
@@ -59,7 +64,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
 
     setSubmitting(true);
     if (mode === 'signup') {
-      const { error } = await requestRegistration(email.trim());
+      const { error } = await requestRegistration(email.trim(), firstName, lastName);
       setSubmitting(false);
       if (error) {
         setError(error);
@@ -81,7 +86,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+      <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="relative px-7 pt-8">
           <button aria-label="Close" onClick={onClose} className="absolute right-4 top-4 rounded-full p-2 text-[#a7a7a7] transition hover:bg-[#2a2a2a] hover:text-white">
             <X size={20} />
@@ -100,6 +105,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-7 pb-8 pt-6">
+          {mode === 'signup' && <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={submitting} />}
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Email</label>
           <div className="mb-4 flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
             <Mail className="ml-3.5 text-[#888]" size={18} />

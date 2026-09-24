@@ -1,3 +1,4 @@
+import { ProfileNameSettings } from './ProfileNameSettings';
 import { useState } from 'react';
 import { ArrowLeft, KeyRound, Loader as Loader2, ShieldCheck, Eye, EyeOff, Lock, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -96,7 +97,7 @@ export function SettingsPage() {
       <main className="mx-auto max-w-[700px] px-5 pb-20 pt-8 lg:px-8">
         <div className="mb-6">
           <h2 className="text-xl font-semibold tracking-[-0.03em]">Account Settings</h2>
-          <p className="mt-1 text-sm text-[#888]">Manage your account security and password.</p>
+          <p className="mt-1 text-sm text-[#888]">Manage your profile, account security, and password.</p>
         </div>
 
         {/* Account info */}
@@ -111,6 +112,8 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {user && <ProfileNameSettings key={user.id} userId={user.id} />}
 
         {/* Change Password */}
         <div className="rounded-2xl border border-[#272727] bg-[#161616] p-6">

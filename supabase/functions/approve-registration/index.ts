@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: registration, error: regErr } = await adminClient
       .from("pending_registrations")
-      .select("id, email, status")
+      .select("id, email, status, first_name, last_name")
       .eq("id", registrationId)
       .maybeSingle();
 
@@ -120,6 +120,7 @@ Deno.serve(async (req: Request) => {
     if (action === "approve") {
       const { error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(userEmail, {
         redirectTo: `${Deno.env.get("SITE_URL") ?? ""}/`,
+        data: { first_name: registration.first_name, last_name: registration.last_name },
       });
 
       if (inviteErr) {

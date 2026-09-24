@@ -14,6 +14,22 @@ function json(data: unknown, status = 200) {
   });
 }
 
+// Only explicitly supplied name fields are changed; blank values remove a name.
+function profileNames(body: Record<string, unknown>): Record<string, string | null> {
+  const names: Record<string, string | null> = {};
+  for (const key of ["first_name", "last_name"]) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    const value = body[key];
+    if (value !== null && typeof value !== "string") {
+      throw new Error("Names must be text or null");
+    }
+    const name = typeof value === "string" ? value.trim() : "";
+    if ([...name].length > 100) throw new Error("Names must be at most 100 characters");
+    names[key] = name || null;
+  }
+  return names;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -57,6 +73,10 @@ Deno.serve(async (req: Request) => {
     if (method === "POST" && url.pathname.endsWith("/admin-users")) {
       const body = await req.json();
       const { email, password, role } = body;
+      let names: Record<string, string | null>;
+      try { names = profileNames(body); } catch (error) {
+        return json({ error: error instanceof Error ? error.message : "Invalid names" }, 400);
+      }
 
       if (!email || !password) {
         return json({ error: "Email and password are required" }, 400);
@@ -70,17 +90,20 @@ Deno.serve(async (req: Request) => {
         email,
         password,
         email_confirm: true,
+        user_metadata: names,
       });
       if (createErr) {
         return json({ error: createErr.message }, 400);
       }
 
       // Upsert profile with the correct role
-      await adminClient.from("profiles").upsert({
+      const { error: profileError } = await adminClient.from("profiles").upsert({
         id: newUser.user.id,
         email,
         role: assignedRole,
+        ...names,
       });
+      if (profileError) return json({ error: profileError.message }, 400);
 
       return json({ id: newUser.user.id, email, role: assignedRole });
     }
@@ -106,10 +129,14 @@ Deno.serve(async (req: Request) => {
       return json({ success: true });
     }
 
-    // PUT: edit a user's email and/or password
+    // PUT: edit a user's names, email and/or password
     if (method === "PUT" && url.pathname.endsWith("/admin-users")) {
       const body = await req.json();
       const { id, email, password } = body;
+      let names: Record<string, string | null>;
+      try { names = profileNames(body); } catch (error) {
+        return json({ error: error instanceof Error ? error.message : "Invalid names" }, 400);
+      }
 
       if (!id) {
         return json({ error: "User id is required" }, 400);
@@ -124,25 +151,31 @@ Deno.serve(async (req: Request) => {
         updateAttrs.password = password;
       }
 
-      if (Object.keys(updateAttrs).length === 0) {
+      if (Object.keys(updateAttrs).length === 0 && Object.keys(names).length === 0) {
         return json({ error: "Nothing to update" }, 400);
       }
 
-      const { data: updated, error: updateErr } = await adminClient.auth.admin.updateUserById(id, updateAttrs);
-      if (updateErr) {
-        return json({ error: updateErr.message }, 400);
+      // A names-only edit does not need an authentication update.
+      let responseEmail = email;
+      if (Object.keys(updateAttrs).length > 0) {
+        const { data: updated, error: updateErr } = await adminClient.auth.admin.updateUserById(id, updateAttrs);
+        if (updateErr) return json({ error: updateErr.message }, 400);
+        responseEmail = updated.user.email;
       }
 
-      // Sync email on the profile row if it changed
-      if (email) {
-        await adminClient.from("profiles").update({ email }).eq("id", id);
+      const profileChanges = { ...names, ...(email ? { email } : {}) };
+      if (Object.keys(profileChanges).length > 0) {
+        const { data: updatedProfile, error: profileErr } = await adminClient.from("profiles")
+          .update(profileChanges).eq("id", id).select("id, email").single();
+        if (profileErr) return json({ error: profileErr.message }, 400);
+        responseEmail = updatedProfile.email;
       }
 
-      return json({ id: updated.user.id, email: updated.user.email });
+      return json({ id, email: responseEmail });
     }
 
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
-    return json({ error: err.message ?? "Internal server error" }, 500);
+    return json({ error: err instanceof Error ? err.message : "Internal server error" }, 500);
   }
 });
