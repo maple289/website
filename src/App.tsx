@@ -4,7 +4,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
 import { AdminPage } from '@/components/AdminPage';
-import { HomePage } from '@/components/HomePage';
+import { HomePage, MediaTabs } from '@/components/HomePage';
 import { VideoLibrary } from '@/components/VideoLibrary';
 import { UploadModal } from '@/components/UploadModal';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,7 +56,7 @@ function AppContent() {
 
   // Redirect: if not signed in and trying to access library, go home
   useEffect(() => {
-    if (!loading && !user && (route === 'library' || route === 'photos' || route === 'files')) {
+    if (!loading && !user && (route === 'library' || route === 'photos')) {
       window.location.hash = '';
       setRoute('home');
     }
@@ -173,7 +173,7 @@ function AppContent() {
 
       {/* Main content */}
       <main className={`pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {route === 'files' && isAuthed ? <FileManager searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} />}
+        {route === 'files' ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab !== 'files') { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && <FileManager key={user?.id ?? 'guest'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('files')} />}
       </main>
 
       {/* Auth modal */}

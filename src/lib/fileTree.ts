@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
+import { loadPublicFiles } from '@/lib/publicFiles';
 
 export type FileEntry = {
+  id?: string; location?: string; ancestors?: FileEntry[];
   name: string; path: string; isFolder: boolean; size: number; updatedAt: string;
   mimeType: string; favorite: boolean; trashedAt: string | null;
 };
@@ -18,6 +20,7 @@ export const fromMetadata = (row: FileMetadata): FileEntry => ({
 
 // Only one level at a time. Both APIs enforce the existing database/storage RLS.
 export async function loadFileChildren(path: string, userId: string, offset = 0): Promise<FilePage> {
+  if (!userId) return loadPublicFiles(path, offset);
   if (!path.startsWith(`${userId}/`) && path !== userId) {
     const { data, error } = await supabase.rpc('list_shared_user_files', { p_folder: path, p_offset: offset });
     if (error) throw error;
@@ -55,6 +58,7 @@ export function ancestorPaths(path: string): string[] {
 // Search already finds all matches on the server. Query only parent metadata to
 // reveal their hierarchy. Inaccessible shared ancestors never become tree nodes.
 export async function searchTreeEntries(matches: FileEntry[], userId: string, signal: AbortSignal): Promise<FileEntry[]> {
+  if (!userId) return [...new Map(matches.flatMap((entry) => [...(entry.ancestors ?? []), entry]).map((entry) => [entry.path, entry])).values()];
   const paths = [...new Set(matches.flatMap((entry) => ancestorPaths(entry.path)))];
   const entries = new Map(matches.map((entry) => [entry.path, entry]));
   for (const path of paths.filter((value) => value.startsWith(`${userId}/`))) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Film, Globe, Image as ImageIcon, Loader as Loader2, Play, Loader as LoaderIcon, CheckCircle2 } from 'lucide-react';
+import { Film, FolderOpen, Globe, Image as ImageIcon, Loader as Loader2, Play, Loader as LoaderIcon, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { timeAgo } from '@/lib/types';
@@ -13,9 +13,10 @@ type HomePageProps = {
   tab: Tab;
   searchTerm: string;
   onTabChange: (tab: Tab) => void;
+  onFiles: () => void;
 };
 
-export function HomePage({ tab, searchTerm, onTabChange }: HomePageProps) {
+export function HomePage({ tab, searchTerm, onTabChange, onFiles }: HomePageProps) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
@@ -48,10 +49,7 @@ export function HomePage({ tab, searchTerm, onTabChange }: HomePageProps) {
   return (
     <div className="mx-auto max-w-[1560px] px-5 pb-14 lg:px-8">
       {/* Tab switcher */}
-      <div className="flex gap-1 border-b border-[#1a2a4a] pt-6">
-        <TabButton active={tab === 'videos'} onClick={() => onTabChange('videos')} icon={<Film size={18} />} label="Videos" />
-        <TabButton active={tab === 'photos'} onClick={() => onTabChange('photos')} icon={<ImageIcon size={18} />} label="Photos" />
-      </div>
+      <MediaTabs active={tab} onSelect={(value) => value === 'files' ? onFiles() : onTabChange(value)} />
 
       {tab === 'videos' ? (
         <section className="py-8 sm:py-10">
@@ -143,4 +141,12 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       {label}
     </button>
   );
+}
+
+export function MediaTabs({ active, onSelect }: { active: Tab | 'files'; onSelect: (tab: Tab | 'files') => void }) {
+  return <nav aria-label="Media navigation" className="flex gap-1 border-b border-[#1a2a4a] pt-6">
+    <TabButton active={active === 'videos'} onClick={() => onSelect('videos')} icon={<Film size={18} />} label="Videos" />
+    <TabButton active={active === 'photos'} onClick={() => onSelect('photos')} icon={<ImageIcon size={18} />} label="Photos" />
+    <TabButton active={active === 'files'} onClick={() => onSelect('files')} icon={<FolderOpen size={18} />} label="Files" />
+  </nav>;
 }
