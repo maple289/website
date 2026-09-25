@@ -26,7 +26,8 @@ def clean(value):
             text = text.replace(env[name], '[REDACTED]')
     return re.sub(r're_[A-Za-z0-9_-]+', '[REDACTED]', text)[:600]
 def request(url, key, body=None, apikey=False):
-    headers = {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'}
+    headers = {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json',
+               'User-Agent': 'Streamly-email-diagnostics/1.0'}
     if apikey:
         headers['apikey'] = key
     req = urllib.request.Request(url, headers=headers, data=None if body is None else json.dumps(body).encode())
@@ -51,7 +52,7 @@ print('Auth SMTP:', 'configured' if all(env.get(k) for k in ['SMTP_HOST', 'SMTP_
 if not secret:
     raise SystemExit('Cannot perform a real Resend send or inspect logs without the server-side key.')
 status, domains = request('https://api.resend.com/domains', secret)
-if status == 401:
+if status == 401 and domains.get('name') != 'restricted_api_key':
     print('RESEND_API_KEY: invalid')
 if status == 200:
     sender = env.get('RESEND_FROM_EMAIL') or env.get('SMTP_ADMIN_EMAIL') or ''
