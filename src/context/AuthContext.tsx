@@ -59,31 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     requestRegistration: async (email, firstName = '', lastName = '') => {
       if (!isSupabaseConfigured) return { error: 'Authentication is not available right now.' };
-      const { error } = await supabase
-        .from('pending_registrations')
-        .insert({ email, first_name: firstName.trim() || null, last_name: lastName.trim() || null });
-      if (error) {
-        // A duplicate means this address already has a request or an account.
-        // Return the same outcome as a brand-new request so the response does
-        // not reveal which addresses are known.
-        const isDuplicate = error.message.includes('duplicate') || error.message.includes('unique');
-        if (!isDuplicate) {
-          console.error('Registration request failed:', error);
-          return { error: 'We could not submit your request right now. Please try again.' };
-        }
-        return { error: null };
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin-registration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+          body: JSON.stringify({ email, first_name: firstName.trim() || null, last_name: lastName.trim() || null }),
+        });
+        if (!response.ok) return { error: 'We could not submit your request right now. Please try again.' };
+      } catch {
+        return { error: 'We could not confirm your request. Please try again; duplicate requests will not create another account.' };
       }
-
-      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin-registration`;
-      fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({ email }),
-      }).catch((err) => console.warn('Failed to notify admins:', err));
 
       return { error: null };
     },

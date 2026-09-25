@@ -1,0 +1,8 @@
+# Backend-only environment. Never pass these values as frontend build arguments.
+services:
+  functions:
+    environment:
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
+      SITE_URL: ${SITE_URL:-}

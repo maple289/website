@@ -187,3 +187,103 @@ failed saves. Near-visible media counts are fetched in batches of up to 100 and
 refreshed every 20 seconds while the page is visible, plus on window focus.
 Other users' changes therefore appear on the next refresh. Detail lists use
 50-user cursor pages and refresh from current profiles while open.
+
+## Registration email configuration and diagnosis
+
+The application uses email requests that require admin approval. Submission sends
+an applicant receipt and a notification to **every profile with role `admin`**.
+Approval creates/invites the account through Supabase Auth and sends the existing
+approval email. There is no username field in this authentication model.
+
+Confirmed defects repaired in this release:
+
+- Submission had no applicant email and the browser ignored notification HTTP failures.
+- Both Resend senders were hard-coded to `noreply@bolt.new`.
+- Email failure booleans were ignored, and there were no persistent delivery IDs
+  or protections against repeated notification requests.
+- Deployment supplied no explicit custom email variables to Edge Functions.
+  A Compose `.env` value alone does not inject a variable into a container.
+
+The existing direct Resend HTTP API is retained (no frontend SDK/API key).
+Configure the **existing** key on the server in `/srv/streamly/supabase/.env`:
+
+```dotenv
+RESEND_API_KEY=<existing server-side key>
+RESEND_FROM_EMAIL=Streamly <notifications@your-verified-domain.example>
+```
+
+Use a sender domain verified in your Resend account; the example is not a real
+sender. `SMTP_ADMIN_EMAIL` is a fallback sender when `RESEND_FROM_EMAIL` is absent.
+Do not add these secrets to `VITE_*`, the application build environment, or Git.
+`scripts/deploy.sh` now includes `deploy/supabase-email.compose.yml` to inject only
+backend email settings into the Functions container and recreate it if changed.
+Deploy migration `20260924050000_registration_email_delivery.sql`, both updated
+registration Edge Functions, their `_shared` directory, and the frontend together.
+
+Supabase Auth invitations are a **separate SMTP delivery path**. A Resend API key
+in Functions alone does not configure Auth. Verify the runtime's existing
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL` and
+`SMTP_SENDER_NAME`. When Resend is your SMTP provider, its documented host is
+`smtp.resend.com`, username `resend`, password your existing API key, and port
+587 uses STARTTLS. Preserve a working SMTP configuration. See
+https://resend.com/docs/send-with-smtp.
+
+### Inspect without printing secrets
+
+Run on the production server (Python 3, standard library only):
+
+```bash
+python3 scripts/diagnose-registration-email.py --env-file /srv/streamly/supabase/.env
+```
+
+Also run `sh scripts/check-email-runtime.sh` to verify variable presence inside
+the running Functions container (as opposed to only the environment file).
+
+The Python script reports key presence, sender domain status where permitted, and only
+safe metadata from Resend Logs. A send-only key may lack permission to list domains
+or logs; a 403 from those read endpoints alone does not mean the key cannot send.
+Inspect the signed-in dashboard in that case. Never print `docker inspect` or
+`docker compose config` unfiltered: they can contain the complete key.
+
+For the user-authorized live registration test:
+
+```bash
+python3 scripts/diagnose-registration-email.py --env-file /srv/streamly/supabase/.env --registration-test maple289@gmail.com
+```
+
+This sends a real registration receipt and real notifications to all admins. It
+requires the migrated backend plus `SUPABASE_PUBLIC_URL` (or `API_EXTERNAL_URL`),
+`ANON_KEY`, and `SERVICE_ROLE_KEY` in the backend environment. It does not bypass
+approval or create a duplicate auth account. If the address already has an approved
+request, use a separately authorized fresh address for a new registration test.
+Verify the delivery rows and their message IDs against Resend Emails/Logs; API
+acceptance is not proof that the message arrived in the recipient inbox. Complete
+admin approval separately to verify the Auth SMTP invitation and approval email.
+
+### Failures and safe retries
+
+Server logs include operation, provider HTTP status, error type/message, and
+accepted message ID. Full API keys and Authorization tokens are redacted.
+`registration_email_deliveries` is backend-only and stores each operation's status,
+message ID, and sanitized error. A failure never rolls back an accepted request.
+Resubmitting the same pending registration retries only unsent emails; already
+sent messages are skipped. Provider rate-limit/server errors get two bounded
+retries with the same idempotency key. Concurrent sends have a database claim,
+a one-minute cooldown, and a five-attempt cap. No recurring retry job is installed. Repeating the same authenticated
+`approve-registration` action for an already approved/rejected request retries its
+unsent notification without another invitation/account creation. The admin UI
+warns if a saved review has an unconfirmed email.
+
+Before the first provider attempt, missing configuration does not consume the send-attempt budget. For ambiguous
+attempts older than 23 hours, inspect Resend logs before any operator retry;
+the provider's idempotency window is 24 hours. Do not blindly clear sent rows or
+reset uncertain deliveries. Fix the configuration before resubmitting.
+
+Offline regression tests use the existing local PGlite dependency and send no mail:
+
+```bash
+node scripts/test-registration-email.mjs
+```
+
+Live key validity, verified-domain ownership, inbox delivery, and production
+Resend logs cannot be inferred from offline tests.

@@ -366,6 +366,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
         setConfirmAction(null);
         return;
       }
+      setError(data.warning ?? null);
       setPending((prev) => prev.filter((p) => p.id !== confirmAction.reg.id));
       setActionId(null);
       setConfirmAction(null);
@@ -378,7 +379,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
   };
 
   if (loading) return null;
-  if (pending.length === 0) return null;
+  if (pending.length === 0) return error ? <p role="alert" className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">{error}</p> : null;
 
   return (
     <div className="mb-8">
