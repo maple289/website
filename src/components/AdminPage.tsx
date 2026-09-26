@@ -1,5 +1,5 @@
 import { ProfileNameFields } from './ProfileNameFields';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
@@ -333,20 +333,54 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
   const [actionId, setActionId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ reg: PendingRegistration; action: 'approve' | 'reject' } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const activeLoad = useRef<AbortController | null>(null);
 
-  const load = async () => {
-    const { data, error } = await supabase
-      .from('pending_registrations')
-      .select('id, email, status, created_at, first_name, last_name')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    if (!error && data) {
-      setPending(data);
+  const load = useCallback(async () => {
+    if (activeLoad.current) return;
+    const controller = new AbortController();
+    activeLoad.current = controller;
+    setRefreshing(true);
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    try {
+      const { data, error } = await supabase
+        .from('pending_registrations')
+        .select('id, email, status, created_at, first_name, last_name')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .abortSignal(controller.signal);
+      if (activeLoad.current !== controller) return;
+      if (error) throw error;
+      setPending(data ?? []);
+      setLoadError(null);
+    } catch {
+      if (activeLoad.current === controller) setLoadError('Could not load pending approvals. Refresh to try again.');
+    } finally {
+      window.clearTimeout(timeout);
+      if (activeLoad.current === controller) {
+        activeLoad.current = null;
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
-    setLoading(false);
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const refreshVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    void load();
+    const interval = window.setInterval(refreshVisible, 15000);
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      const controller = activeLoad.current;
+      activeLoad.current = null;
+      controller?.abort();
+    };
+  }, [load]);
 
   const handleAction = async () => {
     if (!confirmAction) return;
@@ -367,6 +401,11 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
         return;
       }
       setError(data.warning ?? null);
+      // Prevent an older list response from restoring the just-reviewed request.
+      const controller = activeLoad.current;
+      activeLoad.current = null;
+      controller?.abort();
+      setRefreshing(false);
       setPending((prev) => prev.filter((p) => p.id !== confirmAction.reg.id));
       setActionId(null);
       setConfirmAction(null);
@@ -378,21 +417,24 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
     }
   };
 
-  if (loading) return null;
-  if (pending.length === 0) return error ? <p role="alert" className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">{error}</p> : null;
-
   return (
     <div className="mb-8">
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Clock size={18} className="text-amber-400" />
         <h3 className="text-base font-semibold tracking-[-0.02em]">Pending Approvals</h3>
         <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-400">{pending.length}</span>
+        <button type="button" onClick={() => void load()} disabled={refreshing} className="ml-auto rounded-lg border border-amber-500/30 px-3 py-2 text-sm text-amber-200 transition hover:bg-amber-500/10 disabled:opacity-50">
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
+      {loadError && <p role="alert" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">{loadError}</p>}
       {error && (
         <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
       )}
 
+      {pending.length === 0 && <p role="status" className="mb-4 text-sm text-[#aaa]">{loading ? 'Loading pending approvals…' : loadError ? 'Pending approvals could not be checked.' : 'No pending approval requests.'}</p>}
+      {pending.length > 0 && (
       <div className="overflow-x-auto rounded-2xl border border-amber-500/20">
         <table className="w-full text-left text-sm">
           <thead className="bg-amber-500/5 text-[#888]">
@@ -442,6 +484,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
         </table>
       </div>
 
+      )}
       {confirmAction && (
         <ConfirmApprovalModal
           email={confirmAction.reg.email}

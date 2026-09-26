@@ -12,7 +12,8 @@ export function safeEmailLog(value: unknown): string {
 export type EmailResult = { accepted: boolean; status: number; type?: string; message?: string; id?: string };
 export async function sendEmail(message: { to: string; subject: string; html: string; operation: string; key: string }): Promise<EmailResult> {
   const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
-  const from = (Deno.env.get("RESEND_FROM_EMAIL") || Deno.env.get("SMTP_ADMIN_EMAIL"))?.trim();
+  // Sender identity is separate from the registered admin recipient list.
+  const from = Deno.env.get("RESEND_FROM_EMAIL")?.trim();
   const fail = (status: number, type: string, error: unknown): EmailResult => {
     const result = { accepted: false, status, type: safeEmailLog(type), message: safeEmailLog(error) };
     console.error(JSON.stringify({ operation: message.operation, ...result }));

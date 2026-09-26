@@ -47,7 +47,7 @@ def report_error(operation, status, data):
     print(json.dumps({'operation': operation, 'status': status, 'type': clean(data.get('name')), 'message': clean(data.get('message'))}))
 
 print('RESEND_API_KEY:', 'configured' if secret else 'missing')
-print('Sender:', 'configured' if env.get('RESEND_FROM_EMAIL') or env.get('SMTP_ADMIN_EMAIL') else 'missing')
+print('Sender:', 'configured' if env.get('RESEND_FROM_EMAIL') else 'missing')
 print('Auth SMTP:', 'configured' if all(env.get(k) for k in ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'SMTP_ADMIN_EMAIL']) else 'missing/incomplete')
 if not secret:
     raise SystemExit('Cannot perform a real Resend send or inspect logs without the server-side key.')
@@ -55,7 +55,7 @@ status, domains = request('https://api.resend.com/domains', secret)
 if status == 401 and domains.get('name') != 'restricted_api_key':
     print('RESEND_API_KEY: invalid')
 if status == 200:
-    sender = env.get('RESEND_FROM_EMAIL') or env.get('SMTP_ADMIN_EMAIL') or ''
+    sender = env.get('RESEND_FROM_EMAIL') or ''
     match = re.search(r'@([^>\s]+)', sender)
     found = next((d for d in domains.get('data', []) if match and d.get('name') == match[1]), None)
     print('Sender domain:', clean(found.get('status')) if found else 'not found in returned domain page; inspect dashboard')
@@ -75,6 +75,8 @@ if args.registration_test:
     if db_status != 200 or not rows:
         raise SystemExit('Could not verify the registration record.')
     print('Registration state:', rows[0]['status'])
+    if rows[0]['status'] != 'pending':
+        raise SystemExit('This address was already reviewed. Duplicate submissions do not reopen approval requests or send new registration emails; use an authorized fresh test address.')
     query = urllib.parse.urlencode({'registration_id': 'eq.' + rows[0]['id'], 'select': 'operation,recipient,status,message_id,http_status,error_type,error_message'})
     db_status, rows = request(url + '/rest/v1/registration_email_deliveries?' + query, service, apikey=True)
     if db_status != 200:

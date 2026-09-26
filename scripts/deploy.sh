@@ -11,7 +11,7 @@ if [ ! -f "$app_env" ]; then
   echo "Create $app_env from .env.example before deploying."
   exit 1
 fi
-if [ ! -f "$runtime_compose" -f "$project_root/deploy/supabase-email.compose.yml" ] || [ ! -f "$runtime_env" ]; then
+if [ ! -f "$runtime_compose" ] || [ ! -f "$project_root/deploy/supabase-email.compose.yml" ] || [ ! -f "$runtime_env" ]; then
   echo "Run scripts/bootstrap-supabase.sh first."
   exit 1
 fi

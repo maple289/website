@@ -11,6 +11,7 @@ console.info = console.error = console.warn = (...args) => logs.push(args.join('
 let handler, mode = 'ok', checks = 0, invites = 0, inviteError = null;
 const adminId = '11111111-1111-4111-8111-111111111111';
 let callerId = adminId;
+let failRegistrationLookup = false;
 globalThis.Deno = { env: { get: (name) => env.get(name) }, serve: (fn) => { handler = fn; } };
 globalThis.fetch = async (url, options) => {
   assert.equal(url, 'https://api.resend.com/emails');
@@ -38,6 +39,10 @@ const client = {
       eq(key, value) { filters.push([key, value]); return builder; },
       single() { single = true; return builder; }, maybeSingle() { single = true; return builder; },
       async then(resolve) {
+        if (failRegistrationLookup && table === 'pending_registrations' && action === 'select') {
+          failRegistrationLookup = false;
+          return resolve({ data: null, error: { code: 'TEST_LOOKUP_FAILURE' } });
+        }
         try {
           let sql, args = [];
           if (action === 'insert') {
@@ -93,6 +98,8 @@ try {
   check((await db.query("SELECT count(*)::int AS n FROM registration_email_deliveries WHERE status='failed' AND http_status=401")).rows[0].n, 3, 'each invalid-key send records status and failure');
   mode = 'domain'; await submit('domain@example.test');
   check(logs.some((line) => line.includes('Domain is not verified') && line.includes('403')), true, 'sender rejection logged with status');
+  check((await db.query("SELECT status FROM pending_registrations WHERE email='domain@example.test'")).rows[0].status, 'pending', 'unverified sender preserves the request for admin approval');
+  check(sent.filter((mail) => mail.body.to[0] === 'admin-two@example.test').length, 3, 'later admins are attempted even when earlier recipients fail');
   mode = 'network'; await shared.sendEmail({ to: 'a@example.test', subject: 'Test', html: 'Test', operation: 'test_network', key: 'test-network' });
   check(logs.some((line) => line.includes('transport_error')), true, 'transport failure logged');
   check(logs.join('').includes('re_test_secret_not_real'), false, 'secret redacted from all error logs');
@@ -113,6 +120,25 @@ try {
   check(denied, true, 'public cannot claim delivery records');
   await db.exec('RESET ROLE');
   check((await submit('not-an-email')).status, 400, 'invalid registration email rejected');
+  failRegistrationLookup = true;
+  check((await submit('lookup-error@example.test')).status, 500, 'database lookup failure is not reported as a successful registration');
+  check((await db.query("SELECT status FROM pending_registrations WHERE email='lookup-error@example.test'")).rows[0].status, 'pending', 'lookup failure still preserves an already saved pending request');
+  const beforeReviewed = sent.length;
+  for (const status of ['approved', 'rejected']) {
+    await db.query('INSERT INTO pending_registrations(email,status) VALUES ($1,$2)', [`${status}@example.test`, status]);
+    check((await submit(`${status}@example.test`)).status, 200, `${status} duplicate keeps the generic response`);
+    check((await db.query('SELECT status FROM pending_registrations WHERE email=$1', [`${status}@example.test`])).rows[0].status, status, `${status} duplicate cannot reopen a reviewed request`);
+  }
+  check(sent.length, beforeReviewed, 'reviewed duplicates send no new notifications');
+  const configuredSender = env.get('RESEND_FROM_EMAIL');
+  env.delete('RESEND_FROM_EMAIL');
+  env.set('SMTP_ADMIN_EMAIL', 'legacy-sender@example.test');
+  const beforeMissingSender = sent.length;
+  const noSender = await shared.sendEmail({ to: 'a@example.test', subject: 'Test', html: 'Test', operation: 'test_sender', key: 'test-sender' });
+  check(noSender.type, 'configuration_error', 'explicit Resend sender is required; SMTP admin setting is not an API fallback');
+  check(sent.length, beforeMissingSender, 'missing sender does not contact Resend');
+  env.set('RESEND_FROM_EMAIL', configuredSender);
+  env.delete('SMTP_ADMIN_EMAIL');
   mode = 'rate-limit';
   const beforeRate = sent.length;
   const rateResult = await shared.sendEmail({ to: 'rate@example.test', subject: 'Test', html: 'Test', operation: 'rate_test', key: 'rate-fixed-key' });

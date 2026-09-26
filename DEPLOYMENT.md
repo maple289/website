@@ -213,7 +213,13 @@ RESEND_FROM_EMAIL=Streamly <notifications@your-verified-domain.example>
 ```
 
 Use a sender domain verified in your Resend account; the example is not a real
-sender. `SMTP_ADMIN_EMAIL` is a fallback sender when `RESEND_FROM_EMAIL` is absent.
+sender. `RESEND_FROM_EMAIL` is required for registration notifications. It is
+separate from notification recipients, which are all registered profiles with
+the `admin` role. `SMTP_ADMIN_EMAIL` is Supabase Auth's SMTP **sender** setting,
+not an admin recipient or mailing list, and is no longer used as an API fallback.
+The Resend test sender `onboarding@resend.dev` can only send to the Resend account
+owner's email; it cannot enable registration emails for all users. Verify a
+domain before enabling general delivery.
 Do not add these secrets to `VITE_*`, the application build environment, or Git.
 `scripts/deploy.sh` now includes `deploy/supabase-email.compose.yml` to inject only
 backend email settings into the Functions container and recreate it if changed.
@@ -256,9 +262,17 @@ requires the migrated backend plus `SUPABASE_PUBLIC_URL` (or `API_EXTERNAL_URL`)
 `ANON_KEY`, and `SERVICE_ROLE_KEY` in the backend environment. It does not bypass
 approval or create a duplicate auth account. If the address already has an approved
 request, use a separately authorized fresh address for a new registration test.
+The same applies to rejected requests: resubmission does not reopen an admin's
+decision. A generic successful response protects account privacy; inspect the
+record status when diagnosing a missing pending request.
 Verify the delivery rows and their message IDs against Resend Emails/Logs; API
 acceptance is not proof that the message arrived in the recipient inbox. Complete
 admin approval separately to verify the Auth SMTP invitation and approval email.
+
+The Admin Console refreshes pending approvals every 15 seconds while visible and
+when returning to the page. It also has a Refresh button and shows query failures
+instead of silently hiding the section. A saved pending request remains available
+for approval even when Resend rejects every email.
 
 ### Failures and safe retries
 

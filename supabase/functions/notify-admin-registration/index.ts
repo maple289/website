@@ -37,14 +37,22 @@ Deno.serve(async (req: Request) => {
     }
     const { data: registration, error: lookupError } = await client.from("pending_registrations")
       .select("id,email,first_name,last_name,created_at,status").eq("email", email).maybeSingle();
-    if (lookupError) console.error(JSON.stringify({ operation: "registration", type: "lookup_error", code: lookupError.code }));
-    if (!registration || registration.status !== "pending") return json({ success: true });
+    if (lookupError || !registration) {
+      console.error(JSON.stringify({ operation: "registration", type: "lookup_error", code: lookupError?.code }));
+      return json({ error: "Could not confirm your request. Please try again." }, 500);
+    }
+    if (registration.status !== "pending") {
+      console.info(JSON.stringify({ operation: "registration", result: "already_reviewed", registration_id: registration.id, status: registration.status }));
+      return json({ success: true });
+    }
+    console.info(JSON.stringify({ operation: "registration", result: insertError ? "existing_pending" : "pending_saved", registration_id: registration.id }));
     try {
       await deliverEmail(client, registration.id, "registration_receipt", registration.email,
         "Registration request received", "<h2>Thank you for registering</h2><p>Your request has been received and is awaiting administrator approval. You will receive an invitation to set your password after approval.</p>");
       const { data: admins, error: adminError } = await client.from("profiles").select("email").eq("role", "admin");
       const recipients = [...new Set((admins ?? []).map((admin) => admin.email?.trim()).filter(Boolean))] as string[];
       if (adminError || recipients.length === 0) console.error(JSON.stringify({ operation: "admin_registration_notification", type: "admin_recipient_missing" }));
+      else console.info(JSON.stringify({ operation: "admin_registration_notification", result: "recipients_loaded", count: recipients.length, registration_id: registration.id }));
       const html = `<h2>New User Registration</h2><p>A registration request is awaiting approval.</p>
         <p>Email: ${escapeHtml(registration.email)}</p><p>First Name: ${escapeHtml(registration.first_name ?? "")}</p>
         <p>Last Name: ${escapeHtml(registration.last_name ?? "")}</p><p>Registered: ${escapeHtml(registration.created_at)}</p>
