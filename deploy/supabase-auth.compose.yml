@@ -1,0 +1,6 @@
+# Supabase Auth v2.189.0 supports current_password on PUT /auth/v1/user.
+# Enforce this in Auth itself so callers cannot bypass the Settings form.
+services:
+  auth:
+    environment:
+      GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD: "true"

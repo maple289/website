@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
 export function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const [passwordFormOpen, setPasswordFormOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,10 +21,16 @@ export function SettingsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setError(null);
     setSuccess(false);
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!user) {
+      setError('Please sign in to change your password.');
+      return;
+    }
+
+    if (!currentPassword || !newPassword.trim() || !confirmPassword) {
       setError('Please fill in all password fields.');
       return;
     }
@@ -45,37 +52,42 @@ export function SettingsPage() {
 
     setSaving(true);
 
-    // Verify the current password by re-authenticating
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: currentPassword,
-    });
-
-    if (signInError) {
-      setError('Your current password is incorrect.');
+    try {
+      // Never submit credentials to a remote HTTP endpoint.
+      const endpoint = new URL(import.meta.env.VITE_SUPABASE_URL);
+      const local = (url: URL) => ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+      if ((endpoint.protocol !== 'https:' && !local(endpoint)) ||
+          (window.location.protocol !== 'https:' && !local(new URL(window.location.href)))) {
+        setError('Use a secure HTTPS connection to change your password.');
+        return;
+      }
+      // Supabase Auth derives the account from the session, verifies its current
+      // hash, applies its password policy, and revokes other sessions atomically.
+      // Keep this as a variable for compatibility with older SDK type definitions;
+      // the Auth API accepts current_password in the JSON request body.
+      const attributes = { password: newPassword, current_password: currentPassword };
+      const { error: updateError } = await supabase.auth.updateUser(attributes);
+      if (updateError) {
+        const messages: Record<string, string> = {
+          current_password_mismatch: 'Current password is incorrect.',
+          current_password_required: 'Please enter your current password.',
+          same_password: 'New password must be different from your current password.',
+          weak_password: 'New password does not meet the password-security requirements. Choose a stronger password.',
+          over_request_rate_limit: 'Too many attempts. Please wait before trying again.',
+          session_not_found: 'Your session has expired. Please sign in again.',
+          reauthentication_needed: 'Please sign in again before changing your password.',
+        };
+        setError(messages[updateError.code ?? ''] ?? 'Could not change your password. Please try again.');
+        return;
+      }
+      setSuccess(true);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      setShowCurrent(false); setShowNew(false); setShowConfirm(false);
+    } catch {
+      setError('Could not confirm the password change. Check your connection before trying again.');
+    } finally {
       setSaving(false);
-      return;
     }
-
-    // Update the password
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-
-    if (updateError) {
-      setError(updateError.message || 'Failed to update password. Please try again.');
-      setSaving(false);
-      return;
-    }
-
-    setSaving(false);
-    setSuccess(true);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-
-    // Sign out after a short delay so the user sees the success message
-    setTimeout(() => {
-      signOut();
-    }, 2500);
   };
 
   const hasInput = currentPassword || newPassword || confirmPassword;
@@ -117,26 +129,35 @@ export function SettingsPage() {
 
         {/* Change Password */}
         <div className="rounded-2xl border border-[#272727] bg-[#161616] p-6">
-          <div className="mb-5 flex items-center gap-2">
+          <button type="button" aria-expanded={passwordFormOpen} aria-controls="change-password-form" disabled={saving}
+            onClick={() => {
+              setPasswordFormOpen(!passwordFormOpen);
+              setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+              setShowCurrent(false); setShowNew(false); setShowConfirm(false);
+              setError(null); setSuccess(false);
+            }} className="flex min-h-11 w-full items-center gap-2 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4b86ff]">
             <KeyRound size={18} className="text-[#ff737b]" />
-            <h3 className="text-sm font-semibold tracking-[-0.01em]">Change Password</h3>
-          </div>
+            <span className="text-sm font-semibold tracking-[-0.01em]">Change Password</span>
+            <span className="ml-auto text-sm text-[#999]" aria-hidden="true">{passwordFormOpen ? '−' : '+'}</span>
+          </button>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {passwordFormOpen && <form id="change-password-form" onSubmit={handleSubmit} className="mt-5">
+            <fieldset disabled={saving} className="min-w-0 space-y-4">
             {/* Current password */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Current Password</label>
+              <label htmlFor="current-password" className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Current Password</label>
               <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
                 <Lock className="ml-3.5 text-[#888]" size={17} />
                 <input
+                  id="current-password"
                   type={showCurrent ? 'text' : 'password'}
                   value={currentPassword}
                   onChange={(e) => { setCurrentPassword(e.target.value); setError(null); setSuccess(false); }}
                   placeholder="Enter your current password"
                   autoComplete="current-password"
-                  className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+                  className="h-full min-w-0 w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
                 />
-                <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="px-3 text-[#888] transition hover:text-white" aria-label="Toggle visibility">
+                <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="min-h-11 shrink-0 px-3 text-[#888] transition hover:text-white" aria-label={showCurrent ? 'Hide current password' : 'Show current password'} aria-pressed={showCurrent}>
                   {showCurrent ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
@@ -144,18 +165,19 @@ export function SettingsPage() {
 
             {/* New password */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">New Password</label>
+              <label htmlFor="new-password" className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">New Password</label>
               <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
                 <Lock className="ml-3.5 text-[#888]" size={17} />
                 <input
+                  id="new-password"
                   type={showNew ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setError(null); setSuccess(false); }}
                   placeholder="At least 6 characters"
                   autoComplete="new-password"
-                  className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+                  className="h-full min-w-0 w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
                 />
-                <button type="button" onClick={() => setShowNew(!showNew)} className="px-3 text-[#888] transition hover:text-white" aria-label="Toggle visibility">
+                <button type="button" onClick={() => setShowNew(!showNew)} className="min-h-11 shrink-0 px-3 text-[#888] transition hover:text-white" aria-label={showNew ? 'Hide new password' : 'Show new password'} aria-pressed={showNew}>
                   {showNew ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
@@ -163,18 +185,19 @@ export function SettingsPage() {
 
             {/* Confirm new password */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Confirm New Password</label>
+              <label htmlFor="confirm-password" className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Confirm New Password</label>
               <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
                 <Lock className="ml-3.5 text-[#888]" size={17} />
                 <input
+                  id="confirm-password"
                   type={showConfirm ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); setError(null); setSuccess(false); }}
                   placeholder="Re-enter your new password"
                   autoComplete="new-password"
-                  className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+                  className="h-full min-w-0 w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
                 />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="px-3 text-[#888] transition hover:text-white" aria-label="Toggle visibility">
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="min-h-11 shrink-0 px-3 text-[#888] transition hover:text-white" aria-label={showConfirm ? 'Hide password confirmation' : 'Show password confirmation'} aria-pressed={showConfirm}>
                   {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
@@ -182,16 +205,16 @@ export function SettingsPage() {
 
             {/* Error message */}
             {error && (
-              <div className="rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">
+              <div role="alert" className="rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">
                 {error}
               </div>
             )}
 
             {/* Success message */}
             {success && (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-600/30 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-400">
+              <div role="status" className="flex items-center gap-2 rounded-lg border border-emerald-600/30 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-400">
                 <Check size={16} />
-                Password changed successfully. You will be signed out shortly — please sign in with your new password.
+                Your password has been changed successfully.
               </div>
             )}
 
@@ -199,12 +222,12 @@ export function SettingsPage() {
             <div className="flex items-start gap-2 rounded-lg border border-[#1a2a4a] bg-[#001338]/50 px-4 py-3">
               <ShieldCheck size={16} className="mt-0.5 shrink-0 text-[#4b86ff]" />
               <p className="text-xs leading-5 text-[#9ab3d4]">
-                For your security, you will be automatically signed out after changing your password. You'll need to sign in again with your new password.
+                You stay signed in on this device. Other devices will need to sign in again.
               </p>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 type="submit"
                 disabled={saving || !hasInput}
@@ -216,14 +239,15 @@ export function SettingsPage() {
               {hasInput && !saving && (
                 <button
                   type="button"
-                  onClick={() => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setError(null); setSuccess(false); }}
+                  onClick={() => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowCurrent(false); setShowNew(false); setShowConfirm(false); setError(null); setSuccess(false); }}
                   className="h-11 rounded-xl border border-[#3a3a3a] px-4 text-sm font-medium text-[#ccc] transition hover:bg-[#272727]"
                 >
                   Clear
                 </button>
               )}
             </div>
-          </form>
+            </fieldset>
+          </form>}
         </div>
       </main>
     </div>

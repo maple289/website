@@ -301,3 +301,32 @@ node scripts/test-registration-email.mjs
 
 Live key validity, verified-domain ownership, inbox delivery, and production
 Resend logs cannot be inferred from offline tests.
+
+## Changing your own password
+
+Authenticated users can open **User Icon → Settings → Change Password**.
+The form submits `password` and `current_password` to Supabase Auth's existing
+`PUT /auth/v1/user` endpoint using the current session. It does not submit an
+account ID or email and does not use a service-role key. Remote deployments must
+use HTTPS; HTTP is allowed only for local development on loopback addresses.
+
+Deploy the Settings page and `deploy/supabase-auth.compose.yml` together using
+`scripts/deploy.sh`. The override enables
+`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD=true` on the Auth
+service. Supabase Auth v2.189.0 supports this setting. The deployment recreates
+Auth with the setting; a simple restart does not apply new environment values.
+For hosted Supabase, enable **Require current password when changing password**
+in the project's Auth password-security settings before deploying the UI.
+Without this server setting, sending `current_password` alone does not enforce
+verification. Do not deploy the frontend change alone.
+
+Auth derives the account from its verified session, compares the existing
+password hash, applies the configured password policy, and hashes the replacement
+using its existing implementation. Passwords are never written to application
+logs or persisted by the form. A successful change clears the form and preserves
+the current session. Auth revokes other sessions and refresh tokens; previously
+issued access JWTs can remain usable until expiration. Existing verified password
+recovery/invitation flows retain Auth's native recovery behavior.
+
+References: https://supabase.com/docs/guides/auth/password-security and
+https://github.com/supabase/auth/blob/v2.189.0/internal/api/user.go.
