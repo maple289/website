@@ -26,10 +26,17 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
   const stage = useRef<HTMLDivElement>(null);
   const [offset, setOffset] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const busy = useRef(false);
   const timer = useRef<number>();
-  const gesture = useRef<{ x: number; y: number; dx: number; horizontal: boolean; cancelled: boolean } | null>(null);
+  const gesture = useRef<{ x: number; y: number; dx: number; horizontal: boolean; cancelled: boolean; startedAt: number; moved: boolean; onPhoto: boolean } | null>(null);
+  const lastTap = useRef<{ x: number; y: number; time: number } | null>(null);
   const suppressClick = useRef(false);
+
+  useEffect(() => {
+    setExpanded(false);
+    lastTap.current = null;
+  }, [photo?.id]);
 
   const navigate = useCallback((direction: number) => {
     if (busy.current || photos.length < 2) return;
@@ -109,40 +116,57 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
     if (!element) return;
     const start = (event: TouchEvent) => {
       suppressClick.current = false;
-      if (busy.current || event.touches.length !== 1 || (event.target instanceof Element && event.target.closest(controls))) { gesture.current = null; return; }
+      if (busy.current || event.touches.length !== 1 || (event.target instanceof Element && event.target.closest(controls))) { gesture.current = null; lastTap.current = null; return; }
       const touch = event.touches[0];
-      gesture.current = { x: touch.clientX, y: touch.clientY, dx: 0, horizontal: false, cancelled: false };
+      gesture.current = { x: touch.clientX, y: touch.clientY, dx: 0, horizontal: false, cancelled: false,
+        startedAt: performance.now(), moved: false, onPhoto: event.target instanceof Element && event.target.matches('.pv-photo') };
     };
     const move = (event: TouchEvent) => {
       const swipe = gesture.current;
       if (!swipe) return;
-      if (event.touches.length !== 1) { swipe.cancelled = true; setOffset(0); return; }
+      if (event.touches.length !== 1) { swipe.cancelled = true; lastTap.current = null; setOffset(0); return; }
       if (swipe.cancelled) return;
       const dx = event.touches[0].clientX - swipe.x, dy = event.touches[0].clientY - swipe.y;
+      if (Math.hypot(dx, dy) > 12) { swipe.moved = true; lastTap.current = null; }
       if (!swipe.horizontal && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { swipe.cancelled = true; return; }
       if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) swipe.horizontal = true;
       if (!swipe.horizontal) return;
       event.preventDefault(); suppressClick.current = true; swipe.dx = dx;
       setOffset(Math.max(-element.clientWidth, Math.min(element.clientWidth, dx)));
     };
-    const end = () => {
+    const end = (event: TouchEvent) => {
       const swipe = gesture.current; gesture.current = null;
+      const touch = event.changedTouches[0];
+      const now = performance.now();
+      if (swipe && !swipe.cancelled && !swipe.horizontal && !swipe.moved && swipe.onPhoto && touch && event.touches.length === 0 &&
+          now - swipe.startedAt <= 300 && Math.hypot(touch.clientX - swipe.x, touch.clientY - swipe.y) <= 12) {
+        const previous = lastTap.current;
+        if (previous && now - previous.time <= 300 && Math.hypot(touch.clientX - previous.x, touch.clientY - previous.y) <= 32) {
+          event.preventDefault(); // Suppress native double-tap page zoom and the synthetic click.
+          suppressClick.current = true;
+          lastTap.current = null;
+          setExpanded((value) => !value);
+        } else lastTap.current = { x: touch.clientX, y: touch.clientY, time: now };
+        setOffset(0);
+        return;
+      }
+      lastTap.current = null;
       if (!swipe || swipe.cancelled || !swipe.horizontal) { setOffset(0); return; }
       const threshold = Math.max(45, Math.min(100, element.clientWidth * .15));
       if (Math.abs(swipe.dx) >= threshold && hasMultiple) navigateRef.current(swipe.dx < 0 ? 1 : -1);
       else { setAnimating(true); setOffset(0); timer.current = window.setTimeout(() => setAnimating(false), 190); }
     };
-    const cancel = () => { gesture.current = null; setOffset(0); };
+    const cancel = () => { gesture.current = null; lastTap.current = null; setOffset(0); };
     element.addEventListener('touchstart', start, { passive: true });
     element.addEventListener('touchmove', move, { passive: false });
-    element.addEventListener('touchend', end);
+    element.addEventListener('touchend', end, { passive: false });
     element.addEventListener('touchcancel', cancel);
     return () => { element.removeEventListener('touchstart', start); element.removeEventListener('touchmove', move); element.removeEventListener('touchend', end); element.removeEventListener('touchcancel', cancel); };
   }, [hasMultiple]);
 
   if (!photo) return null;
   const slides = hasMultiple ? [-1, 0, 1] : [0];
-  return <div ref={root} tabIndex={-1} className="photo-viewer" role="dialog" aria-modal="true" aria-label="Photo viewer"
+  return <div ref={root} tabIndex={-1} className={`photo-viewer${expanded ? ' pv-expanded' : ''}`} role="dialog" aria-modal="true" aria-label="Photo viewer"
     onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <button aria-label="Close" onClick={onClose} className="pv-close pv-control"><X size={22} /></button>
     {hasMultiple && <>

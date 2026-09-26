@@ -2,6 +2,10 @@
 .pv-stage { position: relative; width: min(100%, 1600px); height: calc(100dvh - 150px); min-height: 80px; overflow: hidden; touch-action: pan-y pinch-zoom; }
 .pv-slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; will-change: transform; }
 .pv-photo { max-height: 100%; max-width: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.photo-viewer.pv-expanded { justify-content: flex-end; }
+.pv-expanded .pv-stage { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pv-expanded .pv-photo { width: 100%; height: 100%; }
+.pv-expanded .pv-info, .pv-expanded .pv-reactions { position: relative; z-index: 1; border-radius: 8px; background: #080e18b3; }
 .pv-control { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; border: 1px solid #ffffff25; border-radius: 50%; background: #0a1428b3; color: white; transition: background-color 160ms; touch-action: manipulation; }
 .pv-control:hover { background: #24344de6; }.pv-control:focus-visible { outline: 2px solid #92c2ff; outline-offset: 3px; }
 .pv-close { right: max(16px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); }.pv-prev { left: 12px; top: 50%; transform: translateY(-50%); }.pv-next { right: 12px; top: 50%; transform: translateY(-50%); }
