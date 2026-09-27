@@ -21,3 +21,6 @@ verify_jwt = true
 
 [functions.serve-public-file]
 verify_jwt = false
+
+[functions.queue-media-upload]
+verify_jwt = true

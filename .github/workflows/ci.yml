@@ -48,3 +48,14 @@ jobs:
 
       - name: Validate Compose configuration
         run: docker compose --env-file .env.example -f compose.yml config --quiet
+
+  media-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build isolated media decoder
+        run: docker build -t streamly-media-validation:ci services/media-worker
+      - name: Verify media decoding and publication
+        run: |
+          docker run --rm --network none --memory 2g --cpus 2 --entrypoint python streamly-media-validation:ci test_validation.py
+          docker run --rm --network none --entrypoint python streamly-media-validation:ci test_worker.py

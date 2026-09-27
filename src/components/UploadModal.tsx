@@ -1,3 +1,4 @@
+import { mediaTypeError, VIDEO_ACCEPT, PHOTO_ACCEPT } from '@/lib/mediaValidation';
 import { TaskModal } from '@/components/TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { BatchUploadModal } from '@/components/BatchUploadModal';
@@ -27,6 +28,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [phase, setPhase] = useState('Uploading');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
 
@@ -66,8 +68,9 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
   };
 
   const handleFileSelect = (f: File) => {
-    if (!f.type.startsWith('video/')) {
-      setError('Please select a video file.');
+    const typeError = mediaTypeError(f, 'video');
+    if (typeError) {
+      setError(typeError);
       return;
     }
     setFile(f);
@@ -80,7 +83,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
 
   const handlePreviewSelect = (f: File) => {
     if (!isSupportedImage(f)) {
-      setError('Please select a JPEG, PNG, WebP, GIF, or AVIF preview image.');
+      setError('Please select a supported image: JPEG, PNG, GIF, WebP, BMP, TIFF, HEIC, HEIF, or AVIF.');
       return;
     }
     if (f.size > 25 * 1024 * 1024) {
@@ -107,7 +110,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
     setUploading(true);
     setUploadProgress(0);
     try {
-      await uploadVideo({ file, user, fileName, visibility, previewImage, onProgress: setUploadProgress });
+      await uploadVideo({ file, user, fileName, visibility, previewImage, onProgress: setUploadProgress, onPhase: setPhase });
       if (!onItemUploaded) window.dispatchEvent(new CustomEvent('media-uploaded', { detail: 'video' }));
       onUploaded();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed.'); }
@@ -145,7 +148,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
               <Upload size={36} className="mb-3 text-[#666]" />
               <p className="text-sm font-medium text-[#ccc]">Drag and drop videos here</p>
               <p className="mt-1 text-xs text-[#777]">or click to browse — MP4, WebM, MOV</p>
-              <input ref={fileInputRef} type="file" multiple accept="video/*" className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length > 1) setBatchFiles(files); else if (files[0]) handleFileSelect(files[0]); e.target.value = ''; }} />
+              <input ref={fileInputRef} type="file" multiple accept={VIDEO_ACCEPT} className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length > 1) setBatchFiles(files); else if (files[0]) handleFileSelect(files[0]); e.target.value = ''; }} />
             </div>
           ) : (
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#3a3a3a] bg-[#121212] p-3">
@@ -197,7 +200,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
                   </div>
                   <p className="mt-0.5 text-xs text-[#777]">Auto-generated from the first frame. You can upload a custom image instead.</p>
                 </div>
-                <input ref={previewInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewSelect(e.target.files[0])} />
+                <input ref={previewInputRef} type="file" accept={PHOTO_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewSelect(e.target.files[0])} />
               </div>
 
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Visibility</label>
@@ -226,7 +229,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
           <div className="flex gap-3">
             <button type="button" disabled={uploading} onClick={close} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
-              {uploading ? <><Loader2 size={16} className="animate-spin" /> {uploadProgress > 0 ? `Uploading ${uploadProgress}%...` : 'Uploading...'}</> : <><Upload size={16} /> Upload</>}
+              {uploading ? <><Loader2 size={16} className="animate-spin" /> {phase === 'Uploading' ? `Uploading ${uploadProgress}%…` : phase + '…'}</> : <><Upload size={16} /> Upload</>}
             </button>
           </div>
         </form>

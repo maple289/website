@@ -1,14 +1,6 @@
-const supportedImageTypes = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/avif',
-]);
+import { mediaTypeError } from './mediaValidation';
 
-export function isSupportedImage(file: File): boolean {
-  return supportedImageTypes.has(file.type);
-}
+export function isSupportedImage(file: File): boolean { return !mediaTypeError(file, 'photo'); }
 
 export function createStorageId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();

@@ -79,7 +79,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   };
 
   return (
-    <FileDropArea appearance="media" message="Drop videos here to upload" enabled={!!user && !showUpload && !editingVideo && !playingVideo && !deletingVideo} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
+    <FileDropArea mediaKind="video" appearance="media" message="Drop videos here to upload" enabled={!!user && !showUpload && !editingVideo && !playingVideo && !deletingVideo} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div className="mg-page">
       <div className="mg-toolbar">
         <div>

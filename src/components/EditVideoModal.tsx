@@ -1,3 +1,5 @@
+import { uploadValidatedPreview } from '@/lib/mediaUploads';
+import { PHOTO_ACCEPT } from '@/lib/mediaValidation';
 import { TaskModal } from '@/components/TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
@@ -6,7 +8,7 @@ import { Film, Image as ImageIcon, Loader2, Pencil, Upload, X } from 'lucide-rea
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
-import { createImageVariants, createStorageId, dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
+import { dataUrlToBlob, isSupportedImage } from '@/lib/imageStorage';
 import { MediaEditFields } from '@/components/MediaEditFields';
 import { StorageImage } from '@/components/StorageImage';
 import { resolveBucketPath } from '@/lib/storageSettings';
@@ -71,7 +73,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
 
   const handlePreviewUpload = (f: File) => {
     if (!isSupportedImage(f)) {
-      setError('Please select a JPEG, PNG, WebP, GIF, or AVIF image.');
+      setError('Please select a supported image: JPEG, PNG, GIF, WebP, BMP, TIFF, HEIC, HEIF, or AVIF.');
       return;
     }
     if (f.size > 25 * 1024 * 1024) {
@@ -96,11 +98,8 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
         let nextPreviewPath = video.preview_path;
         if (previewChanged && previewUrl) {
           const source = await dataUrlToBlob(previewUrl);
-          const { preview } = await createImageVariants(source);
-          nextPreviewPath = `${video.owner_id}/video-previews/${video.id}/${createStorageId()}.webp`;
-          const bucketPath = await resolveBucketPath(nextPreviewPath, 'images');
-          const { error: uploadError } = await supabase.storage.from('user-images').upload(bucketPath, preview, { contentType: 'image/webp' });
-          if (uploadError) throw new Error('Unable to upload the replacement preview. Please try again.');
+          nextPreviewPath = await uploadValidatedPreview(new File([source], 'preview.webp', { type: source.type }),
+            { id: video.owner_id }, video.id);
           uploadedPreviewPath = nextPreviewPath;
         } else if (previewChanged) nextPreviewPath = null;
         const { error: updateError } = await supabase.from('videos').update({ file_name: fileName.trim(),
@@ -171,7 +170,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
               <button type="button" onClick={() => setShowCapture(!showCapture)} className="flex items-center gap-2 rounded-lg border border-[#3a3a3a] px-3 py-2 text-xs font-medium text-[#ccc] transition hover:bg-[#272727]">
                 <Film size={14} /> Capture from video
               </button>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewUpload(e.target.files[0])} />
+              <input ref={fileInputRef} type="file" accept={PHOTO_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewUpload(e.target.files[0])} />
             </div>
           </div>
 

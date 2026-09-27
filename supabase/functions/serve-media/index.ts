@@ -40,7 +40,7 @@ Deno.serve(async (req: Request) => {
     // Fetch the video record
     const { data: video, error: vErr } = await adminClient
       .from("videos")
-      .select("id, owner_id, storage_path, visibility, mime_type, file_name, processing_status")
+      .select("id, owner_id, storage_path, processed_storage_path, visibility, mime_type, file_name, processing_status")
       .eq("id", videoId)
       .single();
 
@@ -88,11 +88,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const playbackPath = video.processed_storage_path || video.storage_path;
+
     // Defence in depth: never sign a path that does not live inside the
     // record owner's own storage folder, even if a row somehow claims one.
     if (
-      typeof video.storage_path !== "string" ||
-      !video.storage_path.startsWith(`${video.owner_id}/`)
+      typeof playbackPath !== "string" ||
+      !playbackPath.startsWith(`${video.owner_id}/`)
     ) {
       return new Response(JSON.stringify({ error: "Access denied" }), {
         status: 403,
@@ -108,8 +110,8 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     const videosBase = basePath?.videos_base_path ?? "";
     const fullStoragePath = videosBase
-      ? `${videosBase}/${video.storage_path}`
-      : video.storage_path;
+      ? `${videosBase}/${playbackPath}`
+      : playbackPath;
 
     // Create a signed URL (valid for 1 hour) for the file
     const { data: signedData, error: signedErr } = await adminClient
@@ -142,7 +144,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         url: publicSignedUrl,
-        mime_type: video.mime_type,
+        mime_type: video.processed_storage_path ? "video/mp4" : video.mime_type,
         file_name: video.file_name,
       }),
       {

@@ -76,7 +76,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const { viewingIndex, openPhoto, closePhoto, onPhotoChange } = usePhotoViewerHistory(filteredPhotos, 'library');
 
   return (
-    <FileDropArea appearance="media" message="Drop photos here to upload" enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
+    <FileDropArea mediaKind="photo" appearance="media" message="Drop photos here to upload" enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div className="mg-page">
       <div className="mg-toolbar">
         <div><h1 className="text-2xl font-semibold tracking-[-0.04em]">My Photos</h1><p className="mt-1 text-sm text-[#888]">Your photos, organized in one place.</p></div>

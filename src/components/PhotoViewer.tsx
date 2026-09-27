@@ -11,10 +11,15 @@ const controls = 'input, textarea, select, button, a, [contenteditable]:not([con
 
 function ViewerPhoto({ photo, current }: { photo: Photo; current: boolean }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [photo.storage_path]);
+  const [usePreview, setUsePreview] = useState(false);
+  useEffect(() => { setFailed(false); setUsePreview(false); }, [photo.storage_path]);
   const fallback = <div className="pv-loading">Unable to load photo.</div>;
-  return failed ? fallback : <StorageImage storagePath={photo.storage_path} alt={current ? photo.file_name : ''}
-    draggable={false} className="pv-photo" onError={() => setFailed(true)} fallback={fallback} />;
+  return failed ? fallback : <StorageImage storagePath={usePreview ? photo.preview_path : photo.storage_path} alt={current ? photo.file_name : ''}
+    draggable={false} className="pv-photo" onError={() => {
+      // HEIC/TIFF and other valid originals may not have a browser decoder.
+      if (!usePreview && photo.preview_path) setUsePreview(true);
+      else setFailed(true);
+    }} fallback={fallback} />;
 }
 
 export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: PhotoViewerProps) {

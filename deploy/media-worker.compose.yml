@@ -1,0 +1,31 @@
+services:
+  media-worker:
+    build:
+      context: ${STREAMLY_PROJECT_ROOT:?Set the absolute project checkout path}/services/media-worker
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/media-heartbeat') < 60"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    environment:
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+    networks:
+      - default
+    read_only: true
+    volumes:
+      - media_scratch:/work
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  media_scratch:

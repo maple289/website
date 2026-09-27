@@ -1,10 +1,10 @@
+import { mediaTypeError, PHOTO_ACCEPT } from '@/lib/mediaValidation';
 import { TaskModal } from '@/components/TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { BatchUploadModal } from '@/components/BatchUploadModal';
 import { useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Upload, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { isSupportedImage } from '@/lib/imageStorage';
 import { uploadPhoto } from '@/lib/mediaUploads';
 
 type PhotoUploadModalProps = {
@@ -24,14 +24,18 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [phase, setPhase] = useState('Uploading');
+  const [progress, setProgress] = useState(0);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
 
   const close = useGuardedClose(onClose, !!file || !!fileName || visibility !== 'private', uploading);
 
   const selectFile = (selectedFile: File) => {
-    if (!isSupportedImage(selectedFile)) {
-      setError('Please select a JPEG, PNG, WebP, GIF, or AVIF image.');
+    const typeError = mediaTypeError(selectedFile, 'photo');
+    if (typeError) {
+      setError(typeError);
       return;
     }
     if (selectedFile.size > 25 * 1024 * 1024) {
@@ -39,6 +43,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
       return;
     }
 
+    setPreviewFailed(false);
     const reader = new FileReader();
     reader.onload = () => setPreviewUrl(reader.result as string);
     reader.readAsDataURL(selectedFile);
@@ -57,7 +62,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
 
     setUploading(true);
     try {
-      await uploadPhoto({ file, user, fileName, visibility, onProgress: () => {} });
+      await uploadPhoto({ file, user, fileName, visibility, onProgress: setProgress, onPhase: setPhase });
       if (!onItemUploaded) window.dispatchEvent(new CustomEvent('media-uploaded', { detail: 'photo' }));
       onUploaded();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed.'); }
@@ -102,11 +107,11 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
             disabled={uploading}
             className={`flex min-h-52 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-[#121212] transition ${dragOver ? 'border-[#ff3d46] bg-[#ff3d46]/5' : 'border-[#3a3a3a] hover:border-[#555]'}`}
           >
-            {previewUrl ? <img src={previewUrl} alt="Selected" className="max-h-72 w-full object-contain" /> : (
-              <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Drag and drop images here or click to browse</p><p className="mt-1 text-xs">JPEG, PNG, WebP, GIF, AVIF · up to 25 MB</p></div>
+            {previewUrl && !previewFailed ? <img src={previewUrl} onError={() => setPreviewFailed(true)} alt="Preview will be generated after upload if this browser cannot display the image." className="max-h-72 w-full object-contain" /> : (
+              <div className="text-center text-[#777]"><Upload className="mx-auto mb-3" size={32} /><p className="text-sm">Drag and drop images here or click to browse</p><p className="mt-1 text-xs">JPEG, PNG, GIF, WebP, BMP, TIFF, HEIC/HEIF, AVIF · up to 25 MB</p></div>
             )}
           </button>
-          <input ref={inputRef} type="file" multiple accept="image/*" className="hidden" onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length > 1) setBatchFiles(files); else if (files[0]) selectFile(files[0]); event.target.value = ''; }} />
+          <input ref={inputRef} type="file" multiple accept={PHOTO_ACCEPT} className="hidden" onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length > 1) setBatchFiles(files); else if (files[0]) selectFile(files[0]); event.target.value = ''; }} />
 
           {file && (
             <>
@@ -124,7 +129,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
           <div className="flex gap-3">
             <button type="button" disabled={uploading} onClick={close} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white disabled:opacity-60">
-              {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Upload
+              {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} {uploading ? (phase === 'Uploading' ? `Uploading ${progress}%` : phase) + '…' : 'Upload'}
             </button>
           </div>
         </form>
