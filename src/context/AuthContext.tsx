@@ -20,7 +20,7 @@ type AuthContextValue = {
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  requestRegistration: (email: string, firstName?: string, lastName?: string, username?: string) => Promise<{ error: string | null }>;
+  requestRegistration: (email: string, firstName?: string, lastName?: string) => Promise<{ error: string | null }>;
   passwordSetup: PasswordSetup | null;
   cancelPasswordSetup: () => void;
   completeInitialPassword: (password: string, confirmation: string) => Promise<{ error: string | null }>;
@@ -93,13 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signUp({ email, password });
       return { error: error ? readableError(error.message) : null };
     },
-    requestRegistration: async (email, firstName = '', lastName = '', username = '') => {
+    requestRegistration: async (email, firstName = '', lastName = '') => {
       if (!isSupabaseConfigured) return { error: 'Authentication is not available right now.' };
       try {
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin-registration`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
-          body: JSON.stringify({ email, username: username.trim(), first_name: firstName.trim() || null, last_name: lastName.trim() || null }),
+          body: JSON.stringify({ email: email.trim().toLowerCase(), first_name: firstName.trim() || null, last_name: lastName.trim() || null }),
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));

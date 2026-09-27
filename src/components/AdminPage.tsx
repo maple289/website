@@ -25,7 +25,6 @@ type Profile = {
 };
 
 type PendingRegistration = {
-  username: string | null;
   first_name: string | null;
   last_name: string | null;
   id: string;
@@ -355,7 +354,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
     try {
       const { data, error } = await supabase
         .from('pending_registrations')
-        .select('id, username, email, status, created_at, first_name, last_name')
+        .select('id, email, status, created_at, first_name, last_name')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .abortSignal(controller.signal);
@@ -453,7 +452,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">
                       {(reg.email ?? '?').charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{reg.email}</p><p className="mt-1 text-xs text-[#999]">Username: {reg.username || reg.email.split('@')[0]}</p><p className="mt-1 text-xs text-[#999]">First Name: {reg.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {reg.last_name || '—'}</p></div>
+                    <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{reg.email}</p><p className="mt-1 text-xs text-[#999]">First Name: {reg.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {reg.last_name || '—'}</p></div>
                   </div>
                 </td>
                 <td className="hidden px-5 py-4 text-[#888] sm:table-cell">

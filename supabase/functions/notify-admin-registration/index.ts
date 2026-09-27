@@ -21,8 +21,6 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-    const username = typeof body.username === "string" ? body.username.trim() : "";
-    if (!/^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/.test(username)) return json({ error: "Username must be 3–32 letters, numbers, underscores or hyphens." }, 400);
     if (email.length > 254 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(email)) return json({ error: "Valid email is required" }, 400);
     for (const key of ["first_name", "last_name"]) {
       if (body[key] != null && (typeof body[key] !== "string" || [...body[key].trim()].length > 100)) return json({ error: "Names must be text, up to 100 characters" }, 400);
@@ -31,15 +29,14 @@ Deno.serve(async (req: Request) => {
     // Insert and trigger delivery in the same backend request. Duplicate submissions
     // never create another account/request or overwrite the original applicant's data.
     const { error: insertError } = await client.from("pending_registrations").insert({
-      username, email, first_name: body.first_name?.trim() || null, last_name: body.last_name?.trim() || null,
+      email, first_name: body.first_name?.trim() || null, last_name: body.last_name?.trim() || null,
     });
     if (insertError && insertError.code !== "23505") {
       console.error(JSON.stringify({ operation: "registration", type: "database_error", code: insertError.code }));
       return json({ error: "Could not submit your request. Please try again." }, 500);
     }
     const { data: registration, error: lookupError } = await client.from("pending_registrations")
-      .select("id,username,email,first_name,last_name,created_at,status").eq("email", email).maybeSingle();
-    if (insertError?.code === "23505" && !registration && !lookupError) return json({ error: "This username is unavailable. Choose another username." }, 409);
+      .select("id,email,first_name,last_name,created_at,status").eq("email", email).maybeSingle();
     if (lookupError || !registration) {
       console.error(JSON.stringify({ operation: "registration", type: "lookup_error", code: lookupError?.code }));
       return json({ error: "Could not confirm your request. Please try again." }, 500);
@@ -63,7 +60,7 @@ Deno.serve(async (req: Request) => {
       if (adminError || recipients.length === 0) console.error(JSON.stringify({ operation: "admin_registration_notification", type: "admin_recipient_missing" }));
       else console.info(JSON.stringify({ operation: "admin_registration_notification", result: "recipients_loaded", count: recipients.length, registration_id: registration.id }));
       const html = `<h2>New User Registration</h2><p>A registration request is awaiting approval.</p>
-        <p>Username: ${escapeHtml(registration.username ?? "")}</p><p>Email: ${escapeHtml(registration.email)}</p><p>First Name: ${escapeHtml(registration.first_name ?? "")}</p>
+        <p>Email: ${escapeHtml(registration.email)}</p><p>First Name: ${escapeHtml(registration.first_name ?? "")}</p>
         <p>Last Name: ${escapeHtml(registration.last_name ?? "")}</p><p>Registered: ${escapeHtml(registration.created_at)}</p>
         <p>Open the Admin Console to review this request.</p>`;
       for (const to of recipients) await deliverEmail(client, registration.id, "admin_registration_notification", to, "New User Registration", html);

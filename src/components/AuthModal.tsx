@@ -17,14 +17,13 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const close = useGuardedClose(onClose, !!email || !!username || !!firstName || !!lastName || !!password, submitting);
+  const close = useGuardedClose(onClose, !!email || !!firstName || !!lastName || !!password, submitting);
 
   useEffect(() => {
     if (open) {
@@ -37,7 +36,6 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   useEffect(() => {
     if (!open) {
       setEmail('');
-      setUsername('');
       setFirstName('');
       setLastName('');
       setPassword('');
@@ -57,20 +55,19 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
     setInfo(null);
 
     if (!email.trim()) {
-      setError(mode === 'signin' ? 'Please enter your username or email.' : 'Please enter your email.');
+      setError('Please enter your email.');
       return;
     }
-    if (mode === 'signup' && !/^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/.test(username.trim())) { setError('Username must be 3–32 letters, numbers, underscores or hyphens.'); return; }
 
     setSubmitting(true);
     if (mode === 'signup') {
-      const { error } = await requestRegistration(email.trim(), firstName, lastName, username);
+      const { error } = await requestRegistration(email.trim(), firstName, lastName);
       setSubmitting(false);
       if (error) {
         setError(error);
       } else {
-        setInfo('Your registration request has been submitted for administrator approval. After approval, sign in with your username or email and leave the password blank to create your password.');
-        setEmail(''); setUsername(''); setFirstName(''); setLastName(''); setPassword('');
+        setInfo('Your registration request has been submitted for administrator approval. After approval, sign in with your email and leave the password blank to create your password.');
+        setEmail(''); setFirstName(''); setLastName(''); setPassword('');
       }
     } else {
       const { error } = await signIn(email.trim(), password);
@@ -105,15 +102,17 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-7 pb-8 pt-6">
-          {mode === 'signup' && <div className="mb-4"><label htmlFor="registration-username" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Username</label>
-            <input id="registration-username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" maxLength={32} disabled={submitting} placeholder="Choose a username" className="h-12 w-full rounded-xl border border-[#3a3a3a] bg-[#121212] px-3 text-[15px]" /></div>}
           {mode === 'signup' && <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={submitting} />}
-          <label htmlFor="login-identifier" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">{mode === 'signin' ? 'Username or Email' : 'Email'}</label>
+          <label htmlFor="login-identifier" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Email</label>
           <div className="mb-4 flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
             <Mail className="ml-3.5 text-[#888]" size={18} />
             <input
               id="login-identifier"
-              type={mode === 'signup' ? 'email' : 'text'}
+              type="email"
+              required
+              maxLength={254}
+              autoCapitalize="none"
+              spellCheck={false}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"

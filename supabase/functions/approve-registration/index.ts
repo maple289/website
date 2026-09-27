@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
       const { data: account, error: approvalError } = await callerClient.rpc("approve_pending_account", { p_registration_id: registrationId });
       if (approvalError) {
         console.error(JSON.stringify({ operation: "registration_approval", type: "transaction_failed", code: approvalError.code }));
-        const useful = approvalError.message.includes("already exists") || approvalError.message.includes("valid username") || approvalError.message.includes("already been reviewed")
+        const useful = approvalError.message.includes("already exists") || approvalError.message.includes("email is invalid") || approvalError.message.includes("already been reviewed")
           ? approvalError.message : "Account creation could not be completed. The pending request was retained; please retry.";
         return json({ error: `Unable to approve user: ${useful}` }, approvalError.code === "42501" ? 403 : 409);
       }
@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
       // Delivery is never part of the account creation transaction.
       const notify = async () => {
         if (customerEmailsEnabled()) await deliverEmail(adminClient, registrationId, "registration_approved", registration.email,
-          "Your Account Has Been Approved", "<h2>Your Account Has Been Approved</h2><p>Your account is ready for initial login. Sign in with your username or email and leave the password blank to create your password on the website.</p>");
+          "Your Account Has Been Approved", "<h2>Your Account Has Been Approved</h2><p>Your account is ready for initial login. Sign in with your email and leave the password blank to create your password on the website.</p>");
       };
       if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(notify()); else await notify();
       return json({ success: true, user_id: account.user_id, must_change_password: true,

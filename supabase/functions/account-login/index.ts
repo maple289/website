@@ -28,7 +28,7 @@ Deno.serve(async (req: Request) => {
       if (claimError) return json({ error: "Password setup is temporarily unavailable." }, 503);
       if (!accountId) return json({ error: "Password setup has expired or was already completed. Sign in again." }, 401);
       // Account ID comes ONLY from the server-side capability. Browser-supplied
-      // user IDs, roles, usernames and emails are deliberately never forwarded.
+      // user IDs, roles and emails are deliberately never forwarded.
       const { error: updateError } = await service.auth.admin.updateUserById(accountId, { password: body.new_password });
       if (updateError) {
         // Do not reopen a claim following an ambiguous timeout/server error.
@@ -44,8 +44,8 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, must_change_password: false });
     }
 
-    if (body.action !== "login" || typeof body.identifier !== "string" || !body.identifier.trim() || body.identifier.length > 254 || typeof body.password !== "string" || body.password.length > 1024) return json({ error: "Enter your username or email and password." }, 400);
-    const identifier = body.identifier.trim();
+    if (body.action !== "login" || typeof body.identifier !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.identifier.trim()) || body.identifier.length > 254 || typeof body.password !== "string" || body.password.length > 1024) return json({ error: "Enter your email and password." }, 400);
+    const identifier = body.identifier.trim().toLowerCase();
     if (body.password === "") {
       const token = hex(crypto.getRandomValues(new Uint8Array(32)));
       const { data: allowed, error } = await service.rpc("start_initial_login", { p_identifier: identifier, p_token_hash: await hash(token) });
@@ -56,9 +56,9 @@ Deno.serve(async (req: Request) => {
     const { data: email, error } = await service.rpc("resolve_login_email", { p_identifier: identifier });
     if (error) return json({ error: "Sign-in is temporarily unavailable." }, 503);
     // Still invoke Auth for unknown identifiers, retaining its rate limiting and
-    // credential verification rather than exposing a public username lookup.
+    // credential verification rather than exposing a public account lookup.
     const { data, error: loginError } = await auth.auth.signInWithPassword({ email: email || "unknown-account@invalid.example", password: body.password });
-    if (loginError || !data.session || !email) return json({ error: "Username/email or password is incorrect." }, loginError?.status === 429 ? 429 : 401);
+    if (loginError || !data.session || !email) return json({ error: "Email or password is incorrect." }, loginError?.status === 429 ? 429 : 401);
     return json({ session: { access_token: data.session.access_token, refresh_token: data.session.refresh_token } });
   } catch {
     // Never include request bodies, credentials, or provider errors in logs.
