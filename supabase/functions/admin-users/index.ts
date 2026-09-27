@@ -122,6 +122,7 @@ Deno.serve(async (req: Request) => {
 
       const { error: delErr } = await adminClient.auth.admin.deleteUser(userId);
       if (delErr) {
+        console.error(JSON.stringify({ operation: "delete_user", user_id: userId, code: delErr.code, status: delErr.status }));
         return json({ error: delErr.message }, 400);
       }
 

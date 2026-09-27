@@ -1,3 +1,4 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useEffect, useRef, useState } from 'react';
 import { Film, Image as ImageIcon, Loader2, Pencil, Upload, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -16,6 +17,9 @@ type EditVideoModalProps = {
 };
 
 export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps) {
+  const { requestDelete } = useDeleteConfirmation();
+  const savingRef = useRef(false);
+  const pendingCleanup = useRef<{ path: string | null } | null>(null);
   const [fileName, setFileName] = useState(video.file_name);
   const [previewUrl, setPreviewUrl] = useState<string | null>(video.preview_url);
   const [previewChanged, setPreviewChanged] = useState(false);
@@ -78,65 +82,54 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
     reader.readAsDataURL(f);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!fileName.trim()) {
-      setError('Video name cannot be empty.');
-      return;
-    }
-
-    setSaving(true);
+  const saveChanges = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true); setError(null);
     let uploadedPreviewPath: string | null = null;
-    let nextPreviewPath = video.preview_path;
-
-    if (previewChanged && previewUrl) {
-      try {
-        const previewSource = await dataUrlToBlob(previewUrl);
-        const { preview } = await createImageVariants(previewSource);
-        nextPreviewPath = `${video.owner_id}/video-previews/${video.id}/${createStorageId()}.webp`;
-        const previewBucketPath = await resolveBucketPath(nextPreviewPath, 'images');
-        const { error: uploadError } = await supabase.storage
-          .from('user-images')
-          .upload(previewBucketPath, preview, { contentType: 'image/webp' });
-        if (uploadError) {
-          console.error('Preview upload failed:', uploadError);
-          setError('We could not upload the preview image. Please try a different image.');
-          setSaving(false);
-          return;
-        }
-        uploadedPreviewPath = nextPreviewPath;
-      } catch (uploadError) {
-        console.error('Processing the preview image failed:', uploadError);
-        setError('We could not process that preview image. Please try a different image.');
-        setSaving(false);
-        return;
+    try {
+      // A cleanup retry must not upload a second replacement or resave the row.
+      if (!pendingCleanup.current) {
+        let nextPreviewPath = video.preview_path;
+        if (previewChanged && previewUrl) {
+          const source = await dataUrlToBlob(previewUrl);
+          const { preview } = await createImageVariants(source);
+          nextPreviewPath = `${video.owner_id}/video-previews/${video.id}/${createStorageId()}.webp`;
+          const bucketPath = await resolveBucketPath(nextPreviewPath, 'images');
+          const { error: uploadError } = await supabase.storage.from('user-images').upload(bucketPath, preview, { contentType: 'image/webp' });
+          if (uploadError) throw new Error('Unable to upload the replacement preview. Please try again.');
+          uploadedPreviewPath = nextPreviewPath;
+        } else if (previewChanged) nextPreviewPath = null;
+        const { error: updateError } = await supabase.from('videos').update({ file_name: fileName.trim(),
+          preview_url: previewChanged ? null : previewUrl, preview_path: nextPreviewPath, visibility,
+        }).eq('id', video.id).eq('owner_id', video.owner_id).select('id').single();
+        if (updateError) throw new Error('Unable to save this video. Check your permissions and try again.');
+        pendingCleanup.current = { path: previewChanged && video.preview_path !== nextPreviewPath ? video.preview_path : null };
       }
-    } else if (previewChanged) {
-      nextPreviewPath = null;
+      if (pendingCleanup.current.path) {
+        const { error: cleanupError } = await supabase.storage.from('user-images').remove([await resolveBucketPath(pendingCleanup.current.path, 'images')]);
+        if (cleanupError) throw new Error('Your changes were saved, but the old preview could not be deleted. Retry to finish cleanup.');
+      }
+      onSaved();
+    } catch (cause) {
+      if (uploadedPreviewPath && !pendingCleanup.current) {
+        // Roll back only the uncommitted replacement created by this attempt.
+        await supabase.storage.from('user-images').remove([await resolveBucketPath(uploadedPreviewPath, 'images')]).catch(() => {});
+      }
+      throw cause;
+    } finally { savingRef.current = false; setSaving(false); }
+  };
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault(); setError(null);
+    if (!fileName.trim()) { setError('Video name cannot be empty.'); return; }
+    if (previewChanged && (video.preview_path || video.preview_url)) {
+      await requestDelete({ title: previewUrl ? 'Replace preview image' : 'Delete preview image',
+        message: `Are you sure you want to ${previewUrl ? 'replace' : 'delete'} the preview image for "${video.file_name}"?`,
+        details: 'The existing preview will be removed. The video itself will be kept. Your other edits will also be saved.',
+        confirmLabel: previewUrl ? 'Replace preview' : 'Delete preview', processingLabel: 'Saving…', onConfirm: saveChanges });
+    } else {
+      try { await saveChanges(); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save changes. Please try again.'); }
     }
-
-    const { error } = await supabase
-      .from('videos')
-      .update({
-        file_name: fileName.trim(),
-        preview_url: previewChanged ? null : previewUrl,
-        preview_path: nextPreviewPath,
-        visibility,
-      })
-      .eq('id', video.id);
-
-    if (error) {
-      if (uploadedPreviewPath) await supabase.storage.from('user-images').remove([await resolveBucketPath(uploadedPreviewPath, 'images')]);
-      console.error('Saving video changes failed:', error);
-      setError('We could not save your changes. Please try again.');
-      setSaving(false);
-      return;
-    }
-    if (previewChanged && video.preview_path && video.preview_path !== nextPreviewPath) {
-      await supabase.storage.from('user-images').remove([await resolveBucketPath(video.preview_path, 'images')]);
-    }
-    onSaved();
   };
 
   return (
@@ -164,7 +157,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
                 fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><ImageIcon size={24} /></div>}
               />
               {(previewUrl || (!previewChanged && video.preview_path)) && (
-                <button type="button" onClick={() => { setPreviewUrl(null); setPreviewChanged(true); }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={12} /></button>
+                <button type="button" aria-label="Remove preview image (applied when saved)" onClick={() => { setPreviewUrl(null); setPreviewChanged(true); }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={12} /></button>
               )}
             </div>
             <div className="flex flex-1 flex-col gap-2">

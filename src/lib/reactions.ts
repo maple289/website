@@ -101,23 +101,25 @@ export class ReactionStore {
   }
   async react(type: MediaType, id: string, reaction: Reaction | null) {
     const entry = this.entry(type, id);
-    if (!this.userId || !entry.state.available || entry.state.saving) return;
+    if (!this.userId || !entry.state.available || entry.state.saving) return false;
     const previous = entry.state;
     const counts = { ...previous.counts };
     if (previous.own) counts[previous.own] = Math.max(0, (counts[previous.own] ?? 0) - 1);
     if (reaction) counts[reaction] = (counts[reaction] ?? 0) + 1;
     entry.revision++;
     const epoch = this.epoch;
-    this.publish(entry, { counts, own: reaction, saving: true, error: '' });
+    this.publish(entry, reaction === null ? { saving: true, error: '' } : { counts, own: reaction, saving: true, error: '' });
     try {
       const { error } = await supabase.rpc('set_media_reaction', { p_type: type, p_id: id, p_reaction: reaction });
       if (error) throw error;
-      if (epoch !== this.epoch) return;
-      this.publish(entry, { saving: false });
+      if (epoch !== this.epoch) return false;
+      this.publish(entry, { counts, own: reaction, saving: false });
       this.refresh(entry);
+      return true;
     } catch {
-      if (epoch !== this.epoch) return;
+      if (epoch !== this.epoch) return false;
       this.publish(entry, { ...previous, saving: false, error: 'Could not save your reaction. Please try again.' });
+      return false;
     }
   }
 }

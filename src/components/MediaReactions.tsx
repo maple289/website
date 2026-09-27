@@ -1,3 +1,4 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { SmilePlus, X } from 'lucide-react';
@@ -5,14 +6,15 @@ import { supabase } from '@/lib/supabase';
 import { ReactionContext, reactions, type MediaType, type Reaction, type ReactionState, type ReactionStore } from '@/lib/reactions';
 import './MediaReactions.css';
 
-type Props = { mediaType: MediaType; mediaId: string };
-export function MediaReactions({ mediaType, mediaId }: Props) {
+type Props = { mediaType: MediaType; mediaId: string; mediaName?: string };
+export function MediaReactions({ mediaType, mediaId, mediaName }: Props) {
   const store = useContext(ReactionContext);
   if (!store) return null;
-  return <ReactionControl key={`${mediaType}:${mediaId}:${store.userId}`} store={store} mediaType={mediaType} mediaId={mediaId} />;
+  return <ReactionControl key={`${mediaType}:${mediaId}:${store.userId}`} store={store} mediaType={mediaType} mediaId={mediaId} mediaName={mediaName} />;
 }
 
-function ReactionControl({ store, mediaType, mediaId }: Props & { store: ReactionStore }) {
+function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { store: ReactionStore }) {
+  const { requestDelete } = useDeleteConfirmation();
   const root = useRef<HTMLDivElement>(null);
   const popover = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -65,7 +67,17 @@ function ReactionControl({ store, mediaType, mediaId }: Props & { store: Reactio
   const apply = (reaction: Reaction | null) => {
     clearBarTimer(); setExpanded(false); closeDetails();
     trigger.current?.focus({ preventScroll: true });
-    void store.react(mediaType, mediaId, reaction);
+    if (reaction === null) {
+      const previous = state.own;
+      void requestDelete({ title: 'Remove reaction',
+        message: `Are you sure you want to remove your ${selected?.label ?? ''} reaction${mediaName ? ` from "${mediaName}"` : ` from this ${mediaType}`}?`,
+        confirmLabel: 'Remove reaction', processingLabel: 'Removing…',
+        onConfirm: async () => {
+          if (store.entry(mediaType, mediaId).state.own !== previous) throw new Error('Your reaction changed. Cancel and try again.');
+          if (!await store.react(mediaType, mediaId, null)) throw new Error('Unable to remove your reaction. Please try again.');
+        },
+      });
+    } else void store.react(mediaType, mediaId, reaction);
   };
   return <div ref={root} className="media-reactions" data-reaction-control onClick={(event) => event.stopPropagation()}>
     {store.userId ? <div className="reaction-selector"

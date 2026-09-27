@@ -184,6 +184,6 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
       })}
     </div>
     <div className="pv-info" aria-live="polite" aria-atomic="true"><p title={photo.file_name}>{photo.file_name}</p>{hasMultiple && <span>{index + 1} of {photos.length}</span>}</div>
-    <div className="pv-reactions" data-reaction-control><MediaReactions mediaType="photo" mediaId={photo.id} /></div>
+    <div className="pv-reactions" data-reaction-control><MediaReactions mediaType="photo" mediaId={photo.id} mediaName={photo.file_name} /></div>
   </div>;
 }

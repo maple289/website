@@ -1,3 +1,4 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Globe, LoaderCircle, Search, Share2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -9,6 +10,9 @@ const message = (error: unknown) => error && typeof error === 'object' && 'messa
 export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSaved }: {
   path: string; name: string; isFolder: boolean; ownerEmail: string; onClose: () => void; onSaved: () => void;
 }) {
+  const { requestDelete } = useDeleteConfirmation();
+  const initialGrants = useRef<{ users: ShareUser[]; everyone: boolean }>({ users: [], everyone: false });
+  const savingRef = useRef(false);
   const [users, setUsers] = useState<ShareUser[]>([]);
   const [inherited, setInherited] = useState<Grant[]>([]);
   const [everyone, setEveryone] = useState(false);
@@ -27,6 +31,7 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
       if (!active) return;
       if (rpcError) { setError(rpcError.message); return; }
       const grants = (data ?? []) as Grant[];
+      initialGrants.current = { users: grants.filter((g) => !g.inherited && g.recipient_id).map((g) => ({ id: g.recipient_id!, email: g.email ?? 'Registered user' })), everyone: grants.some((g) => !g.inherited && !g.recipient_id) };
       setUsers(grants.filter((g) => !g.inherited && g.recipient_id).map((g) => ({ id: g.recipient_id!, email: g.email ?? 'Registered user' })));
       setEveryone(grants.some((g) => !g.inherited && !g.recipient_id));
       setInherited(grants.filter((g) => g.inherited));
@@ -57,14 +62,25 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
     return () => previous?.focus();
   }, []);
 
-  const save = async () => {
-    setSaving(true); setError('');
+  const saveChanges = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true); setError('');
     try {
       const { error: rpcError } = await supabase.rpc('set_user_file_sharing', { p_path: path, p_recipients: users.map((u) => u.id), p_everyone: everyone });
       if (rpcError) throw rpcError;
       onSaved();
-    } catch (err) { setError(message(err)); }
-    finally { setSaving(false); }
+    } finally { savingRef.current = false; setSaving(false); }
+  };
+  const save = async () => {
+    const removed = initialGrants.current.users.filter((u) => !users.some((next) => next.id === u.id));
+    const removesEveryone = initialGrants.current.everyone && !everyone;
+    if (removed.length || removesEveryone) {
+      await requestDelete({ title: 'Remove shared access', message: `Are you sure you want to remove sharing permissions for "${name}"?`,
+        details: `Remove access for: ${[...removed.map((u) => u.email), ...(removesEveryone ? ['Everyone (including guests)'] : [])].join(', ')}. ${isFolder ? 'This also affects access inherited by its contents. ' : ''}Access granted by a parent folder remains. Other sharing changes in this dialog will also be saved.`,
+        confirmLabel: 'Remove access', processingLabel: 'Saving…', onConfirm: saveChanges });
+    } else {
+      try { await saveChanges(); } catch (cause) { setError(message(cause)); }
+    }
   };
 
   return <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}>

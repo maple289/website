@@ -1,6 +1,8 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
+import { deleteMedia } from '@/lib/deleteMedia';
 import { MediaReactions } from './MediaReactions';
 import { FileDropArea } from '@/components/FileDropArea';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Photo } from '@/lib/types';
@@ -10,10 +12,11 @@ import { PhotoUploadModal } from '@/components/PhotoUploadModal';
 import { EditPhotoModal } from '@/components/EditPhotoModal';
 import { PhotoViewer } from '@/components/PhotoViewer';
 import { useAuth } from '@/hooks/useAuth';
-import { resolveBucketPath } from '@/lib/storageSettings';
 
 export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const { user } = useAuth();
+  const loadVersion = useRef(0);
+  const { requestDelete } = useDeleteConfirmation();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +27,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     if (!user) {
       setPhotos([]);
@@ -31,6 +35,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
       return;
     }
     const { data, error: loadError } = await supabase.from('photos').select('*').eq('owner_id', user.id).order('created_at', { ascending: false });
+    if (version !== loadVersion.current) return;
     setError(loadError ? 'Could not load your photos.' : null);
     if (!loadError) setPhotos(data ?? []);
     setLoading(false);
@@ -56,19 +61,16 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
     else load();
   };
 
-  const remove = async (photo: Photo) => {
-    if (!window.confirm(`Delete "${photo.file_name}" permanently?`)) return;
-    const { error: deleteError } = await supabase.from('photos').delete().eq('id', photo.id);
-    if (deleteError) {
-      setError('Could not delete the photo.');
-      return;
-    }
-    await supabase.storage.from('user-images').remove([
-      await resolveBucketPath(photo.storage_path, 'images'),
-      await resolveBucketPath(photo.preview_path, 'images'),
-      await resolveBucketPath(photo.thumbnail_path, 'images'),
-    ]);
-    load();
+  const remove = (photo: Photo) => {
+    if (!user) return;
+    void requestDelete({ title: 'Delete photo', message: `Are you sure you want to delete "${photo.file_name}"?`,
+      details: 'The photo, preview, thumbnail and reactions will be permanently deleted. This cannot be undone.',
+      onConfirm: async () => {
+        await deleteMedia('photo', photo, user.id);
+        setPhotos((current) => current.filter((item) => item.id !== photo.id));
+        await load();
+      },
+    });
   };
 
   return (
@@ -91,7 +93,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
                 <span className={`mg-badge mg-privacy ${photo.visibility}`}>{photo.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</span>
               </button>
               <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>
-                <MediaReactions mediaType="photo" mediaId={photo.id} />
+                <MediaReactions mediaType="photo" mediaId={photo.id} mediaName={photo.file_name} />
                 <div className="mg-actions">
                   <button onClick={() => toggleVisibility(photo)} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs text-[#aaa]">{photo.visibility === 'public' ? <Globe size={13} /> : <Lock size={13} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</button>
                   {photo.owner_id === user?.id && <button onClick={() => { setSuccess(''); setError(null); setEditingPhoto(photo); }} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white"><Pencil size={13} /> Edit</button>}

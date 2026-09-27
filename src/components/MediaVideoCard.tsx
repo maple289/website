@@ -39,7 +39,7 @@ export function MediaVideoCard({ video, onPlay, onEdit, onDelete, showOwner = fa
       {showOwner && <p className="mg-meta" title={video.owner_email ?? ''}>{video.owner_email ?? 'Unknown'}</p>}
       <p className="mg-meta">{!showOwner && `${formatBytes(video.file_size)} · `}{timeAgo(video.created_at)}</p>
       {failed && video.processing_error && !showOwner && <p className="mg-error">{video.processing_error}</p>}
-      <MediaReactions mediaType="video" mediaId={video.id} />
+      <MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} />
       {(onEdit || onDelete) && <div className="mg-actions">
         {onEdit && <button onClick={onEdit}><Pencil size={13} />Edit</button>}
         <button onClick={onPlay} disabled={!ready}><Play size={13} />Play</button>

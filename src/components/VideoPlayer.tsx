@@ -69,7 +69,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
             <video ref={videoRef} src={url ?? undefined} controls autoPlay className="h-full w-full" />
           )}
         </div>
-        <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} /></div>
+        <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} /></div>
       </div>
     </div>
   );

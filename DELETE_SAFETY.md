@@ -1,0 +1,38 @@
+# Delete-action inventory
+
+All destructive UI operations use the application-level confirmation provider.
+It captures the target before displaying the warning, focuses Cancel, traps focus,
+makes the underlying application inert and prevents outside/Escape dismissal.
+Only the confirmation button runs the callback. A synchronous lock guards duplicate
+requests; errors leave the dialog open for Cancel or retry.
+
+| Surface | Guarded operation | Server authorization |
+| --- | --- | --- |
+| Video gallery cards | Permanent video, stored versions and preview deletion | Media/storage ownership policies |
+| Photo gallery cards | Permanent photo, preview and thumbnail deletion | Media/storage ownership policies |
+| File Manager menus and right-click menus | Move files/folders to Trash | Owner-only metadata policy |
+| Trash rows and menus | Permanently delete files/folders and contents | Owner-only storage and metadata policies |
+| File Manager bulk actions, including Tree View selections | Counted selection with recursive-folder warning | Same ownership policies for each target |
+| Shared-content listings | Owner actions use the same guards; recipients remain read-only | Sharing grants allow reads, not deletes |
+| Admin user management | Delete named account; explain database cascades and storage limitations | `admin-users` authenticates and checks administrator role; self-deletion remains blocked |
+| Pending registrations | Approve consumes the pending row only after account creation; Reject retains the record with rejected status | Admin-only approval transaction/review endpoint |
+| Video/photo cards and viewers, including public galleries | Remove reaction via selected emoji or Remove reaction | RPC binds deletion to `auth.uid()` and checks media access |
+| Share dialog | Save removal of individual or Everyone permissions | Owner-only sharing RPC |
+| Video edit dialog | Save deletion/replacement of an existing preview | Owner-only video/storage policies |
+
+Sharing selections and preview edits are drafts until Save. If saving removes
+existing data/access, confirmation appears before saving. Cancelling the confirmation
+does not issue the mutation. Changing a reaction to another type remains an update;
+removing it requires confirmation. Favorite toggles change a reversible boolean,
+without deleting the file or its metadata record.
+
+Media records are retained until storage cleanup succeeds. Storage and database
+operations are not one distributed transaction: partial storage failures are
+reported explicitly and retries can finish the cleanup. Folder/bulk failures reload
+actual state, retain remaining selections, and skip fully completed targets on retry.
+
+Other `.remove()` calls in uploads roll back newly created, uncommitted files after
+failed uploads; they never implement a user-facing Delete action. JavaScript
+Set/Map cleanup does not delete stored application content. There is no separate
+pending-registration Delete button, storage-location Delete UI or viewer Delete
+action beyond the surfaces listed above.

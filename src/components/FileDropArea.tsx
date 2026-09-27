@@ -1,6 +1,9 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useEffect, useState, type ReactNode } from 'react';
 
 export function FileDropArea({ enabled, onFiles, children, appearance = 'default', message = 'Drop files here to upload' }: { enabled: boolean; onFiles: (files: File[]) => void; children: ReactNode; appearance?: 'default' | 'light' | 'media'; message?: string }) {
+  const { isOpen } = useDeleteConfirmation();
+  enabled = enabled && !isOpen;
   const [active, setActive] = useState(false);
   useEffect(() => {
     const reset = () => setActive(false);

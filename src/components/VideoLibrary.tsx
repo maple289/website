@@ -1,6 +1,8 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
+import { deleteMedia } from '@/lib/deleteMedia';
 import { FileDropArea } from '@/components/FileDropArea';
-import { useCallback, useEffect, useState } from 'react';
-import { Library, Loader as Loader2, Plus, Trash2, Upload, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Library, Loader as Loader2, Plus, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { UploadModal } from '@/components/UploadModal';
@@ -8,10 +10,10 @@ import { EditVideoModal } from '@/components/EditVideoModal';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { MediaVideoCard } from '@/components/MediaVideoCard';
 import { useAuth } from '@/hooks/useAuth';
-import { resolveBucketPath } from '@/lib/storageSettings';
 
 export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   const { user } = useAuth();
+  const loadVersion = useRef(0);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,9 +21,10 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   const [showUpload, setShowUpload] = useState(false);
   const [editingVideo, setEditingVideo] = useState<Video | null>(null);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
-  const [deletingVideo, setDeletingVideo] = useState<Video | null>(null);
+  const { requestDelete, isOpen: deletingVideo } = useDeleteConfirmation();
 
   const load = useCallback(async (quiet = false) => {
+    const version = ++loadVersion.current;
     if (!quiet) setLoading(true);
     setError(null);
     if (!user) {
@@ -34,6 +37,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       .select('*')
       .eq('owner_id', user.id)
       .order('created_at', { ascending: false });
+    if (version !== loadVersion.current) return;
     if (error) {
       setError('Could not load your videos.');
     } else {
@@ -62,24 +66,16 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
     return !term || video.file_name.toLowerCase().includes(term);
   });
 
-  const confirmDelete = async () => {
-    if (!deletingVideo) return;
-    const { error: dbErr } = await supabase
-      .from('videos')
-      .delete()
-      .eq('id', deletingVideo.id);
-    if (dbErr) {
-      setError('Failed to delete video.');
-      return;
-    }
-    const pathsToRemove = [await resolveBucketPath(deletingVideo.storage_path, 'videos')];
-    if (deletingVideo.processed_storage_path && deletingVideo.processed_storage_path !== deletingVideo.storage_path) {
-      pathsToRemove.push(await resolveBucketPath(deletingVideo.processed_storage_path, 'videos'));
-    }
-    await supabase.storage.from('user-videos').remove(pathsToRemove);
-    if (deletingVideo.preview_path) await supabase.storage.from('user-images').remove([await resolveBucketPath(deletingVideo.preview_path, 'images')]);
-    setDeletingVideo(null);
-    load();
+  const confirmDelete = (video: Video) => {
+    if (!user) return;
+    void requestDelete({ title: 'Delete video', message: `Are you sure you want to delete "${video.file_name}"?`,
+      details: 'The video, its stored versions, preview and reactions will be permanently deleted. This cannot be undone.',
+      onConfirm: async () => {
+        await deleteMedia('video', video, user.id);
+        setVideos((current) => current.filter((item) => item.id !== video.id));
+        await load(true);
+      },
+    });
   };
 
   return (
@@ -119,7 +115,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
               video={v}
               onPlay={() => setPlayingVideo(v)}
               onEdit={() => setEditingVideo(v)}
-              onDelete={() => setDeletingVideo(v)}
+              onDelete={() => confirmDelete(v)}
             />
           ))}
         </div>
@@ -141,26 +137,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
         <VideoPlayer video={playingVideo} onClose={() => setPlayingVideo(null)} />
       )}
 
-      {deletingVideo && (
-        <div className="mg-dialog fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeletingVideo(null)} />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
-            <div className="px-6 pt-6">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><AlertTriangle size={24} /></div>
-              <h2 className="text-lg font-semibold tracking-[-0.02em]">Delete Video</h2>
-              <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">Are you sure you want to permanently delete <span className="font-semibold text-white">{deletingVideo.file_name}</span>? This cannot be undone.</p>
-            </div>
-            <div className="px-6 pb-7 pt-5">
-              <div className="flex gap-3">
-                <button onClick={() => setDeletingVideo(null)} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-                <button onClick={confirmDelete} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962]">
-                  <Trash2 size={16} /> Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
     </FileDropArea>
   );

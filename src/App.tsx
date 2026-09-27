@@ -1,4 +1,5 @@
 import { ReactionProvider } from '@/components/ReactionProvider';
+import { DeleteConfirmationProvider } from '@/components/DeleteConfirmationProvider';
 import '@/components/MediaGallery.css';
 import { FileDropArea } from '@/components/FileDropArea';
 import { useEffect, useRef, useState } from 'react';
@@ -21,7 +22,7 @@ import { FileManager } from '@/components/FileManager';
 function App() {
   return (
     <AuthProvider>
-      <ReactionProvider><AppContent /></ReactionProvider>
+      <DeleteConfirmationProvider><ReactionProvider><AppContent /></ReactionProvider></DeleteConfirmationProvider>
     </AuthProvider>
   );
 }

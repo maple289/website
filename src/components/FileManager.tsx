@@ -1,3 +1,4 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { FileDropArea } from '@/components/FileDropArea';
 import { uploadObject } from '@/lib/mediaUploads';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,6 +41,7 @@ const fileIcon = (entry: Entry, size = 24) => {
 
 export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: string; onSearchTermChange: (value: string) => void }) {
   const { user } = useAuth();
+  const { requestDelete } = useDeleteConfirmation();
   const guest = !user;
   const [shareEntry, setShareEntry] = useState<Entry | null>(null);
   const [shareIndicators, setShareIndicators] = useState<Record<string, 'users' | 'everyone'>>({});
@@ -404,19 +406,11 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
       if (changeError) throw changeError;
     }
   };
-  const deleteEntries = async (items: Entry[]) => {
-    if (!user) return;
-    setBusy(true);
-    try {
-      for (const item of items) {
-        const now = new Date().toISOString();
-        const affectedPaths = (await getFileMetadataTree(item, user.id)).map((row) => row.object_path);
-        if (!affectedPaths.includes(item.path)) { await register(item.path, item.isFolder, item.favorite, item.size, item.mimeType); affectedPaths.push(item.path); }
-        await changeMetadata(affectedPaths, now);
-      }
-      setSelected([]); setMenu(null); setDetails(null); await load();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Could not move items to Trash.'); }
-    setBusy(false);
+  const trashEntry = async (item: Entry) => {
+    if (!user || !owns(item)) throw new Error('You do not have permission to delete this item.');
+    const affectedPaths = (await getFileMetadataTree(item, user.id)).map((row) => row.object_path);
+    if (!affectedPaths.includes(item.path)) { await register(item.path, item.isFolder, item.favorite, item.size, item.mimeType); affectedPaths.push(item.path); }
+    await changeMetadata(affectedPaths, new Date().toISOString());
   };
   const restoreEntry = async (entry: Entry) => {
     if (!user) return;
@@ -427,23 +421,54 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not restore this item.'); }
   };
   const permanentDelete = async (entry: Entry) => {
-    if (!user) return;
-    setBusy(true);
-    try {
-      const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
-      for (let offset = 0; offset < paths.length; offset += 1000) {
-        const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths.slice(offset, offset + 1000));
-        if (removeError) throw removeError;
-      }
-
-      const affectedPaths = (await getFileMetadataTree(entry, user.id)).map((row) => row.object_path);
-      await changeMetadata(affectedPaths);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not permanently delete this item.');
-    } finally {
-      setBusy(false);
+    if (!user || !owns(entry)) throw new Error('You do not have permission to delete this item.');
+    const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
+    for (let offset = 0; offset < paths.length; offset += 1000) {
+      const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths.slice(offset, offset + 1000));
+      if (removeError) throw removeError;
     }
-    await load();
+    const affectedPaths = (await getFileMetadataTree(entry, user.id)).map((row) => row.object_path);
+    if (!affectedPaths.includes(entry.path)) affectedPaths.push(entry.path);
+    await changeMetadata(affectedPaths);
+  };
+  const confirmDeleteEntries = (selectedItems: Entry[]) => {
+    if (!user || busy || !selectedItems.length) return;
+    if (selectedItems.some((entry) => !owns(entry))) { setError('You do not have permission to delete these items.'); return; }
+    const items = selectedItems.filter((entry) => !selectedItems.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`)));
+    const permanent = items.some((entry) => !!entry.trashedAt);
+    const folders = items.some((entry) => entry.isFolder);
+    const completed = new Set<string>();
+    setMenu(null);
+    void requestDelete({
+      title: permanent ? 'Permanently delete items' : 'Move to Trash',
+      message: selectedItems.length === 1
+        ? `Are you sure you want to delete ${items[0].isFolder ? 'the folder ' : ''}"${items[0].name}"?`
+        : `Are you sure you want to delete these ${selectedItems.length} selected items?`,
+      details: [folders ? 'Folders may contain files and subfolders. All of their contents are included in this action.' : '',
+        permanent ? 'Items already in Trash will be permanently deleted, including their sharing records. This cannot be undone. Any other selected items will be moved to Trash.'
+          : 'These items will be moved to Trash and will no longer be available to shared users. You can restore them from Trash.'].filter(Boolean).join(' '),
+      confirmLabel: permanent ? folders && selectedItems.length === 1 ? 'Delete Folder' : 'Delete forever' : 'Move to Trash',
+      processingLabel: permanent ? 'Deleting…' : 'Moving to Trash…',
+      onConfirm: async () => {
+        setBusy(true);
+        let current: Entry | undefined;
+        try {
+          for (const item of items) {
+            if (completed.has(item.path)) continue;
+            current = item;
+            if (item.trashedAt) await permanentDelete(item); else await trashEntry(item);
+            completed.add(item.path);
+          }
+          setSelected([]); setDetails(null); await load();
+        } catch (cause) {
+          // Refresh actual results after partial success, retaining failed targets.
+          await load();
+          setSelected(items.filter((item) => !completed.has(item.path)).map((item) => item.path));
+          const reason = cause && typeof cause === 'object' && 'message' in cause ? String(cause.message) : 'Please try again.';
+          throw new Error(`Unable to finish deleting "${current?.name ?? 'this item'}". ${completed.size ? `${completed.size} selected item(s) completed. ` : ''}${folders ? 'Some folder contents may already have changed. ' : ''}${reason} Retry to finish the remaining items.`);
+        } finally { setBusy(false); }
+      },
+    });
   };
   const performPathAction = async () => {
     if (!dialog?.entry || !user) return;
@@ -493,13 +518,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   };
 
   const bulkDownload = async () => { for (const path of selected) { const item = actionEntries.find((entry) => entry.path === path); if (item) await download(item); } };
-  const bulkDelete = async () => {
-    const selectedEntries = actionEntries.filter((entry) => selected.includes(entry.path) && owns(entry));
-    const items = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`)));
-    for (const item of items.filter((entry) => entry.trashedAt)) await permanentDelete(item);
-    const activeItems = items.filter((entry) => !entry.trashedAt);
-    if (activeItems.length) await deleteEntries(activeItems);
-  };
+  const bulkDelete = () => confirmDeleteEntries(actionEntries.filter((entry) => selected.includes(entry.path)));
   const contextAction = (action: string, entry: Entry) => {
     setMenu(null);
     if (action === 'open') enterFolder(entry);
@@ -509,7 +528,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     if (action === 'rename') setDialog({ kind: 'rename', entry, value: entry.name });
     if (action === 'move' || action === 'copy') setDialog({ kind: action, entry, value: folder });
     if (action === 'favorite') void toggleFavorite(entry);
-    if (action === 'delete') { if (entry.trashedAt) void permanentDelete(entry); else void deleteEntries([entry]); }
+    if (action === 'delete') confirmDeleteEntries([entry]);
     if (action === 'restore') void restoreEntry(entry);
     if (action === 'properties') setDetails(entry);
   };
@@ -556,7 +575,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     } finally { if (version === listingState.current.version) setRootPaging(false); }
   };
 
-  const renderFileEntry = (entry: Entry) => <FileCard key={entry.path} entry={entry} shareMode={shareIndicators[entry.path]} location={guest || isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout === 'tree' ? 'list' : layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onRestore={() => void restoreEntry(entry)} onDelete={() => entry.trashedAt ? void permanentDelete(entry) : void deleteEntries([entry])} />;
+  const renderFileEntry = (entry: Entry) => <FileCard key={entry.path} entry={entry} shareMode={shareIndicators[entry.path]} location={guest || isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout === 'tree' ? 'list' : layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 380), entry }); }} onRestore={() => void restoreEntry(entry)} onDelete={() => confirmDeleteEntries([entry])} />;
 
   return (
     <FileDropArea appearance="light" enabled={!guest && view === 'files' && !uploadOpen && !dialog && !preview && !shareEntry && !details} onFiles={(files) => void uploadFiles(files)}>

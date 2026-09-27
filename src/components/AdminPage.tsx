@@ -1,3 +1,4 @@
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { ProfileNameFields } from './ProfileNameFields';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
@@ -106,7 +107,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
   const [actionId, setActionId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
-  const [deletingUser, setDeletingUser] = useState<Profile | null>(null);
+  const { requestDelete } = useDeleteConfirmation();
   const [roleChangeUser, setRoleChangeUser] = useState<Profile | null>(null);
   const [openRoleMenu, setOpenRoleMenu] = useState<string | null>(null);
 
@@ -271,7 +272,18 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
                         <Pencil size={15} />
                       </button>
                       <button
-                        onClick={() => setDeletingUser(p)}
+                        onClick={() => void requestDelete({ title: 'Delete user',
+                          message: `Are you sure you want to delete user "${[p.first_name, p.last_name].filter(Boolean).join(' ') || p.email}" (${p.email})?`,
+                          details: 'The account, profile, video/photo records, file metadata, related shares and reactions will be permanently deleted. Uploaded storage files are not automatically removed; account deletion may be blocked while the user owns stored files. This cannot be undone.',
+                          confirmLabel: 'Delete User', onConfirm: async () => {
+                            const headers = await getAuthHeaders();
+                            const response = await fetch(`${adminFnUrl}?id=${encodeURIComponent(p.id)}`, { method: 'DELETE', headers });
+                            const data = await response.json();
+                            if (!response.ok) throw new Error(data.error || 'Unable to delete this user. Please try again.');
+                            setProfiles((current) => current.filter((profile) => profile.id !== p.id));
+                            await load();
+                          },
+                        })}
                         disabled={p.id === currentUserId}
                         className="rounded-lg p-2 text-[#888] transition hover:bg-[#ff3d46]/15 hover:text-[#ff737b] disabled:cursor-not-allowed disabled:opacity-40"
                         aria-label="Delete user"
@@ -305,14 +317,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
         />
       )}
 
-      {deletingUser && (
-        <DeleteUserModal
-          user={deletingUser}
-          onClose={() => setDeletingUser(null)}
-          onDeleted={() => { setDeletingUser(null); load(); }}
-          getAuthHeaders={getAuthHeaders}
-        />
-      )}
+
 
       {roleChangeUser && (
         <ChangeRoleModal
@@ -332,7 +337,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
   const [pending, setPending] = useState<PendingRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ reg: PendingRegistration; action: 'approve' | 'reject' } | null>(null);
+  const { requestDelete } = useDeleteConfirmation();
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -384,41 +389,30 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
     };
   }, [load]);
 
-  const handleAction = async () => {
-    if (!confirmAction) return;
-    setActionId(confirmAction.reg.id);
-    setError(null);
-    setNotice(null);
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(approveFnUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ action: confirmAction.action, registrationId: confirmAction.reg.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? 'Failed to process request.');
-        setActionId(null);
-        setConfirmAction(null);
-        return;
-      }
-      setError(data.warning ?? null);
-      setNotice(data.message ?? 'Registration updated successfully.');
-      // Prevent an older list response from restoring the just-reviewed request.
-      const controller = activeLoad.current;
-      activeLoad.current = null;
-      controller?.abort();
-      setRefreshing(false);
-      setPending((prev) => prev.filter((p) => p.id !== confirmAction.reg.id));
-      setActionId(null);
-      setConfirmAction(null);
-      onResolved();
-    } catch {
-      setError('Network error. Please try again.');
-      setActionId(null);
-      setConfirmAction(null);
-    }
+  const confirmReview = (reg: PendingRegistration, action: 'approve' | 'reject') => {
+    void requestDelete({
+      title: action === 'approve' ? 'Approve registration' : 'Reject registration',
+      tone: action === 'approve' ? 'primary' : 'destructive',
+      message: action === 'approve' ? `Approve the registration for "${reg.email}"?` : `Are you sure you want to reject the registration for "${reg.email}"?`,
+      details: action === 'approve'
+        ? 'A standard User account will be created and this pending request will be removed only after successful account creation. The user must create a password at first login.'
+        : 'No account will be created. The request will leave Waiting for Approval, but the rejected registration record is retained.',
+      confirmLabel: action === 'approve' ? 'Approve' : 'Reject', processingLabel: action === 'approve' ? 'Approving…' : 'Rejecting…',
+      onConfirm: async () => {
+        setActionId(reg.id); setError(null); setNotice(null);
+        try {
+          const headers = await getAuthHeaders();
+          const res = await fetch(approveFnUrl, { method: 'POST', headers, body: JSON.stringify({ action, registrationId: reg.id }) });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? 'Unable to review this registration. Please try again.');
+          setError(data.warning ?? null); setNotice(data.message ?? 'Registration updated successfully.');
+          const controller = activeLoad.current;
+          activeLoad.current = null; controller?.abort(); setRefreshing(false);
+          setPending((current) => current.filter((p) => p.id !== reg.id));
+          onResolved();
+        } finally { setActionId(null); }
+      },
+    });
   };
 
   return (
@@ -466,7 +460,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
                 <td className="px-5 py-4">
                   <div className="flex items-center justify-end gap-2">
                     <button
-                      onClick={() => setConfirmAction({ reg, action: 'approve' })}
+                      onClick={() => confirmReview(reg, 'approve')}
                       disabled={actionId === reg.id}
                       className="flex items-center gap-1.5 rounded-lg bg-emerald-600/15 px-3 py-2 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-600/25 disabled:opacity-50"
                     >
@@ -474,7 +468,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
                       Approve
                     </button>
                     <button
-                      onClick={() => setConfirmAction({ reg, action: 'reject' })}
+                      onClick={() => confirmReview(reg, 'reject')}
                       disabled={actionId === reg.id}
                       className="flex items-center gap-1.5 rounded-lg bg-[#ff3d46]/15 px-3 py-2 text-xs font-semibold text-[#ff737b] transition hover:bg-[#ff3d46]/25 disabled:opacity-50"
                     >
@@ -490,58 +484,11 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
       </div>
 
       )}
-      {confirmAction && (
-        <ConfirmApprovalModal
-          email={confirmAction.reg.email}
-          action={confirmAction.action}
-          saving={actionId === confirmAction.reg.id}
-          onClose={() => setConfirmAction(null)}
-          onConfirm={handleAction}
-        />
-      )}
+
     </div>
   );
 }
 
-function ConfirmApprovalModal({ email, action, saving, onClose, onConfirm }: { email: string; action: 'approve' | 'reject'; saving: boolean; onClose: () => void; onConfirm: () => void }) {
-  const isApprove = action === 'approve';
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
-        <div className="px-6 pt-6">
-          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isApprove ? 'bg-emerald-600/15 text-emerald-400' : 'bg-[#ff3d46]/15 text-[#ff737b]'}`}>
-            {isApprove ? <Check size={24} /> : <XCircle size={24} />}
-          </div>
-          <h2 className="text-lg font-semibold tracking-[-0.02em]">
-            {isApprove ? 'Approve Registration' : 'Reject Registration'}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
-            {isApprove ? (
-              <>Approve <span className="font-semibold text-white">{email}</span>? A standard User account will be created. Their first sign-in with a blank password will require password setup before they can use the account. No email will be sent to the applicant while user emails are disabled.</>
-            ) : (
-              <>Are you sure you want to reject the registration for <span className="font-semibold text-white">{email}</span>? No account will be created.</>
-            )}
-          </p>
-        </div>
-        <div className="px-6 pb-7 pt-5">
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button
-              onClick={onConfirm}
-              disabled={saving}
-              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isApprove ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-[#ff3d46] hover:bg-[#ff5962]'}`}
-            >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : isApprove ? <Check size={16} /> : <XCircle size={16} />}
-              {isApprove ? 'Approve' : 'Reject'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; onClose: () => void; onConfirm: () => void; saving: boolean }) {
   const newRole = user.role === 'admin' ? 'user' : 'admin';
@@ -1010,60 +957,6 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function DeleteUserModal({ user, onClose, onDeleted, getAuthHeaders }: { user: Profile; onClose: () => void; onDeleted: () => void; getAuthHeaders: AuthHeadersFn }) {
-  const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    setError(null);
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${adminFnUrl}?id=${encodeURIComponent(user.id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? 'Failed to delete user.');
-        setDeleting(false);
-        return;
-      }
-      onDeleted();
-    } catch {
-      setError('Network error. Please try again.');
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
-        <div className="px-6 pt-6">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]">
-            <AlertTriangle size={24} />
-          </div>
-          <h2 className="text-lg font-semibold tracking-[-0.02em]">Delete User</h2>
-          <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
-            Are you sure you want to permanently delete <span className="font-semibold text-white">{user.email}</span>? This action cannot be undone and all their data will be removed.
-          </p>
-        </div>
-        <div className="px-6 pb-7 pt-5">
-          {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button onClick={handleDelete} disabled={deleting} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
-              {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-              Delete user
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
