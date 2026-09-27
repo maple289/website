@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.auth.setSession(result.session);
         if (error) return { error: 'Your password was saved. Return to sign in and use your new password.' };
         setPasswordSetup(null);
-        window.location.hash = '#/library';
+        window.location.hash = '';
         return { error: null };
       } catch (error) { return { error: error instanceof Error ? error.message : 'Could not complete password setup. Please try signing in again.' }; }
     },
@@ -122,7 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (!result.session) return { error: 'Could not start your session. Please try again.' };
         const { error } = await supabase.auth.setSession(result.session);
-        if (!error) setPasswordSetup(null);
+        if (!error) {
+          setPasswordSetup(null);
+          window.location.hash = '';
+        }
         return { error: error ? readableError(error.message) : null };
       } catch (error) { return { error: error instanceof Error ? error.message : 'Could not sign in. Please try again.' }; }
     },

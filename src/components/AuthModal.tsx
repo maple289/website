@@ -1,9 +1,11 @@
 import { TaskModal } from '@/components/TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { ProfileNameFields } from './ProfileNameFields';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mail, Lock, Eye, EyeOff, X, Youtube } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+
+const approvalMessage = 'Your registration request has been submitted for administrator approval. After approval, sign in with your email and leave the password blank to create your password.';
 
 type AuthModalProps = {
   open: boolean;
@@ -22,6 +24,8 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [registrationSubmitted, setRegistrationSubmitted] = useState(false);
+  const submission = useRef<'idle' | 'pending' | 'submitted'>('idle');
 
   const close = useGuardedClose(onClose, !!email || !!firstName || !!lastName || !!password, submitting);
 
@@ -43,6 +47,8 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
       setError(null);
       setInfo(null);
       setSubmitting(false);
+      setRegistrationSubmitted(false);
+      submission.current = 'idle';
     }
   }, [open]);
 
@@ -51,6 +57,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submission.current === 'pending' || (mode === 'signup' && submission.current === 'submitted')) return;
     setError(null);
     setInfo(null);
 
@@ -59,24 +66,32 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
       return;
     }
 
+    submission.current = 'pending';
     setSubmitting(true);
-    if (mode === 'signup') {
-      const { error } = await requestRegistration(email.trim(), firstName, lastName);
-      setSubmitting(false);
-      if (error) {
-        setError(error);
+    try {
+      if (mode === 'signup') {
+        const { error } = await requestRegistration(email.trim(), firstName, lastName);
+        if (error) {
+          setError(error);
+        } else {
+          submission.current = 'submitted';
+          setRegistrationSubmitted(true);
+          setInfo(approvalMessage);
+          setEmail(''); setFirstName(''); setLastName(''); setPassword('');
+        }
       } else {
-        setInfo('Your registration request has been submitted for administrator approval. After approval, sign in with your email and leave the password blank to create your password.');
-        setEmail(''); setFirstName(''); setLastName(''); setPassword('');
+        const { error } = await signIn(email.trim(), password);
+        if (error) {
+          setError(error);
+        } else {
+          onClose();
+        }
       }
-    } else {
-      const { error } = await signIn(email.trim(), password);
+    } catch {
+      setError('Could not complete your request. Please try again.');
+    } finally {
+      if (submission.current === 'pending') submission.current = registrationSubmitted ? 'submitted' : 'idle';
       setSubmitting(false);
-      if (error) {
-        setError(error);
-      } else {
-        onClose();
-      }
     }
   };
 
@@ -97,12 +112,12 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           <p className="mt-1.5 text-sm text-[#a5a5a5]">
             {mode === 'signup'
               ? 'Request an account for administrator approval. You will create your password on the website after approval.'
-              : 'Sign in to continue where you left off.'}
+              : 'Sign in to go to Home.'}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-7 pb-8 pt-6">
-          {mode === 'signup' && <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={submitting} />}
+          {mode === 'signup' && <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={submitting || (mode === 'signup' && registrationSubmitted)} />}
           <label htmlFor="login-identifier" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Email</label>
           <div className="mb-4 flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
             <Mail className="ml-3.5 text-[#888]" size={18} />
@@ -110,6 +125,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
               id="login-identifier"
               type="email"
               required
+              disabled={submitting || (mode === 'signup' && registrationSubmitted)}
               maxLength={254}
               autoCapitalize="none"
               spellCheck={false}
@@ -155,18 +171,19 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || (mode === 'signup' && registrationSubmitted)}
             className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-[15px] font-semibold text-white transition hover:bg-[#ff5962] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting && <Loader2 size={18} className="animate-spin" />}
-            {mode === 'signup' ? 'Request account' : 'Sign in'}
+            {mode === 'signup' ? (registrationSubmitted ? 'Request submitted' : 'Request account') : 'Sign in'}
           </button>
 
           <p className="mt-5 text-center text-sm text-[#a5a5a5]">
             {mode === 'signup' ? 'Already have an account?' : 'New to Streamly?'}{' '}
             <button
               type="button"
-              onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(null); setInfo(null); }}
+              disabled={submitting}
+              onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(null); setInfo(mode === 'signin' && registrationSubmitted ? approvalMessage : null); }}
               className="font-semibold text-[#ff6971] transition hover:text-[#ff9ba0]"
             >
               {mode === 'signup' ? 'Sign in' : 'Create one'}
