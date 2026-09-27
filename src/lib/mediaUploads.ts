@@ -91,6 +91,10 @@ async function validatedUpload(options: Options, kind: 'video' | 'photo' | 'prev
     if (!response.ok) { if (response.status < 500) enqueueAttempted = false; throw new Error(result.error || 'Could not start media validation.'); }
     queued = true;
     onProgress(95); onPhase?.('Processing');
+    if (kind === 'video') {
+      window.dispatchEvent(new CustomEvent('media-processing', { detail: 'video' }));
+      return { id }; // Durable server job continues after the dialog/page closes.
+    }
     const deadline = Date.now() + 2 * 60 * 60 * 1000;
     while (Date.now() < deadline) {
       await new Promise(resolve => window.setTimeout(resolve,1500));

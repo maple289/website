@@ -20,6 +20,11 @@ export type Video = {
   frame_rate: number | null;
   duration_seconds: number | null;
   container_format: string | null;
+  source_metadata?: { container: string; video_codec: string | null; video_bitrate: number | null; width: number; height: number; frame_rate: number | null; duration_seconds: number | null } | null;
+  processing_action?: string | null;
+  audio_codec?: string | null;
+  audio_bitrate?: number | null;
+  processed_file_size?: number | null;
 };
 
 export type Photo = {

@@ -59,7 +59,7 @@ def remove(bucket,paths):
 
 def validate(kind,source,directory):
     command=[sys.executable,str(Path(__file__).with_name('validate.py')),kind,str(source),str(directory)]
-    result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=3720 if kind=='video' else 120,
+    result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=7620 if kind=='video' else 120,
                           env={'PATH':os.environ.get('PATH',''),'HOME':'/tmp','PYTHONUNBUFFERED':'1'})
     try: metadata=json.loads(result.stdout)
     except Exception: raise ValueError('Media decoding failed or exceeded processing limits.')
@@ -118,7 +118,10 @@ def process(job):
                 upload('user-videos',full(processed,'user-videos'),directory/'stream.mp4','video/mp4',created)
                 upload('user-images',full(preview,'user-images'),preview_source,'image/webp',created)
                 record.update(storage_path=original,processed_storage_path=processed,preview_path=preview,processing_status='ready',
-                    container_format=metadata['format'],video_codec='h264',video_bitrate=2000,
+                    container_format=metadata['format'],video_codec=metadata['video_codec'],video_bitrate=metadata['video_bitrate'],
+                    frame_rate=metadata['frame_rate'],source_metadata=metadata['source_metadata'],
+                    processing_action=metadata['processing_action'],audio_codec=metadata['audio_codec'],audio_bitrate=metadata['audio_bitrate'],
+                    processed_file_size=(directory/'stream.mp4').stat().st_size,
                     resolution_width=metadata['width'],resolution_height=metadata['height'],duration_seconds=metadata['duration_seconds'])
                 publication_attempted=True
                 api('POST','/rest/v1/videos',json=record)
@@ -144,9 +147,11 @@ def process(job):
         try: job_update(jid,status='error',error=error,finished_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
         except Exception: LOG.error(json.dumps({'operation':'media_job_status','id':jid,'result':'error'}))
     finally:
-        # These are only this job's unpublished staging objects, never user content.
-        try: remove('media-staging',[prefix+'/source',prefix+'/preview'])
-        except Exception: LOG.error(json.dumps({'operation':'staging_cleanup','id':jid,'result':'error'}))
+        # Retain a failed video's original in private staging for recovery.
+        # Successful videos also retain their original in final video storage.
+        if kind != 'video' or published:
+            try: remove('media-staging',[prefix+'/source',prefix+'/preview'])
+            except Exception: LOG.error(json.dumps({'operation':'staging_cleanup','id':jid,'result':'error'}))
 
 def main():
     if not URL or not KEY: raise RuntimeError('Media worker server credentials are not configured')
@@ -162,7 +167,7 @@ def main():
         while True:
             active={future for future in active if not future.done()}
             try:
-                stale=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime(time.time()-7200))
+                stale=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime(time.time()-10800))
                 api('PATCH','/rest/v1/media_upload_jobs?status=eq.processing&started_at=lt.'+stale,
                     json={'status':'error','error':'Processing was interrupted. Please upload the file again.'})
                 if len(active)<2:

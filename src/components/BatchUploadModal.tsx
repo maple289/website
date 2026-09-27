@@ -12,7 +12,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
   const [items, setItems] = useState<Item[]>(() => files.map((file) => { const error = mediaTypeError(file, kind); return { file, status: error ? 'Failed' : 'Waiting', progress: 0, message: error ?? undefined }; }));
   const started = useRef(false);
   const refresh = useRef(onItemUploaded); refresh.current = onItemUploaded;
-  const active = items.some((item) => !['Completed','Failed'].includes(item.status));
+  const active = items.some((item) => !['Completed','Failed', ...(kind === 'video' ? ['Processing'] : [])].includes(item.status));
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -31,7 +31,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
           else {
             await uploadVideo(options);
           }
-          update(index, { status: 'Completed', progress: 100, message: warning ?? undefined });
+          update(index, { status: kind === 'video' ? 'Processing' : 'Completed', progress: kind === 'video' ? 95 : 100, message: kind === 'video' ? 'Processing on the server. You can continue browsing.' : warning ?? undefined });
           if (refresh.current) refresh.current();
           else window.dispatchEvent(new CustomEvent('media-uploaded', { detail: kind }));
         } catch (cause) { update(index, { status: 'Failed', message: cause instanceof Error ? cause.message : 'Upload failed. Please try again.' }); }

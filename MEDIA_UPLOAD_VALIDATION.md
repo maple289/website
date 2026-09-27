@@ -8,7 +8,7 @@ All gallery upload entry points now use `mediaUploads.ts` and `mediaValidation.t
 
 Uploads go into private, immutable `media-staging` objects. An authenticated edge function queues an owner-bound job. Only the server worker can publish gallery rows or write the final media buckets. Restrictive storage policies close old permissive-policy bypasses; table permissions/triggers prevent clients forging storage paths or Ready status. Normal file-manager uploads, metadata edits, ownership rules and confirmed deletions remain in place.
 
-The worker uses FFprobe followed by a complete FFmpeg decode/conversion to H.264/AAC MP4 with the existing 2,000 kb/s target. Images use Pillow plus pillow-heif, verify all frames, and produce WebP previews/thumbnails. No gallery row is created until processing succeeds. Failed jobs stay visible as per-file errors; other files continue. The browser polls its own job and refreshes the gallery on completion. Photo Viewer falls back to the preview when the browser cannot display a valid original.
+The worker uses FFprobe followed by a complete FFmpeg decode/conversion to H.264/AAC MP4 with a 2,500 kb/s target when transcoding is needed (see VIDEO_PROCESSING.md). Compatible MP4 video at or below this bitrate is stream-copied; audio/fast-start layout is normalized separately. Images use Pillow plus pillow-heif, verify all frames, and produce WebP previews/thumbnails. No gallery row is created until processing succeeds. Failed jobs stay visible as per-file errors; other files continue. For videos, the upload dialog returns after server queueing, and an owner-only gallery job panel polls status and refreshes on completion. Photos retain their existing per-file completion flow. Photo Viewer falls back to the preview when the browser cannot display a valid original.
 
 ## Supported formats and limits
 
@@ -29,7 +29,7 @@ Required pieces:
 2. `queue-media-upload`, updated `process-video` and `serve-media` functions through the existing sync script.
 3. Healthy media-worker service, then the updated frontend.
 
-Old browser builds will have direct uploads rejected after migration; users must reload. Existing gallery records/objects are not reprocessed or modified. Jobs are private; the server removes each job's temporary inputs after processing. Interrupted processing is marked failed after two hours. Unqueued uploads abandoned before registration may remain in the staging bucket; clean these only through a separately scoped retention procedure. Do not delete final media objects merely because an HTTP commit response was lost.
+Old browser builds will have direct uploads rejected after migration; users must reload. Existing gallery records/objects are not reprocessed or modified. Jobs are private; the server removes each job's temporary inputs after processing. Interrupted processing is marked failed after three hours. Failed video originals are retained in private staging; successful videos retain their originals in final storage. Unqueued uploads abandoned before registration may remain in the staging bucket; clean these only through a separately scoped retention procedure. Do not delete final media objects merely because an HTTP commit response was lost.
 
 ## Verification
 

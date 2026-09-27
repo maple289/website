@@ -1,3 +1,4 @@
+import { VideoProcessingJobs } from '@/components/VideoProcessingJobs';
 import { useCallback, useEffect, useState } from 'react';
 import { Film, FolderOpen, Image as ImageIcon, Loader as Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +62,8 @@ export function HomePage({ tab, searchTerm, onTabChange, onFiles }: HomePageProp
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6971]">Public Gallery</p>
             <h1 className="text-[27px] font-semibold tracking-[-0.04em] sm:text-[34px]">Discover videos</h1>
           </div>
+
+      <VideoProcessingJobs searchTerm={searchTerm} visibleIds={videos.map(video => video.id)} />
 
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-[#ff3d46]" /></div>

@@ -18,7 +18,8 @@ class PublicationTests(unittest.TestCase):
             if method=='PATCH' and kwargs['json'].get('status')=='complete' and fail_status:raise ConnectionError('ambiguous status response')
         def validate(kind,source,directory):
             if invalid:raise ValueError('Not a decodable image.')
-            return dict(extension='jpg',mime_type='image/jpeg',width=64,height=48,format='mov',duration_seconds=1)
+            (directory/'stream.mp4').write_bytes(b'fixture')
+            return dict(video_codec='h264',video_bitrate=2500,frame_rate=25,source_metadata={},processing_action='transcoded',audio_codec=None,audio_bitrate=None,extension='jpg',mime_type='image/jpeg',width=64,height=48,format='mov',duration_seconds=1)
         with tempfile.TemporaryDirectory() as tmp:
             real_temp=tempfile.TemporaryDirectory
             with patch.object(worker.tempfile,'TemporaryDirectory',side_effect=lambda **kw:real_temp(dir=tmp)),patch.object(worker,'api',side_effect=api),patch.object(worker,'download',return_value=64),patch.object(worker,'validate',side_effect=validate),patch.object(worker,'upload',side_effect=lambda bucket,path,source,mime,created:(uploads.append(path),created.append((bucket,path)))),patch.object(worker,'remove',side_effect=lambda bucket,paths:removals.append((bucket,paths))):

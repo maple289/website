@@ -1,3 +1,4 @@
+import { VideoProcessingJobs } from '@/components/VideoProcessingJobs';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { deleteMedia } from '@/lib/deleteMedia';
 import { FileDropArea } from '@/components/FileDropArea';
@@ -97,6 +98,8 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       {error && (
         <div className="mb-5 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
       )}
+
+      <VideoProcessingJobs searchTerm={searchTerm} visibleIds={videos.map(video => video.id)} />
 
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>
