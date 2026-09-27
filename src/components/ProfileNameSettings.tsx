@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ProfileNameFields } from './ProfileNameFields';
 
@@ -33,8 +33,8 @@ export function ProfileNameSettings({ userId, onDirtyChange, onSavingChange }: {
     return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => { onDirtyChange?.(loaded && (firstName !== savedNames.first || lastName !== savedNames.last)); }, [firstName, lastName, savedNames, loaded, onDirtyChange]);
-  useEffect(() => { onSavingChange?.(saving); }, [saving, onSavingChange]);
+  useLayoutEffect(() => { onDirtyChange?.(loaded && (firstName !== savedNames.first || lastName !== savedNames.last)); }, [firstName, lastName, savedNames, loaded, onDirtyChange]);
+  useLayoutEffect(() => { onSavingChange?.(saving); }, [saving, onSavingChange]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

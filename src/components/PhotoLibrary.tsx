@@ -1,3 +1,4 @@
+import { usePhotoViewerHistory } from '@/hooks/usePhotoViewerHistory';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { deleteMedia } from '@/lib/deleteMedia';
 import { MediaReactions } from './MediaReactions';
@@ -24,7 +25,6 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const [success, setSuccess] = useState('');
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
-  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
@@ -73,6 +73,8 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
     });
   };
 
+  const { viewingIndex, openPhoto, closePhoto, onPhotoChange } = usePhotoViewerHistory(filteredPhotos, 'library');
+
   return (
     <FileDropArea appearance="media" message="Drop photos here to upload" enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div className="mg-page">
@@ -88,7 +90,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
         <div className="mg-grid">
           {filteredPhotos.map((photo, index) => (
             <article key={photo.id} className="mg-card">
-              <button onClick={() => setViewingIndex(index)} className="mg-thumbnail">
+              <button onClick={() => openPhoto(index)} className="mg-thumbnail">
                 <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
                 <span className={`mg-badge mg-privacy ${photo.visibility}`}>{photo.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</span>
               </button>
@@ -107,7 +109,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
       {editingPhoto && <div className="mg-dialog"><EditPhotoModal key={editingPhoto.id} photo={editingPhoto} onClose={() => setEditingPhoto(null)} onSaved={(updated) => { setPhotos((current) => current.map((photo) => photo.id === updated.id ? updated : photo)); setEditingPhoto(null); setError(null); setSuccess('Photo changes saved.'); }} /></div>}
       {showUpload && <div className="mg-dialog"><PhotoUploadModal initialFiles={droppedFiles} onItemUploaded={() => void load()} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); load(); }} /></div>}
       {viewingIndex !== null && viewingIndex < filteredPhotos.length && (
-        <PhotoViewer photos={filteredPhotos} startIndex={viewingIndex} onClose={() => setViewingIndex(null)} />
+        <PhotoViewer photos={filteredPhotos} startIndex={viewingIndex} onClose={closePhoto} onPhotoChange={onPhotoChange} />
       )}
     </div>
     </FileDropArea>

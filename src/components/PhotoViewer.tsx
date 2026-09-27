@@ -6,7 +6,7 @@ import type { Photo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
 import './PhotoViewer.css';
 
-type PhotoViewerProps = { photos: Photo[]; startIndex: number; onClose: () => void };
+type PhotoViewerProps = { photos: Photo[]; startIndex: number; onClose: () => void; onPhotoChange?: (id: string) => void };
 const controls = 'input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="menu"], [role="combobox"], [data-reaction-control]';
 
 function ViewerPhoto({ photo, current }: { photo: Photo; current: boolean }) {
@@ -17,7 +17,7 @@ function ViewerPhoto({ photo, current }: { photo: Photo; current: boolean }) {
     draggable={false} className="pv-photo" onError={() => setFailed(true)} fallback={fallback} />;
 }
 
-export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
+export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: PhotoViewerProps) {
   const [photoId, setPhotoId] = useState(photos[startIndex]?.id);
   const found = photos.findIndex((item) => item.id === photoId);
   const index = found >= 0 ? found : Math.max(0, Math.min(startIndex, photos.length - 1));
@@ -48,9 +48,9 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
     setAnimating(!reduceMotion);
     setOffset(-direction * (stage.current?.clientWidth ?? 0));
     timer.current = window.setTimeout(() => {
-      setPhotoId(next.id); setAnimating(false); setOffset(0); busy.current = false;
+      setPhotoId(next.id); onPhotoChange?.(next.id); setAnimating(false); setOffset(0); busy.current = false;
     }, reduceMotion ? 0 : 190);
-  }, [index, photos]);
+  }, [index, photos, onPhotoChange]);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 

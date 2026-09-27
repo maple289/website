@@ -1,3 +1,4 @@
+import { useSettingsNavigation } from '@/hooks/useSettingsNavigation';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { ProfileNameSettings } from './ProfileNameSettings';
 import { useState } from 'react';
@@ -99,15 +100,15 @@ export function SettingsPage() {
   const clearPassword = () => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowCurrent(false); setShowNew(false); setShowConfirm(false); setError(null); setSuccess(false); };
   const clear = useGuardedClose(clearPassword, !!hasInput, saving);
   const togglePassword = useGuardedClose(() => { clearPassword(); setPasswordFormOpen(!passwordFormOpen); }, !!hasInput, saving);
-  const back = useGuardedClose(() => { window.location.hash = '/library'; }, !!hasInput || profileDirty, saving || profileSaving);
+  const back = useSettingsNavigation(!!hasInput || profileDirty, saving || profileSaving);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#033C8D_0%,#0062C7_50%,#001338_100%)] text-[#f1f1f1]">
       <header className="sticky top-0 z-30 border-b border-[#1a2a4a] bg-[#001338]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[700px] items-center gap-4 px-5 lg:px-8">
-          <a href="#/library" onClick={(event) => { event.preventDefault(); back(); }} className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back">
+          <button type="button" onClick={back} disabled={saving || profileSaving} className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back">
             <ArrowLeft size={20} />
-          </a>
+          </button>
           <div className="flex h-8 w-10 items-center justify-center rounded-[10px] bg-[#ff3d46]">
             <ShieldCheck size={20} className="text-white" />
           </div>

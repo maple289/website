@@ -1,3 +1,4 @@
+import { pushAppHistory, replaceAppHistory } from '@/lib/appHistory';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FileEntry } from '@/lib/fileTree';
 
@@ -47,12 +48,12 @@ export function useFileNavigation(guest: boolean, onNavigate: () => void) {
       if (!window.history.state?.[marker]) {
         // A pasted/deep-linked folder needs a Files root behind it, otherwise
         // the first browser Back would leave Files immediately.
-        window.history.replaceState({ ...window.history.state, [marker]: {} }, '', '#/files');
-        if (url !== '#/files') window.history.pushState({ [marker]: { publicFolder: next.publicFolder } }, '', url);
+        replaceAppHistory({ ...window.history.state, [marker]: {} }, '#/files');
+        if (url !== '#/files') pushAppHistory({ [marker]: { publicFolder: next.publicFolder } }, url);
       } else if (url !== window.location.hash) {
         // Drop invalid or inapplicable parameters, including a signed-in
         // user's folder URL after switching to guest access.
-        window.history.replaceState({ [marker]: { publicFolder: next.publicFolder } }, '', url);
+        replaceAppHistory({ [marker]: { publicFolder: next.publicFolder } }, url);
       }
       if (lastUrl.current !== url) {
         lastUrl.current = url;
@@ -70,7 +71,7 @@ export function useFileNavigation(guest: boolean, onNavigate: () => void) {
     const destination = { ...root, ...next };
     const url = urlFor(destination);
     if (url === window.location.hash) return;
-    window.history.pushState({ [marker]: { publicFolder: destination.publicFolder } }, '', url);
+    pushAppHistory({ [marker]: { publicFolder: destination.publicFolder } }, url);
     lastUrl.current = url;
     onNavigateRef.current();
     setLocation(destination);

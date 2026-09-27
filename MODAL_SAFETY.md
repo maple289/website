@@ -24,7 +24,7 @@ Busy forms cannot close. Completed saves bypass discard prompts.
 | Sharing | Selected users, Everyone state and unfinished user search |
 | Administration | Add/edit user forms; role-change confirmation |
 | Deletion/approval | Existing global DeleteConfirmationProvider, including nested confirmations |
-| Account settings | Password section collapse/clear; Settings Back protects password/profile drafts |
+| Account settings | Password section collapse/clear; Settings ESC/header Back/browser Back and Forward protect password/profile drafts |
 | Initial password | Return to sign in protects the unfinished password |
 
 PhotoViewer uses the shared hook directly to retain keyboard, wheel and swipe
@@ -33,7 +33,8 @@ controls remain inside the focus boundary.
 
 Dropdowns, context menus, informational sidebars, tooltips and reaction hover bars
 are not task dialogs and keep their lightweight dismissal. Route/browser navigation
-is not globally intercepted by this modal policy.
+is not globally intercepted by this modal policy. Settings additionally registers a
+history guard; see SETTINGS_NAVIGATION.md.
 
 ## Scope of validation
 
