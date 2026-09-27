@@ -1,3 +1,4 @@
+import { TaskModal } from '@/components/TaskModal';
 import { MediaReactions } from './MediaReactions';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Play, X } from 'lucide-react';
@@ -43,15 +44,11 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
     return () => { active = false; };
   }, [video.id]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} />
+    <TaskModal aria-label="Video player" className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div className="relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#0a0a0a] shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4">
           <h3 className="truncate text-base font-semibold tracking-[-0.02em]">{video.file_name}</h3>
@@ -71,6 +68,6 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
         </div>
         <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} /></div>
       </div>
-    </div>
+    </TaskModal>
   );
 }

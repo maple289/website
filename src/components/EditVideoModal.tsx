@@ -1,3 +1,5 @@
+import { TaskModal } from '@/components/TaskModal';
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useEffect, useRef, useState } from 'react';
 import { Film, Image as ImageIcon, Loader2, Pencil, Upload, X } from 'lucide-react';
@@ -31,6 +33,8 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
   const [videoLoading, setVideoLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const close = useGuardedClose(onClose, fileName !== video.file_name || visibility !== video.visibility || previewChanged, saving);
 
   useVideoVolume(videoRef, videoUrl);
 
@@ -133,15 +137,15 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+    <TaskModal aria-label="Edit video" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><Pencil size={20} /></div>
             <h2 className="text-lg font-semibold tracking-[-0.02em]">Edit Video</h2>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button onClick={close} disabled={saving} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
@@ -198,7 +202,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}
               Save changes
@@ -206,6 +210,6 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
           </div>
         </form>
       </div>
-    </div>
+    </TaskModal>
   );
 }

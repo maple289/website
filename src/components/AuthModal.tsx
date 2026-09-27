@@ -1,3 +1,5 @@
+import { TaskModal } from '@/components/TaskModal';
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { ProfileNameFields } from './ProfileNameFields';
 import { useEffect, useState } from 'react';
 import { Loader2, Mail, Lock, Eye, EyeOff, X, Youtube } from 'lucide-react';
@@ -22,6 +24,8 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const close = useGuardedClose(onClose, !!email || !!username || !!firstName || !!lastName || !!password, submitting);
+
   useEffect(() => {
     if (open) {
       setMode(initialMode);
@@ -44,13 +48,6 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
     }
   }, [open]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (open) window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -73,7 +70,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
         setError(error);
       } else {
         setInfo('Your registration request has been submitted for administrator approval. After approval, sign in with your username or email and leave the password blank to create your password.');
-        setTimeout(onClose, 4000);
+        setEmail(''); setUsername(''); setFirstName(''); setLastName(''); setPassword('');
       }
     } else {
       const { error } = await signIn(email.trim(), password);
@@ -87,11 +84,11 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+    <TaskModal aria-label="Sign in or register" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="relative px-7 pt-8">
-          <button aria-label="Close" onClick={onClose} className="absolute right-4 top-4 rounded-full p-2 text-[#a7a7a7] transition hover:bg-[#2a2a2a] hover:text-white">
+          <button aria-label="Close" onClick={close} className="absolute right-4 top-4 rounded-full p-2 text-[#a7a7a7] transition hover:bg-[#2a2a2a] hover:text-white">
             <X size={20} />
           </button>
           <div className="flex h-11 w-14 items-center justify-center rounded-xl bg-[#ff3d46] shadow-[0_0_28px_rgba(255,61,70,0.28)]">
@@ -178,6 +175,6 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           </p>
         </form>
       </div>
-    </div>
+    </TaskModal>
   );
 }

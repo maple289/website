@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ProfileNameFields } from './ProfileNameFields';
 
-export function ProfileNameSettings({ userId }: { userId: string }) {
+export function ProfileNameSettings({ userId, onDirtyChange, onSavingChange }: { userId: string; onDirtyChange?: (dirty: boolean) => void; onSavingChange?: (saving: boolean) => void }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [savedNames, setSavedNames] = useState({ first: '', last: '' });
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -20,6 +21,7 @@ export function ProfileNameSettings({ userId }: { userId: string }) {
         if (error) throw error;
         setFirstName(data.first_name ?? '');
         setLastName(data.last_name ?? '');
+        setSavedNames({ first: data.first_name ?? '', last: data.last_name ?? '' });
         setLoaded(true);
       } catch {
         if (!cancelled) setError('Could not load your profile. Please reload to try again.');
@@ -30,6 +32,9 @@ export function ProfileNameSettings({ userId }: { userId: string }) {
     void load();
     return () => { cancelled = true; };
   }, [userId]);
+
+  useEffect(() => { onDirtyChange?.(loaded && (firstName !== savedNames.first || lastName !== savedNames.last)); }, [firstName, lastName, savedNames, loaded, onDirtyChange]);
+  useEffect(() => { onSavingChange?.(saving); }, [saving, onSavingChange]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -44,6 +49,7 @@ export function ProfileNameSettings({ userId }: { userId: string }) {
       if (error) throw error;
       setFirstName(firstName.trim());
       setLastName(lastName.trim());
+      setSavedNames({ first: firstName.trim(), last: lastName.trim() });
       setSuccess(true);
     } catch {
       setError('Could not save your profile. Please try again.');

@@ -1,3 +1,4 @@
+import { useModalLayer } from '@/hooks/useModalLayer';
 import { MediaReactions } from './MediaReactions';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -24,6 +25,7 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
   const hasMultiple = photos.length > 1;
   const root = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
+  useModalLayer(root, !!photo);
   const [offset, setOffset] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -50,30 +52,11 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
     }, reduceMotion ? 0 : 190);
   }, [index, photos]);
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const bodyOverflow = document.body.style.overflow;
-    const htmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden'; document.documentElement.style.overflow = 'hidden';
-    root.current?.focus({ preventScroll: true });
-    return () => {
-      window.clearTimeout(timer.current);
-      document.body.style.overflow = bodyOverflow; document.documentElement.style.overflow = htmlOverflow;
-      if (previous?.isConnected) previous.focus({ preventScroll: true });
-    };
-  }, []);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!root.current?.contains(document.activeElement)) return;
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
-      if (event.key === 'Tab') {
-        const buttons = Array.from(root.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-        const first = buttons[0], last = buttons[buttons.length - 1];
-        if (event.shiftKey && (document.activeElement === first || document.activeElement === root.current)) { event.preventDefault(); last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-        return;
-      }
       const target = event.target instanceof Element ? event.target : null;
       if (event.defaultPrevented || event.isComposing || target?.closest(controls) || event.ctrlKey || event.metaKey || event.shiftKey) return;
       const space = event.code === 'Space' || event.key === ' ';
@@ -166,8 +149,7 @@ export function PhotoViewer({ photos, startIndex, onClose }: PhotoViewerProps) {
 
   if (!photo) return null;
   const slides = hasMultiple ? [-1, 0, 1] : [0];
-  return <div ref={root} tabIndex={-1} className={`photo-viewer${expanded ? ' pv-expanded' : ''}`} role="dialog" aria-modal="true" aria-label="Photo viewer"
-    onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return <div ref={root} tabIndex={-1} className={`photo-viewer${expanded ? ' pv-expanded' : ''}`} onClick={(event) => event.stopPropagation()} onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); }} role="dialog" data-focus-viewer data-task-modal aria-modal="true" aria-label="Photo viewer">
     <button aria-label="Close" onClick={onClose} className="pv-close pv-control"><X size={22} /></button>
     {hasMultiple && <>
       <button aria-label="Previous photo" onClick={() => navigate(-1)} className="pv-prev pv-control"><ChevronLeft size={26} /></button>

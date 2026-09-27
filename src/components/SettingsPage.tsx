@@ -1,3 +1,4 @@
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { ProfileNameSettings } from './ProfileNameSettings';
 import { useState } from 'react';
 import { ArrowLeft, KeyRound, Loader as Loader2, ShieldCheck, Eye, EyeOff, Lock, Check } from 'lucide-react';
@@ -17,6 +18,8 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const email = user?.email ?? '';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,11 +96,16 @@ export function SettingsPage() {
 
   const hasInput = currentPassword || newPassword || confirmPassword;
 
+  const clearPassword = () => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowCurrent(false); setShowNew(false); setShowConfirm(false); setError(null); setSuccess(false); };
+  const clear = useGuardedClose(clearPassword, !!hasInput, saving);
+  const togglePassword = useGuardedClose(() => { clearPassword(); setPasswordFormOpen(!passwordFormOpen); }, !!hasInput, saving);
+  const back = useGuardedClose(() => { window.location.hash = '/library'; }, !!hasInput || profileDirty, saving || profileSaving);
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#033C8D_0%,#0062C7_50%,#001338_100%)] text-[#f1f1f1]">
       <header className="sticky top-0 z-30 border-b border-[#1a2a4a] bg-[#001338]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[700px] items-center gap-4 px-5 lg:px-8">
-          <a href="#/library" className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back">
+          <a href="#/library" onClick={(event) => { event.preventDefault(); back(); }} className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back">
             <ArrowLeft size={20} />
           </a>
           <div className="flex h-8 w-10 items-center justify-center rounded-[10px] bg-[#ff3d46]">
@@ -126,17 +134,12 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {user && <ProfileNameSettings key={user.id} userId={user.id} />}
+        {user && <ProfileNameSettings key={user.id} userId={user.id} onDirtyChange={setProfileDirty} onSavingChange={setProfileSaving} />}
 
         {/* Change Password */}
         <div className="rounded-2xl border border-[#272727] bg-[#161616] p-6">
           <button type="button" aria-expanded={passwordFormOpen} aria-controls="change-password-form" disabled={saving}
-            onClick={() => {
-              setPasswordFormOpen(!passwordFormOpen);
-              setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
-              setShowCurrent(false); setShowNew(false); setShowConfirm(false);
-              setError(null); setSuccess(false);
-            }} className="flex min-h-11 w-full items-center gap-2 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4b86ff]">
+            onClick={togglePassword} className="flex min-h-11 w-full items-center gap-2 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4b86ff]">
             <KeyRound size={18} className="text-[#ff737b]" />
             <span className="text-sm font-semibold tracking-[-0.01em]">Change Password</span>
             <span className="ml-auto text-sm text-[#999]" aria-hidden="true">{passwordFormOpen ? '−' : '+'}</span>
@@ -240,7 +243,7 @@ export function SettingsPage() {
               {hasInput && !saving && (
                 <button
                   type="button"
-                  onClick={() => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowCurrent(false); setShowNew(false); setShowConfirm(false); setError(null); setSuccess(false); }}
+                  onClick={clear}
                   className="h-11 rounded-xl border border-[#3a3a3a] px-4 text-sm font-medium text-[#ccc] transition hover:bg-[#272727]"
                 >
                   Clear

@@ -182,5 +182,5 @@ function ReactionDetails({ mediaType, mediaId, state, selected, anchor, focus, p
     </div>
     {(hasMore || cursors.length > 1) && <footer><button type="button" disabled={loading || cursors.length === 1} onClick={() => setCursors((value) => value.slice(0, -1))}>Previous</button>
       <span>Page {cursors.length}</span><button type="button" disabled={loading || !hasMore} onClick={() => setCursors((value) => [...value, people[people.length - 1].user_id])}>Next</button></footer>}
-  </div>, document.body);
+  </div>, anchor.closest('[data-task-modal]') ?? document.body);
 }

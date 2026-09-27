@@ -1,5 +1,7 @@
+import { TaskModal } from '@/components/TaskModal';
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { BatchUploadModal } from '@/components/BatchUploadModal';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Upload, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { isSupportedImage } from '@/lib/imageStorage';
@@ -24,11 +26,8 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !uploading && !batchFiles.length) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, uploading, batchFiles.length]);
+
+  const close = useGuardedClose(onClose, !!file || !!fileName || visibility !== 'private', uploading);
 
   const selectFile = (selectedFile: File) => {
     if (!isSupportedImage(selectedFile)) {
@@ -68,7 +67,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
   if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="photo" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Upload photos" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
@@ -76,7 +75,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><ImageIcon size={20} /></div>
             <h2 className="text-lg font-semibold">Upload Photo</h2>
           </div>
-          <button disabled={uploading} onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button disabled={uploading} onClick={close} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} action="#" className="px-6 pb-7 pt-5">
@@ -123,13 +122,13 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
 
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
           <div className="flex gap-3">
-            <button type="button" disabled={uploading} onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] hover:bg-[#272727]">Cancel</button>
+            <button type="button" disabled={uploading} onClick={close} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white disabled:opacity-60">
               {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Upload
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </TaskModal>
   );
 }

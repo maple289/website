@@ -5,6 +5,7 @@ export type DeleteConfirmation = {
   message: string;
   details?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   processingLabel?: string;
   tone?: 'destructive' | 'primary';
   onConfirm: () => Promise<void>;

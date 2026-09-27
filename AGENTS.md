@@ -19,3 +19,14 @@
   pre-existing user content. Replacing saved content requires confirmation.
 - Audit the deletion paths listed in `DELETE_SAFETY.md` when adding or changing any
   destructive action. Do not introduce a second, unguarded caller of a delete helper.
+
+# Modal safety
+
+- Use TaskModal (or useModalLayer for specialized viewers) for task dialogs.
+  Never dismiss them from overlay clicks/taps or Escape.
+- Use useGuardedClose on explicit Cancel/Close when a draft differs from its saved
+  values. Discard confirmation must preserve the original form on Keep Editing.
+- Successful saves may close directly; block closing while requests are pending.
+- Keep modal focus, background inertness and scroll locking in the shared layer.
+- Leave dropdowns, context menus, tooltips and reaction bars lightweight.
+- Review MODAL_SAFETY.md when adding or changing dialogs.

@@ -1,0 +1,5 @@
+/* Dialogs retain their existing visual design; coarse pointers get safe targets. */
+[data-task-modal] { overscroll-behavior: contain; }
+@media (pointer: coarse) {
+  [data-task-modal] button:not([data-reaction-control] button) { min-height: 44px; min-width: 44px; }
+}

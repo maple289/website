@@ -1,3 +1,5 @@
+import { TaskModal } from './TaskModal';
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { ProfileNameFields } from './ProfileNameFields';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -491,12 +493,13 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
 
 
 function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; onClose: () => void; onConfirm: () => void; saving: boolean }) {
+  const close = useGuardedClose(onClose, false, saving);
   const newRole = user.role === 'admin' ? 'user' : 'admin';
   const isPromotion = newRole === 'admin';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+    <TaskModal aria-label="Change user role" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="px-6 pt-6">
           <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isPromotion ? 'bg-[#ff3d46]/15 text-[#ff737b]' : 'bg-amber-500/15 text-amber-400'}`}>
@@ -522,7 +525,7 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
             <span className={`text-xs font-semibold ${newRole === 'admin' ? 'text-[#ff737b]' : 'text-[#a5a5a5]'}`}>{newRole === 'admin' ? 'Admin' : 'User'}</span>
           </div>
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button
               onClick={onConfirm}
               disabled={saving}
@@ -534,7 +537,7 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
           </div>
         </div>
       </div>
-    </div>
+    </TaskModal>
   );
 }
 
@@ -781,6 +784,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
   const [role, setRole] = useState('user');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const close = useGuardedClose(onClose, !!firstName || !!lastName || !!email || !!password || role !== 'user', saving);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -811,15 +815,15 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+    <TaskModal aria-label="Add user" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><UserPlus size={20} /></div>
             <h2 className="text-lg font-semibold tracking-[-0.02em]">Add User</h2>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button onClick={close} disabled={saving} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
           <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={saving} />
@@ -856,7 +860,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
               {saving && <Loader2 size={16} className="animate-spin" />}
               Create user
@@ -864,7 +868,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
           </div>
         </form>
       </div>
-    </div>
+    </TaskModal>
   );
 }
 
@@ -875,6 +879,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const close = useGuardedClose(onClose, firstName !== (user.first_name ?? '') || lastName !== (user.last_name ?? '') || email !== (user.email ?? '') || !!password, saving);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -907,8 +912,8 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+    <TaskModal aria-label="Edit user" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
@@ -918,7 +923,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
               <p className="text-xs text-[#888]">{user.email}</p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button onClick={close} disabled={saving} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
           <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={saving} />
@@ -950,7 +955,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
           {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
               {saving && <Loader2 size={16} className="animate-spin" />}
               Save changes
@@ -958,6 +963,6 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
           </div>
         </form>
       </div>
-    </div>
+    </TaskModal>
   );
 }

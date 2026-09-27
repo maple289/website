@@ -1,3 +1,4 @@
+import { useModalLayer } from '@/hooks/useModalLayer';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Check, Loader2, Trash2 } from 'lucide-react';
@@ -15,6 +16,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
   const cancel = useRef<HTMLButtonElement>(null);
   const heading = useId();
   const description = useId();
+  useModalLayer(panel, !!pending);
   const requestDelete = useCallback((options: DeleteConfirmation) => {
     // Lock synchronously: rapid clicks cannot open multiple dialogs or requests.
     if (active.current) return Promise.resolve(false);
@@ -30,33 +32,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
     previous?.resolve(confirmed);
   };
 
-  useEffect(() => {
-    if (!pending) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const app = document.getElementById('root');
-    const wasInert = app?.hasAttribute('inert') ?? false;
-    const overflow = document.body.style.overflow;
-    app?.setAttribute('inert', ''); document.body.style.overflow = 'hidden';
-    cancel.current?.focus();
-    const keyboard = (event: KeyboardEvent) => {
-      // Escape must neither close this dialog nor a viewer underneath it.
-      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); }
-      if (event.key === 'Tab') {
-        const buttons = Array.from(panel.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
-        const first = buttons[0], last = buttons[buttons.length - 1];
-        if (!first) { event.preventDefault(); panel.current?.focus(); }
-        else if (event.shiftKey && (document.activeElement === first || !panel.current?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && (document.activeElement === last || !panel.current?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', keyboard, true);
-    return () => {
-      document.removeEventListener('keydown', keyboard, true);
-      if (!wasInert) app?.removeAttribute('inert');
-      document.body.style.overflow = overflow;
-      if (previous?.isConnected) previous.focus({ preventScroll: true });
-    };
-  }, [pending]);
+  useEffect(() => { if (pending) cancel.current?.focus(); }, [pending]);
 
   const confirm = async () => {
     const operation = active.current;
@@ -85,7 +61,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
         {error && <p role="alert" className="mt-4 break-words rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button ref={cancel} type="button" disabled={busy} onClick={() => { if (!running.current) finish(false); }}
-            className="min-h-11 rounded-xl border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+            className="min-h-11 rounded-xl border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{pending.cancelLabel ?? 'Cancel'}</button>
           <button type="button" disabled={busy} onClick={() => void confirm()}
             className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white disabled:opacity-60 ${pending.tone === 'primary' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
             {busy ? <Loader2 aria-hidden="true" size={17} className="animate-spin" /> : pending.tone === 'primary' ? <Check aria-hidden="true" size={17} /> : <Trash2 aria-hidden="true" size={17} />}

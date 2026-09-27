@@ -1,3 +1,4 @@
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useState } from 'react';
 import { Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,6 +10,7 @@ export function InitialPasswordPage() {
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const close = useGuardedClose(() => { setPassword(''); setConfirmation(''); cancelPasswordSetup(); window.location.hash = ''; }, !!password || !!confirmation, saving);
   return <main className="flex min-h-dvh items-center justify-center bg-[#001338] p-5 text-white">
     <section className="w-full max-w-md rounded-2xl border border-white/15 bg-[#131e31] p-6 shadow-xl">
       <KeyRound className="mb-4 text-blue-300" size={28} />
@@ -34,7 +36,7 @@ export function InitialPasswordPage() {
           <button type="button" aria-pressed={visible} onClick={() => setVisible(!visible)} className="flex min-h-11 items-center gap-2 text-sm text-slate-300">{visible ? <EyeOff size={18} /> : <Eye size={18} />}{visible ? 'Hide passwords' : 'Show passwords'}</button>
           {error && <p role="alert" className="rounded-lg bg-red-950/40 p-3 text-sm text-red-200">{error}</p>}
           <button type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-semibold disabled:opacity-60">{saving && <Loader2 size={18} className="animate-spin" />}Save password and continue</button>
-          <button type="button" onClick={() => { setPassword(''); setConfirmation(''); cancelPasswordSetup(); window.location.hash = ''; }} className="min-h-11 w-full text-sm text-slate-300">Return to sign in</button>
+          <button type="button" onClick={close} className="min-h-11 w-full text-sm text-slate-300">Return to sign in</button>
         </fieldset>
       </form>
     </section>

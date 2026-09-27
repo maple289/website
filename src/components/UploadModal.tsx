@@ -1,5 +1,7 @@
+import { TaskModal } from '@/components/TaskModal';
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { BatchUploadModal } from '@/components/BatchUploadModal';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { isSupportedImage } from '@/lib/imageStorage';
@@ -28,13 +30,8 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !uploading && !batchFiles.length) onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [uploading, onClose, batchFiles.length]);
+
+  const close = useGuardedClose(onClose, !!file || !!fileName || !!previewImage || visibility !== 'private', uploading);
 
   const captureFirstFrame = (videoFile: File) => {
     const url = URL.createObjectURL(videoFile);
@@ -120,7 +117,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
   if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="video" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Upload video" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
@@ -128,7 +125,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><Film size={20} /></div>
             <h2 className="text-lg font-semibold tracking-[-0.02em]">Upload Video</h2>
           </div>
-          <button disabled={uploading} onClick={onClose} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button disabled={uploading} onClick={close} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
@@ -227,13 +224,13 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
           )}
 
           <div className="flex gap-3">
-            <button type="button" disabled={uploading} onClick={onClose} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" disabled={uploading} onClick={close} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
             <button type="submit" disabled={!file || uploading} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
               {uploading ? <><Loader2 size={16} className="animate-spin" /> {uploadProgress > 0 ? `Uploading ${uploadProgress}%...` : 'Uploading...'}</> : <><Upload size={16} /> Upload</>}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </TaskModal>
   );
 }

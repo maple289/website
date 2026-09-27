@@ -1,3 +1,5 @@
+import { TaskModal } from './TaskModal';
+import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Globe, LoaderCircle, Search, Share2, X } from 'lucide-react';
@@ -23,7 +25,8 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const modal = useRef<HTMLDivElement>(null);
+  const dirty = !loading && (everyone !== initialGrants.current.everyone || JSON.stringify(users.map(u => u.id).sort()) !== JSON.stringify(initialGrants.current.users.map(u => u.id).sort()) || !!query || confirmEveryone);
+  const close = useGuardedClose(onClose, dirty, saving);
 
   useEffect(() => {
     let active = true;
@@ -56,11 +59,7 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [path, query]);
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    modal.current?.focus();
-    return () => previous?.focus();
-  }, []);
+
 
   const saveChanges = async () => {
     if (savingRef.current) return;
@@ -83,17 +82,9 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
     }
   };
 
-  return <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}>
-    <div ref={modal} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="share-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-slate-800 shadow-2xl outline-none" onKeyDown={(e) => {
-      if (e.key === 'Escape' && !saving) { e.stopPropagation(); onClose(); }
-      if (e.key === 'Tab') {
-        const elements = Array.from(modal.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') ?? []);
-        const first = elements[0], last = elements[elements.length - 1];
-        if (e.shiftKey && (document.activeElement === first || document.activeElement === modal.current)) { e.preventDefault(); last?.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
-      }
-    }}>
-      <div className="mb-4 flex items-center gap-3"><Share2 size={21} className="text-blue-600" /><h2 id="share-title" className="min-w-0 flex-1 truncate text-lg font-semibold">Share {name}</h2><button disabled={saving} onClick={onClose} aria-label="Close sharing" className="rounded-lg p-2 hover:bg-slate-100"><X size={18} /></button></div>
+  return <TaskModal aria-labelledby="share-title" className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/50 p-4">
+    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-slate-800 shadow-2xl outline-none">
+      <div className="mb-4 flex items-center gap-3"><Share2 size={21} className="text-blue-600" /><h2 id="share-title" className="min-w-0 flex-1 truncate text-lg font-semibold">Share {name}</h2><button disabled={saving} onClick={close} aria-label="Close sharing" className="rounded-lg p-2 hover:bg-slate-100"><X size={18} /></button></div>
       <p className="mb-4 text-sm text-slate-500">Shared users can view and download. Only you can edit, move, delete, or manage sharing.{isFolder && ' Current and future files and subfolders inherit this access.'}</p>
       {error && <p role="alert" className="mb-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
       {loading ? <p className="text-sm text-slate-500">{error ? 'Close and reopen to retry loading permissions.' : 'Loading permissions…'}</p> : <>
@@ -110,8 +101,8 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
         {confirmEveryone && <div role="alert" className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"><p>Anyone, including people who are not signed in, will be able to view and download this {isFolder ? 'folder and everything inside it, including future additions' : 'file'}. Enable this access?</p><div className="mt-2 flex gap-3"><button onClick={() => { setEveryone(true); setConfirmEveryone(false); }} className="font-semibold">Enable Everyone</button><button onClick={() => setConfirmEveryone(false)}>Cancel</button></div></div>}
         {inherited.length > 0 && <div className="mt-4 rounded-xl bg-blue-50 p-3 text-xs text-blue-900"><p className="mb-2 font-semibold">Access inherited from parent folders</p>{inherited.map((g) => <p key={`${g.source_path}-${g.recipient_id}`}>{g.email ?? 'Everyone (including guests)'} — {g.source_path.split('/').slice(1).join('/')}</p>)}<p className="mt-2">To remove inherited access, manage sharing on the named parent folder. Disabling Everyone here does not remove a parent folder’s grant.</p></div>}
         <p className="mt-4 text-xs text-slate-500">Changes take effect when you save.</p>
-        <div className="mt-5 flex justify-end gap-2"><button disabled={saving} onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm hover:bg-slate-100">Cancel</button><button disabled={saving || confirmEveryone} onClick={() => void save()} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving && <LoaderCircle size={16} className="animate-spin" />}Save sharing</button></div>
+        <div className="mt-5 flex justify-end gap-2"><button disabled={saving} onClick={close} className="rounded-xl px-4 py-2.5 text-sm hover:bg-slate-100">Cancel</button><button disabled={saving || confirmEveryone} onClick={() => void save()} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving && <LoaderCircle size={16} className="animate-spin" />}Save sharing</button></div>
       </>}
     </div>
-  </div>;
+  </TaskModal>;
 }
