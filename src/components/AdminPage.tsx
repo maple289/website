@@ -54,7 +54,7 @@ export function AdminPage() {
         <p className="max-w-sm text-sm text-[#999]">
           You need an admin account to view this page. Sign in with an admin account to manage users and storage configuration.
         </p>
-        <a href="/" className="mt-2 rounded-lg bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962]">
+        <a href="#/" className="mt-2 rounded-lg bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962]">
           Back to home
         </a>
       </div>
@@ -65,7 +65,7 @@ export function AdminPage() {
     <div className="min-h-screen bg-[linear-gradient(90deg,#033C8D_0%,#001338_48%,#0062C7_100%)] text-[#f1f1f1]">
       <header className="sticky top-0 z-30 border-b border-[#1a2a4a] bg-[#001338]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[1100px] items-center gap-4 px-5 lg:px-8">
-          <a href="/" className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back to home">
+          <a href="#/" className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back to home">
             <ArrowLeft size={20} />
           </a>
           <div className="flex h-8 w-10 items-center justify-center rounded-[10px] bg-[#ff3d46]">
