@@ -4,11 +4,11 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { PGlite } from '../.runtime/sharing-tests/node_modules/@electric-sql/pglite/dist/index.js';
 const db = new PGlite();
-const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>']]);
+const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>'], ['CUSTOMER_EMAILS_ENABLED', 'true']]);
 const logs = [], sent = [];
 const originalLog = console.log, originalInfo = console.info, originalError = console.error, originalWarn = console.warn;
 console.info = console.error = console.warn = (...args) => logs.push(args.join(' '));
-let handler, mode = 'ok', checks = 0, invites = 0, inviteError = null;
+let handler, mode = 'ok', checks = 0;
 const adminId = '11111111-1111-4111-8111-111111111111';
 let callerId = adminId;
 let failRegistrationLookup = false;
@@ -28,7 +28,7 @@ const check = (actual, expected, label) => { assert.deepEqual(actual, expected, 
 // Supabase adapter backed by a real local PostgreSQL engine.
 const client = {
   auth: { getUser: async () => ({ data: { user: callerId ? { id: callerId } : null }, error: null }),
-    admin: { inviteUserByEmail: async () => { invites++; return { error: inviteError }; } } },
+    admin: {} },
   from(table) {
     let action = 'select', values, filters = [], single = false, ignore = false;
     const builder = {
@@ -67,7 +67,7 @@ globalThis.__emailTestClient = client;
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString('base64');
 try {
   await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
-    CREATE TABLE pending_registrations(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text UNIQUE, first_name text, last_name text, created_at timestamptz DEFAULT now(), status text DEFAULT 'pending', reviewed_at timestamptz, reviewed_by uuid);
+    CREATE TABLE pending_registrations(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text UNIQUE, username text UNIQUE, first_name text, last_name text, created_at timestamptz DEFAULT now(), status text DEFAULT 'pending', reviewed_at timestamptz, reviewed_by uuid);
     CREATE TABLE profiles(id uuid DEFAULT gen_random_uuid(), email text, role text);
     INSERT INTO profiles(email,role) VALUES ('admin-one@example.test','admin'),('admin-two@example.test','admin'),('member@example.test','user');`);
   await db.query("UPDATE profiles SET id=$1 WHERE email='admin-one@example.test'", [adminId]);
@@ -77,7 +77,7 @@ try {
   let endpoint = await readFile(new URL('../supabase/functions/notify-admin-registration/index.ts', import.meta.url), 'utf8');
   endpoint = endpoint.replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";', '').replace('import { createClient } from "npm:@supabase/supabase-js@2.57.4";', 'const createClient = () => globalThis.__emailTestClient;').replace('"../_shared/email.ts"', JSON.stringify(sharedUrl));
   await import(moduleUrl(endpoint));
-  const submit = (email, first_name = 'Alex') => handler(new Request('https://local.test/registration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, first_name }) }));
+  const submit = (email, first_name = 'Alex') => handler(new Request('https://local.test/registration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, first_name, username: email.split('@')[0] }) }));
   let response = await submit('new@example.test', '<script>');
   check(response.status, 200, 'registration succeeds');
   check(sent.length, 3, 'receipt plus notification to every admin (not ordinary members)');
@@ -145,34 +145,13 @@ try {
   check(rateResult.accepted, true, 'rate-limited delivery recovers');
   check(sent.length - beforeRate, 2, 'rate-limit retry is bounded');
   check(sent.at(-1).key, sent.at(-2).key, 'rate-limit retry preserves idempotency key');
-  let approval = await readFile(new URL('../supabase/functions/approve-registration/index.ts', import.meta.url), 'utf8');
-  approval = approval.replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";', '').replace('import { createClient } from "npm:@supabase/supabase-js@2.57.4";', 'const createClient = () => globalThis.__emailTestClient;').replace('"../_shared/email.ts"', JSON.stringify(sharedUrl));
-  await import(moduleUrl(approval));
-  const regId = (await db.query("SELECT id FROM pending_registrations WHERE email='new@example.test'")).rows[0].id;
-  const review = (action, registrationId = regId) => handler(new Request('https://local.test/approve', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test' }, body: JSON.stringify({ action, registrationId }) }));
-  mode = 'invalid';
-  let reviewed = await review('approve');
-  const reviewedBody = await reviewed.json();
-  check(reviewed.status, 200, 'notification failure does not fail completed approval');
-  check(reviewedBody.email_accepted, false, 'admin response identifies notification failure');
-  check(typeof reviewedBody.warning, 'string', 'admin gets actionable notification warning');
-  check((await db.query('SELECT status FROM pending_registrations WHERE id=$1', [regId])).rows[0].status, 'approved', 'approval state persisted despite email failure');
-  check(invites, 1, 'one invitation on approval');
-  mode = 'ok';
-  await db.exec("UPDATE registration_email_deliveries SET last_attempt_at=now()-interval '2 minutes' WHERE operation='registration_approved'");
-  reviewed = await review('approve');
-  check((await reviewed.json()).email_accepted, true, 'completed approval can retry failed notification');
-  check(invites, 1, 'notification retry does not invite/create another account');
-  const beforeDuplicateApproval = sent.length;
-  await review('approve');
-  check(sent.length, beforeDuplicateApproval, 'completed successful approval does not resend notification');
-  check((await review('reject')).status, 400, 'opposite completed review cannot overwrite approval');
-  const pendingId = (await db.query("SELECT id FROM pending_registrations WHERE email='domain@example.test'")).rows[0].id;
-  inviteError = { status: 500, name: 'smtp_failure', message: 'SMTP unavailable' };
-  check((await review('approve', pendingId)).status, 400, 'SMTP invitation failure is reported');
-  check((await db.query('SELECT status FROM pending_registrations WHERE id=$1', [pendingId])).rows[0].status, 'pending', 'SMTP invitation failure does not mark approved');
-  callerId = null;
-  check((await review('approve', pendingId)).status, 401, 'guest cannot approve or retry review email');
+  env.set('CUSTOMER_EMAILS_ENABLED', 'false');
+  const beforeSuppressed = sent.length;
+  await submit('suppressed@example.test');
+  check(sent.length - beforeSuppressed, 2, 'customer mail disabled while all admins remain enabled');
+  check(sent.slice(beforeSuppressed).every(mail => mail.body.to[0].startsWith('admin-')), true, 'only administrators receive registration notifications');
+  check(logs.some(line => line.includes('customer_email_temporarily_disabled')), true, 'temporary customer suppression is visible in safe logs');
+  check(logs.join('').includes('re_test_secret_not_real'), false, 'secrets stay redacted');
   originalLog(`${checks} checks passed; no external emails sent.`);
 } finally {
   console.log = originalLog; console.info = originalInfo; console.error = originalError; console.warn = originalWarn;

@@ -1,4 +1,4 @@
-import { deliverEmail, safeEmailLog } from "../_shared/email.ts";
+import { deliverEmail, customerEmailsEnabled } from "../_shared/email.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
@@ -37,7 +37,7 @@ async function verifyAdmin(supabaseUrl: string, serviceRoleKey: string, anonKey:
   if (profileErr || !profile || profile.role !== "admin") {
     return { authorized: false as const, status: 403, message: "Admin access required" };
   }
-  return { authorized: true as const, userId: callerData.user.id, adminClient };
+  return { authorized: true as const, userId: callerData.user.id, adminClient, callerClient };
 }
 
 Deno.serve(async (req: Request) => {
@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
     if (!auth.authorized) {
       return json({ error: auth.message }, auth.status);
     }
-    const { userId, adminClient } = auth;
+    const { userId, adminClient, callerClient } = auth;
 
     const body = await req.json();
     const { action, registrationId } = body;
@@ -82,46 +82,34 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Registration not found" }, 404);
     }
 
-    const desiredStatus = action === "approve" ? "approved" : "rejected";
-    if (registration.status !== "pending" && registration.status !== desiredStatus) {
-      return json({ error: `Registration has already been ${registration.status}` }, 400);
-    }
-    let existingAccount = false;
-    if (registration.status === "pending") {
-      if (action === "approve") {
-        const { error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(registration.email, {
-          redirectTo: `${Deno.env.get("SITE_URL") ?? ""}/`,
-          data: { first_name: registration.first_name, last_name: registration.last_name },
-        });
-        if (inviteErr) {
-          existingAccount = inviteErr.message.includes("already been registered") || inviteErr.message.includes("already exists");
-          console.error(JSON.stringify({ operation: "auth_invitation", status: inviteErr.status, type: inviteErr.name, message: safeEmailLog(inviteErr.message) }));
-          if (!existingAccount) return json({ error: "Could not send the account invitation. Check the authentication SMTP configuration and server logs." }, 400);
-        } else {
-          console.info(JSON.stringify({ operation: "auth_invitation", result: "accepted" }));
-        }
+    if (action === "approve") {
+      // Use the caller's authenticated session, not a body-supplied administrator
+      // ID. The RPC checks the admin role again and commits everything atomically.
+      const { data: account, error: approvalError } = await callerClient.rpc("approve_pending_account", { p_registration_id: registrationId });
+      if (approvalError) {
+        console.error(JSON.stringify({ operation: "registration_approval", type: "transaction_failed", code: approvalError.code }));
+        const useful = approvalError.message.includes("already exists") || approvalError.message.includes("valid username") || approvalError.message.includes("already been reviewed")
+          ? approvalError.message : "Account creation could not be completed. The pending request was retained; please retry.";
+        return json({ error: `Unable to approve user: ${useful}` }, approvalError.code === "42501" ? 403 : 409);
       }
-      const { data: reviewed, error: reviewError } = await adminClient.from("pending_registrations")
-        .update({ status: desiredStatus, reviewed_at: new Date().toISOString(), reviewed_by: userId })
-        .eq("id", registrationId).eq("status", "pending").select("id").maybeSingle();
-      if (reviewError || !reviewed) {
-        console.error(JSON.stringify({ operation: "registration_review", type: "review_update_failed", code: reviewError?.code }));
-        return json({ error: "Could not confirm the review status. Reload the registration list before retrying." }, 409);
-      }
+      // Retain the existing user-email service/template behind the feature flag.
+      // Delivery is never part of the account creation transaction.
+      const notify = async () => {
+        if (customerEmailsEnabled()) await deliverEmail(adminClient, registrationId, "registration_approved", registration.email,
+          "Your Account Has Been Approved", "<h2>Your Account Has Been Approved</h2><p>Your account is ready for initial login. Sign in with your username or email and leave the password blank to create your password on the website.</p>");
+      };
+      if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(notify()); else await notify();
+      return json({ success: true, user_id: account.user_id, must_change_password: true,
+        message: "User approved successfully. The account has been created and is ready for initial login." });
     }
-    // Repeating the same completed review retries only its unsent notification;
-    // it never invites/creates another account or repeats a successful email.
-    const approved = action === "approve";
-    const accepted = await deliverEmail(adminClient, registrationId,
-      approved ? "registration_approved" : "registration_rejected", registration.email,
-      approved ? "Your Account Has Been Approved" : "Registration Update",
-      approved
-        ? `<h2>Your Account Has Been Approved</h2><p>Good news! Your registration has been approved by an administrator.</p><p>${existingAccount ? "You can sign in using your existing account." : "Use your account invitation email to set your password and activate your account."}</p>`
-        : "<h2>Registration Update</h2><p>Your registration request has not been approved at this time. If you believe this was an error, please contact an administrator.</p>",
-    );
-    return json({ success: true, email_accepted: accepted,
-      ...(accepted ? {} : { warning: "The registration review was saved, but its notification email was not confirmed. Check server email logs before retrying the notification." }),
-    });
+    if (registration.status !== "pending") return json({ error: "Registration has already been reviewed" }, 409);
+    const { data: reviewed, error: reviewError } = await adminClient.from("pending_registrations")
+      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: userId })
+      .eq("id", registrationId).eq("status", "pending").select("id").maybeSingle();
+    if (reviewError || !reviewed) return json({ error: "Unable to reject registration. Reload and try again." }, 409);
+    if (customerEmailsEnabled()) await deliverEmail(adminClient, registrationId, "registration_rejected", registration.email,
+      "Registration Update", "<h2>Registration Update</h2><p>Your registration request has not been approved at this time. If you believe this was an error, please contact an administrator.</p>");
+    return json({ success: true, message: "Registration rejected." });
   } catch {
     console.error(JSON.stringify({ operation: "registration_review", type: "unexpected_error" }));
     return json({ error: "Internal server error" }, 500);

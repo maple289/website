@@ -10,6 +10,7 @@ export function safeEmailLog(value: unknown): string {
   return text.replace(/re_[A-Za-z0-9_-]+/g, "[REDACTED]").replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]").slice(0, 600);
 }
 export type EmailResult = { accepted: boolean; status: number; type?: string; message?: string; id?: string };
+export const customerEmailsEnabled = () => Deno.env.get("CUSTOMER_EMAILS_ENABLED") === "true";
 export async function sendEmail(message: { to: string; subject: string; html: string; operation: string; key: string }): Promise<EmailResult> {
   const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
   // Sender identity is separate from the registered admin recipient list.
@@ -71,6 +72,10 @@ async function deliverEmailImpl(client: SupabaseClient, registrationId: string, 
 }
 
 export async function deliverEmail(client: SupabaseClient, registrationId: string, operation: string, to: string, subject: string, html: string): Promise<boolean> {
+  if (!operation.startsWith("admin_") && !customerEmailsEnabled()) {
+    console.info(JSON.stringify({ operation, result: "customer_email_temporarily_disabled" }));
+    return true;
+  }
   try { return await deliverEmailImpl(client, registrationId, operation, to, subject, html); }
   catch { console.error(JSON.stringify({ operation, type: "unexpected_delivery_failure" })); return false; }
 }

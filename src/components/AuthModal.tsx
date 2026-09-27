@@ -15,6 +15,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   useEffect(() => {
     if (!open) {
       setEmail('');
+      setUsername('');
       setFirstName('');
       setLastName('');
       setPassword('');
@@ -57,19 +59,20 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
     setError(null);
     setInfo(null);
 
-    if (!email.trim() || (mode === 'signin' && !password)) {
-      setError(mode === 'signin' ? 'Please enter your email and password.' : 'Please enter your email.');
+    if (!email.trim()) {
+      setError(mode === 'signin' ? 'Please enter your username or email.' : 'Please enter your email.');
       return;
     }
+    if (mode === 'signup' && !/^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/.test(username.trim())) { setError('Username must be 3–32 letters, numbers, underscores or hyphens.'); return; }
 
     setSubmitting(true);
     if (mode === 'signup') {
-      const { error } = await requestRegistration(email.trim(), firstName, lastName);
+      const { error } = await requestRegistration(email.trim(), firstName, lastName, username);
       setSubmitting(false);
       if (error) {
         setError(error);
       } else {
-        setInfo('Your registration request has been submitted. An administrator will review it and email you once your account is approved.');
+        setInfo('Your registration request has been submitted for administrator approval. After approval, sign in with your username or email and leave the password blank to create your password.');
         setTimeout(onClose, 4000);
       }
     } else {
@@ -99,22 +102,25 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           </h2>
           <p className="mt-1.5 text-sm text-[#a5a5a5]">
             {mode === 'signup'
-              ? 'Enter your email to request an account. An admin will review and send you an invitation.'
+              ? 'Request an account for administrator approval. You will create your password on the website after approval.'
               : 'Sign in to continue where you left off.'}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-7 pb-8 pt-6">
+          {mode === 'signup' && <div className="mb-4"><label htmlFor="registration-username" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Username</label>
+            <input id="registration-username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" maxLength={32} disabled={submitting} placeholder="Choose a username" className="h-12 w-full rounded-xl border border-[#3a3a3a] bg-[#121212] px-3 text-[15px]" /></div>}
           {mode === 'signup' && <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={submitting} />}
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Email</label>
+          <label htmlFor="login-identifier" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">{mode === 'signin' ? 'Username or Email' : 'Email'}</label>
           <div className="mb-4 flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
             <Mail className="ml-3.5 text-[#888]" size={18} />
             <input
-              type="email"
+              id="login-identifier"
+              type={mode === 'signup' ? 'email' : 'text'}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              autoComplete="email"
+              autoComplete={mode === 'signup' ? 'email' : 'username'}
               className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#6a6a6a]"
             />
           </div>
@@ -136,6 +142,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+              <p className="mt-2 text-xs leading-5 text-[#999]">First login after approval? Leave the password blank to set it up. Existing accounts require their password.</p>
             </>
           )}
 

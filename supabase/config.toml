@@ -10,6 +10,9 @@ verify_jwt = true
 [functions.notify-admin-registration]
 verify_jwt = false
 
+[functions.account-login]
+verify_jwt = false
+
 [functions.storage-settings]
 verify_jwt = true
 

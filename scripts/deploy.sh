@@ -20,9 +20,7 @@ if grep -q 'replace-with-generated-anon-key' "$app_env"; then
   exit 1
 fi
 
-STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/sync-functions.sh"
-
-docker compose --env-file "$runtime_env" -f "$runtime_compose" -f "$project_root/deploy/supabase-email.compose.yml" -f "$project_root/deploy/supabase-auth.compose.yml" up -d
+docker compose --env-file "$runtime_env" -f "$runtime_compose" -f "$project_root/deploy/supabase-email.compose.yml" -f "$project_root/deploy/supabase-auth.compose.yml" up -d db
 
 attempt=0
 until docker compose --env-file "$runtime_env" -f "$runtime_compose" -f "$project_root/deploy/supabase-email.compose.yml" -f "$project_root/deploy/supabase-auth.compose.yml" exec -T db pg_isready -U postgres -d postgres >/dev/null 2>&1; do
@@ -35,6 +33,8 @@ until docker compose --env-file "$runtime_env" -f "$runtime_compose" -f "$projec
 done
 
 STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/apply-migrations.sh"
+STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/sync-functions.sh"
+docker compose --env-file "$runtime_env" -f "$runtime_compose" -f "$project_root/deploy/supabase-email.compose.yml" -f "$project_root/deploy/supabase-auth.compose.yml" up -d
 docker compose --env-file "$runtime_env" -f "$runtime_compose" -f "$project_root/deploy/supabase-email.compose.yml" -f "$project_root/deploy/supabase-auth.compose.yml" restart functions
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" up -d --build
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" ps

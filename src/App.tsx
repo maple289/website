@@ -15,6 +15,7 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { PhotoLibrary } from '@/components/PhotoLibrary';
 import { PhotoUploadModal } from '@/components/PhotoUploadModal';
 import { SettingsPage } from '@/components/SettingsPage';
+import { InitialPasswordPage } from '@/components/InitialPasswordPage';
 import { FileManager } from '@/components/FileManager';
 
 function App() {
@@ -38,7 +39,7 @@ function getRoute(): Route {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, passwordSetup } = useAuth();
   const { isAdmin } = useAdmin();
   const [route, setRoute] = useState<Route>(getRoute());
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -85,6 +86,10 @@ function AppContent() {
 
   const isAuthed = !!user;
   const uploadsPhoto = route === 'photos' || (route === 'home' && homeTab === 'photos');
+
+  // A setup capability is not an authenticated account session. No application
+  // route is rendered until the server confirms that a password is established.
+  if (passwordSetup) return <InitialPasswordPage />;
 
   // Admin route — always allow AdminPage to handle its own access control
   if (route === 'admin') {

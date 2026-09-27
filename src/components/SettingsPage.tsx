@@ -70,6 +70,7 @@ export function SettingsPage() {
       if (updateError) {
         const messages: Record<string, string> = {
           current_password_mismatch: 'Current password is incorrect.',
+          current_password_invalid: 'Current password is incorrect.',
           current_password_required: 'Please enter your current password.',
           same_password: 'New password must be different from your current password.',
           weak_password: 'New password does not meet the password-security requirements. Choose a stronger password.',

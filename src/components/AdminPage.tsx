@@ -22,6 +22,7 @@ type Profile = {
 };
 
 type PendingRegistration = {
+  username: string | null;
   first_name: string | null;
   last_name: string | null;
   id: string;
@@ -334,6 +335,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
   const [confirmAction, setConfirmAction] = useState<{ reg: PendingRegistration; action: 'approve' | 'reject' } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const activeLoad = useRef<AbortController | null>(null);
 
@@ -346,7 +348,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
     try {
       const { data, error } = await supabase
         .from('pending_registrations')
-        .select('id, email, status, created_at, first_name, last_name')
+        .select('id, username, email, status, created_at, first_name, last_name')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .abortSignal(controller.signal);
@@ -386,6 +388,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
     if (!confirmAction) return;
     setActionId(confirmAction.reg.id);
     setError(null);
+    setNotice(null);
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(approveFnUrl, {
@@ -401,6 +404,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
         return;
       }
       setError(data.warning ?? null);
+      setNotice(data.message ?? 'Registration updated successfully.');
       // Prevent an older list response from restoring the just-reviewed request.
       const controller = activeLoad.current;
       activeLoad.current = null;
@@ -429,6 +433,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
       </div>
 
       {loadError && <p role="alert" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">{loadError}</p>}
+      {notice && <p role="status" className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">{notice}</p>}
       {error && (
         <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
       )}
@@ -452,7 +457,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">
                       {(reg.email ?? '?').charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{reg.email}</p><p className="mt-1 text-xs text-[#999]">First Name: {reg.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {reg.last_name || '—'}</p></div>
+                    <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{reg.email}</p><p className="mt-1 text-xs text-[#999]">Username: {reg.username || reg.email.split('@')[0]}</p><p className="mt-1 text-xs text-[#999]">First Name: {reg.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {reg.last_name || '—'}</p></div>
                   </div>
                 </td>
                 <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
@@ -514,7 +519,7 @@ function ConfirmApprovalModal({ email, action, saving, onClose, onConfirm }: { e
           </h2>
           <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
             {isApprove ? (
-              <>Are you sure you want to approve the registration for <span className="font-semibold text-white">{email}</span>? An account will be created and they will be able to sign in immediately.</>
+              <>Approve <span className="font-semibold text-white">{email}</span>? A standard User account will be created. Their first sign-in with a blank password will require password setup before they can use the account. No email will be sent to the applicant while user emails are disabled.</>
             ) : (
               <>Are you sure you want to reject the registration for <span className="font-semibold text-white">{email}</span>? No account will be created.</>
             )}
