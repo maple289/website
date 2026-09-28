@@ -23,6 +23,19 @@ Private owner-only job cards show Processing, Ready or Processing Failed. Closin
 
 Deploy schema, worker and frontend together using the existing deployment script. FFmpeg/FFprobe are already installed by the media-worker Dockerfile, so there is no need to install a separate JavaScript codec library or FFmpeg on the host. The worker remains isolated from the web request, with two processing slots.
 
-This revision has not been deployed. TypeScript compilation was checked; no new runtime conversion/browser test run was performed for this revision. The earlier validation report describes the previous processing policy, not proof of the new rate-control/resize/copy behavior.
+The deployed system was checked through the live authenticated upload, queue, storage and playback APIs and the HTTPS browser interface. A live failure was found: measured bitrate was a decimal while the existing database column requires an integer. The worker now rounds measured kb/s for that column (source metadata retains precision). The corrected worker was rebuilt and restarted successfully on the server. The repository correction must also be committed/pushed so future deployments retain it.
+
+Live results:
+
+- Standard User account, private ownership, original retention, final MP4 playback, H.264/AAC, preserved frame rate and fast-start layout: passed.
+- Low-bitrate 720p MP4: stream-copied without video re-encoding, 1280x720, measured approximately 579 kb/s.
+- High-bitrate 720p MP4: transcoded, 1280x720; four-second fixture measured 2713 kb/s.
+- 4K MKV: transcoded to 1920x1080; one-second fixture measured 2752 kb/s.
+- Portrait MOV: transcoded proportionally to 606x1080; one-second fixture measured 2874 kb/s.
+- These very short samples illustrate VBV/startup and container timing effects: the encoder target is 2500 kb/s, not a guarantee that every short file averages exactly that rate. Measured AAC rates were 122–126 kb/s for a 128 kb/s target.
+- Direct final-bucket upload and direct Ready-row insertion by the standard user: rejected. Forged executable bytes reported as video: rejected, no gallery row, source retained privately.
+- Actual HTTPS browser sign-in, gallery Ready/error states, processed playback, file-picker upload, background queue handoff and automatic Ready refresh: passed; no browser JavaScript runtime errors during the authenticated test.
+- Six worker regression tests passed, including a fractional-bitrate fixture that asserts integer persistence.
+- Both dedicated synthetic test accounts and all their test media/records were removed after success. Existing user content was not changed.
 
 References: [FFmpeg encoder/muxer options](https://www.ffmpeg.org/ffmpeg-all.html), [scale filter and aspect handling](https://ffmpeg.org/ffmpeg-filters.html), [timestamp/frame-rate options](https://ffmpeg.org/ffmpeg.html).

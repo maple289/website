@@ -118,7 +118,7 @@ def process(job):
                 upload('user-videos',full(processed,'user-videos'),directory/'stream.mp4','video/mp4',created)
                 upload('user-images',full(preview,'user-images'),preview_source,'image/webp',created)
                 record.update(storage_path=original,processed_storage_path=processed,preview_path=preview,processing_status='ready',
-                    container_format=metadata['format'],video_codec=metadata['video_codec'],video_bitrate=metadata['video_bitrate'],
+                    container_format=metadata['format'],video_codec=metadata['video_codec'],video_bitrate=round(metadata['video_bitrate']) if metadata['video_bitrate'] is not None else None,
                     frame_rate=metadata['frame_rate'],source_metadata=metadata['source_metadata'],
                     processing_action=metadata['processing_action'],audio_codec=metadata['audio_codec'],audio_bitrate=metadata['audio_bitrate'],
                     processed_file_size=(directory/'stream.mp4').stat().st_size,

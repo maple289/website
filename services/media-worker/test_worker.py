@@ -19,7 +19,7 @@ class PublicationTests(unittest.TestCase):
         def validate(kind,source,directory):
             if invalid:raise ValueError('Not a decodable image.')
             (directory/'stream.mp4').write_bytes(b'fixture')
-            return dict(video_codec='h264',video_bitrate=2500,frame_rate=25,source_metadata={},processing_action='transcoded',audio_codec=None,audio_bitrate=None,extension='jpg',mime_type='image/jpeg',width=64,height=48,format='mov',duration_seconds=1)
+            return dict(video_codec='h264',video_bitrate=2500.125,frame_rate=25,source_metadata={},processing_action='transcoded',audio_codec=None,audio_bitrate=None,extension='jpg',mime_type='image/jpeg',width=64,height=48,format='mov',duration_seconds=1)
         with tempfile.TemporaryDirectory() as tmp:
             real_temp=tempfile.TemporaryDirectory
             with patch.object(worker.tempfile,'TemporaryDirectory',side_effect=lambda **kw:real_temp(dir=tmp)),patch.object(worker,'api',side_effect=api),patch.object(worker,'download',return_value=64),patch.object(worker,'validate',side_effect=validate),patch.object(worker,'upload',side_effect=lambda bucket,path,source,mime,created:(uploads.append(path),created.append((bucket,path)))),patch.object(worker,'remove',side_effect=lambda bucket,paths:removals.append((bucket,paths))):
@@ -38,6 +38,8 @@ class PublicationTests(unittest.TestCase):
     def test_video_has_processed_path(self):
         calls,_,_=self.scenario(kind='video')
         record=next(kw['json'] for method,path,kw in calls if method=='POST' and path=='/rest/v1/videos')
+        self.assertIsInstance(record['video_bitrate'],int)
+        self.assertEqual(record['video_bitrate'],2500)
         self.assertEqual(record['processing_status'],'ready');self.assertTrue(record['processed_storage_path'].endswith('/stream.mp4'))
     def test_ambiguous_commit_never_deletes_final_media(self):
         for mode in ['fail_insert','fail_status']:
