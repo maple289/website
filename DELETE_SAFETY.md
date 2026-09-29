@@ -8,7 +8,8 @@ requests; errors leave the dialog open for Cancel or retry.
 
 | Surface | Guarded operation | Server authorization |
 | --- | --- | --- |
-| Video gallery cards | Permanent video, stored versions and preview deletion | Media/storage ownership policies |
+| Video gallery cards | Permanent video, stored versions and preview deletion | `delete-video` validates session; owner-bound RPCs, worker cancellation and storage cleanup precede record deletion |
+| Video processing cards | Cancel/delete queued, running or failed uploads | Same confirmed `delete-video` operation; waits for worker acknowledgement before cleanup |
 | Photo gallery cards | Permanent photo, preview and thumbnail deletion | Media/storage ownership policies |
 | File Manager menus and right-click menus | Move files/folders to Trash | Owner-only metadata policy |
 | Trash rows and menus | Permanently delete files/folders and contents | Owner-only storage and metadata policies |
@@ -30,6 +31,14 @@ Media records are retained until storage cleanup succeeds. Storage and database
 operations are not one distributed transaction: partial storage failures are
 reported explicitly and retries can finish the cleanup. Folder/bulk failures reload
 actual state, retain remaining selections, and skip fully completed targets on retry.
+
+Video deletion retains a private server-only tombstone to prevent late publication.
+The server removes the original, processed video, all previews under the video's
+directory, related preview jobs and staging objects using their actual Storage
+catalog keys (including Admin-configured base directories). It verifies the catalog
+is empty before deleting records. Cancelled worker tasks terminate the decoder
+process group and release their local temporary directory before acknowledging.
+Completed upload jobs only refresh the video gallery; they never render Ready cards.
 
 Other `.remove()` calls in uploads roll back newly created, uncommitted files after
 failed uploads; they never implement a user-facing Delete action. JavaScript

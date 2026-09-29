@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.queue-media-upload]
 verify_jwt = true
+
+[functions.delete-video]
+verify_jwt = true

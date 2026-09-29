@@ -1,22 +1,34 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import worker
 
 OWNER='11111111-1111-4111-8111-111111111111'
 class PublicationTests(unittest.TestCase):
-    def scenario(self,kind='photo',invalid=False,fail_insert=False,fail_status=False,rejected=False):
+    def test_cancellation_terminates_decoder_process_group(self):
+        process=MagicMock(pid=321)
+        process.communicate.side_effect=[worker.subprocess.TimeoutExpired('validator',2),(b'',b'')]
+        with patch.object(worker.subprocess,'Popen',return_value=process), \
+             patch.object(worker,'check_cancelled',side_effect=[None,worker.CancelledUpload('cancel')]), \
+             patch.object(worker.os,'killpg') as kill:
+            with self.assertRaises(worker.CancelledUpload):
+                worker.validate('video',Path('/tmp/source'),Path('/tmp/output'),'test-job')
+            kill.assert_called_once_with(321,worker.signal.SIGKILL)
+            self.assertEqual(process.communicate.call_count,2)
+
+    def scenario(self,kind='photo',invalid=False,fail_insert=False,fail_status=False,rejected=False,cancelled=False):
         calls=[];removals=[];uploads=[]
         job=dict(id='55555555-5555-4555-8555-555555555555',owner_id=OWNER,kind=kind,file_name='fixture',visibility='private',has_preview=False,target_video_id='33333333-3333-4333-8333-333333333333')
         def api(method,path,**kwargs):
             calls.append((method,path,kwargs))
             if 'storage_settings' in path:return [{}]
+            if method=='GET' and 'media_upload_jobs' in path:return [{'status':'cancelling' if cancelled else 'processing'}]
             if 'profiles' in path:return [{'email':'fixture@example.test'}]
             if method=='POST' and rejected:raise worker.RejectedRequest('A photo with this name already exists.')
             if method=='POST' and fail_insert:raise ConnectionError('ambiguous database response')
             if method=='PATCH' and kwargs['json'].get('status')=='complete' and fail_status:raise ConnectionError('ambiguous status response')
-        def validate(kind,source,directory):
+        def validate(kind,source,directory,job_id=None):
             if invalid:raise ValueError('Not a decodable image.')
             (directory/'stream.mp4').write_bytes(b'fixture')
             return dict(video_codec='h264',video_bitrate=2500.125,frame_rate=25,source_metadata={},processing_action='transcoded',audio_codec=None,audio_bitrate=None,extension='jpg',mime_type='image/jpeg',width=64,height=48,format='mov',duration_seconds=1)
@@ -25,6 +37,13 @@ class PublicationTests(unittest.TestCase):
             with patch.object(worker.tempfile,'TemporaryDirectory',side_effect=lambda **kw:real_temp(dir=tmp)),patch.object(worker,'api',side_effect=api),patch.object(worker,'download',return_value=64),patch.object(worker,'validate',side_effect=validate),patch.object(worker,'upload',side_effect=lambda bucket,path,source,mime,created:(uploads.append(path),created.append((bucket,path)))),patch.object(worker,'remove',side_effect=lambda bucket,paths:removals.append((bucket,paths))):
                 worker.process(job)
         return calls,removals,uploads
+    def test_cancelled_never_published_and_acknowledged(self):
+        calls,removed,uploaded=self.scenario(kind='video',cancelled=True)
+        self.assertFalse(uploaded)
+        self.assertFalse(any(method=='POST' for method,_,_ in calls))
+        self.assertTrue(any(kw['json'].get('status')=='cancelled' for method,_,kw in calls if method=='PATCH'))
+        self.assertIn('media-staging',[bucket for bucket,_ in removed])
+
     def test_invalid_never_published(self):
         calls,removed,uploaded=self.scenario(invalid=True)
         self.assertFalse(uploaded);self.assertFalse(any(method=='POST' for method,_,_ in calls))

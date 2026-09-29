@@ -2,6 +2,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,14 @@ logging.basicConfig(level=logging.INFO,format='%(message)s')
 
 class RejectedRequest(ValueError):
     pass
+
+class CancelledUpload(ValueError):
+    pass
+
+def check_cancelled(job_id):
+    rows=api('GET','/rest/v1/media_upload_jobs?id=eq.'+job_id+'&select=status')
+    if not rows or rows[0]['status'] in ('cancelling','cancelled'):
+        raise CancelledUpload('Video deletion requested.')
 
 def api(method, path, **kwargs):
     headers = {**HEADERS, **kwargs.pop('headers',{})}
@@ -57,13 +66,29 @@ def upload(bucket,path,source,mime,created):
 def remove(bucket,paths):
     if paths: api('DELETE','/storage/v1/object/'+bucket,json={'prefixes':paths})
 
-def validate(kind,source,directory):
+def validate(kind,source,directory,job_id=None):
     command=[sys.executable,str(Path(__file__).with_name('validate.py')),kind,str(source),str(directory)]
-    result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=7620 if kind=='video' else 120,
-                          env={'PATH':os.environ.get('PATH',''),'HOME':'/tmp','PYTHONUNBUFFERED':'1'})
-    try: metadata=json.loads(result.stdout)
+    process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,
+                             env={'PATH':os.environ.get('PATH',''),'HOME':'/tmp','PYTHONUNBUFFERED':'1'})
+    deadline=time.monotonic()+(7620 if kind=='video' else 120)
+    try:
+        while True:
+            if job_id: check_cancelled(job_id)
+            if time.monotonic()>deadline: raise ValueError('Media processing timed out.')
+            try:
+                stdout,_=process.communicate(timeout=2)
+                break
+            except subprocess.TimeoutExpired: continue
+    except BaseException:
+        # Terminate the validator and its FFmpeg descendants before releasing
+        # the job for deletion or removing its temporary directory.
+        try: os.killpg(process.pid,signal.SIGKILL)
+        except ProcessLookupError: pass
+        process.communicate()
+        raise
+    try: metadata=json.loads(stdout)
     except Exception: raise ValueError('Media decoding failed or exceeded processing limits.')
-    if result.returncode or metadata.get('error'): raise ValueError(metadata.get('error','Media validation failed.'))
+    if process.returncode or metadata.get('error'): raise ValueError(metadata.get('error','Media validation failed.'))
     return metadata
 
 def process(job):
@@ -73,12 +98,15 @@ def process(job):
     published=False
     publication_attempted=False
     error=None
+    cancelled=False
     try:
         with tempfile.TemporaryDirectory(prefix='media-',dir='/work') as temporary:
             directory=Path(temporary)
             source=directory/'source'
             size=download(prefix+'/source',source,10*1024**3 if kind=='video' else 25*1024**2)
-            metadata=validate(kind,source,directory)
+            check_cancelled(jid)
+            metadata=validate(kind,source,directory,jid)
+            check_cancelled(jid)
             rows=api('GET','/rest/v1/storage_settings?id=eq.1&select=videos_base_path,images_base_path') or [{}]
             settings=rows[0]
             def full(path,bucket):
@@ -111,7 +139,7 @@ def process(job):
                     custom=directory/'custom'
                     custom.mkdir()
                     download(prefix+'/preview',custom/'source',25*1024**2)
-                    validate('photo',custom/'source',custom)
+                    validate('photo',custom/'source',custom,jid)
                     preview_source=custom/'preview.webp'
                 else: preview_source=directory/'preview.webp'
                 upload('user-videos',full(original,'user-videos'),source,metadata['mime_type'],created)
@@ -132,6 +160,12 @@ def process(job):
             published=True  # A preview now has a validated result usable by its owner.
             LOG.info(json.dumps({'operation':'media_validation','id':jid,'result':'complete','kind':kind}))
     except Exception as cause:
+        try:
+            check_cancelled(jid)
+        except CancelledUpload:
+            cancelled=True
+        except Exception:
+            pass  # An unavailable API cannot prove that cleanup is safe.
         # Never relay provider response bodies, paths, credentials, or decoder logs.
         error=str(cause) if isinstance(cause,ValueError) else 'Could not validate or save this file. It may be corrupted, unsupported, or exceed processing limits.'
         if isinstance(cause,RejectedRequest): publication_attempted=False
@@ -149,9 +183,17 @@ def process(job):
     finally:
         # Retain a failed video's original in private staging for recovery.
         # Successful videos also retain their original in final video storage.
-        if kind != 'video' or published:
+        if kind != 'video' or published or cancelled:
             try: remove('media-staging',[prefix+'/source',prefix+'/preview'])
             except Exception: LOG.error(json.dumps({'operation':'staging_cleanup','id':jid,'result':'error'}))
+        # All local processing/files are stopped now. The deletion endpoint owns
+        # final storage cleanup (including ambiguous upload responses).
+        try:
+            check_cancelled(jid)
+        except CancelledUpload:
+            job_update(jid,status='cancelled',result=None,error=None)
+        except Exception:
+            LOG.error(json.dumps({'operation':'media_cancel_status','id':jid,'result':'error'}))
 
 def main():
     if not URL or not KEY: raise RuntimeError('Media worker server credentials are not configured')
