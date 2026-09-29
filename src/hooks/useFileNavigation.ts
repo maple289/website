@@ -23,7 +23,7 @@ function readLocation(guest: boolean): Location {
     folder: view === 'shared' ? '' : query.get('folder') ?? '', sharedFolder: view === 'shared' ? query.get('folder') ?? '' : '' };
 }
 
-function urlFor(location: Location): string {
+function urlFor(location: Location, basePath: string): string {
   const query = new URLSearchParams();
   if (location.publicFolder) query.set('public', location.publicFolder.path);
   else {
@@ -31,10 +31,10 @@ function urlFor(location: Location): string {
     const path = location.view === 'shared' ? location.sharedFolder : location.folder;
     if (path) query.set('folder', path);
   }
-  return `#/files${query.size ? `?${query}` : ''}`;
+  return `${basePath}${query.size ? `?${query}` : ''}`;
 }
 
-export function useFileNavigation(guest: boolean, onNavigate: () => void) {
+export function useFileNavigation(guest: boolean, onNavigate: () => void, basePath = '#/files') {
   const [location, setLocation] = useState(() => readLocation(guest));
   const onNavigateRef = useRef(onNavigate);
   onNavigateRef.current = onNavigate;
@@ -42,14 +42,14 @@ export function useFileNavigation(guest: boolean, onNavigate: () => void) {
 
   useEffect(() => {
     const sync = () => {
-      if (window.location.hash.split('?')[0] !== '#/files') return;
+      if (window.location.hash.split('?')[0] !== basePath) return;
       const next = readLocation(guest);
-      const url = urlFor(next);
+      const url = urlFor(next, basePath);
       if (!window.history.state?.[marker]) {
         // A pasted/deep-linked folder needs a Files root behind it, otherwise
         // the first browser Back would leave Files immediately.
-        replaceAppHistory({ ...window.history.state, [marker]: {} }, '#/files');
-        if (url !== '#/files') pushAppHistory({ [marker]: { publicFolder: next.publicFolder } }, url);
+        replaceAppHistory({ ...window.history.state, [marker]: {} }, basePath);
+        if (url !== basePath) pushAppHistory({ [marker]: { publicFolder: next.publicFolder } }, url);
       } else if (url !== window.location.hash) {
         // Drop invalid or inapplicable parameters, including a signed-in
         // user's folder URL after switching to guest access.
@@ -65,17 +65,17 @@ export function useFileNavigation(guest: boolean, onNavigate: () => void) {
     window.addEventListener('popstate', sync);
     window.addEventListener('hashchange', sync);
     return () => { window.removeEventListener('popstate', sync); window.removeEventListener('hashchange', sync); };
-  }, [guest]);
+  }, [guest, basePath]);
 
   const navigate = useCallback((next: Partial<Location>) => {
     const destination = { ...root, ...next };
-    const url = urlFor(destination);
+    const url = urlFor(destination, basePath);
     if (url === window.location.hash) return;
     pushAppHistory({ [marker]: { publicFolder: destination.publicFolder } }, url);
     lastUrl.current = url;
     onNavigateRef.current();
     setLocation(destination);
-  }, []);
+  }, [basePath]);
 
   return { ...location, navigate, back: () => window.history.back(), forward: () => window.history.forward() };
 }

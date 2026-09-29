@@ -27,13 +27,14 @@ function App() {
   );
 }
 
-type Route = 'home' | 'library' | 'photos' | 'files' | 'admin' | 'settings';
+type Route = 'home' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings';
 
 function getRoute(): Route {
   const hash = window.location.hash;
   if (hash === '#/admin') return 'admin';
   if (hash === '#/library') return 'library';
   if (hash === '#/photos') return 'photos';
+  if (hash.split('?')[0] === '#/public-files') return 'public-files';
   if (hash.split('?')[0] === '#/files') return 'files';
   if (hash === '#/settings') return 'settings';
   return 'home';
@@ -62,7 +63,7 @@ function AppContent() {
 
   // Redirect: if not signed in and trying to access library, go home
   useEffect(() => {
-    if (!loading && !user && (route === 'library' || route === 'photos')) {
+    if (!loading && !user && (route === 'library' || route === 'photos' || route === 'files')) {
       window.location.hash = '';
       setRoute('home');
     }
@@ -76,6 +77,7 @@ function AppContent() {
     if (r === 'home') window.location.hash = '';
     else if (r === 'library') window.location.hash = '#/library';
     else if (r === 'photos') window.location.hash = '#/photos';
+    else if (r === 'public-files') window.location.hash = '#/public-files';
     else if (r === 'files') window.location.hash = '#/files';
     else if (r === 'admin') window.location.hash = '#/admin';
     else if (r === 'settings') window.location.hash = '#/settings';
@@ -86,6 +88,7 @@ function AppContent() {
   const openSignIn = () => { setAuthMode('signin'); setAuthOpen(true); };
 
   const isAuthed = !!user;
+  const isFilesRoute = route === 'files' || route === 'public-files';
   const uploadsPhoto = route === 'photos' || (route === 'home' && homeTab === 'photos');
 
   // A setup capability is not an authenticated account session. No application
@@ -182,9 +185,9 @@ function AppContent() {
       )}
 
       {/* Main content */}
-      <main className={`${route !== 'files' ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {(route === 'library' || route === 'photos') && <div className="mg-page mg-page-nav"><MediaTabs active={route === 'photos' ? 'photos' : 'videos'} onSelect={(tab) => navigate(tab === 'files' ? 'files' : tab === 'photos' ? 'photos' : 'library')} /></div>}
-        {route === 'files' ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab !== 'files') { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && <FileManager key={user?.id ?? 'guest'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('files')} /></FileDropArea>}
+      <main className={`${!isFilesRoute ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
+        {(route === 'library' || route === 'photos') && <div className="mg-page mg-page-nav"><MediaTabs active={route === 'photos' ? 'photos' : 'videos'} onSelect={(tab) => navigate(tab === 'files' ? 'public-files' : tab === 'photos' ? 'photos' : 'library')} /></div>}
+        {isFilesRoute ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab === 'files') navigate('public-files'); else { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('public-files')} /></FileDropArea>}
       </main>
 
       {/* Auth modal */}
@@ -192,12 +195,12 @@ function AppContent() {
 
       {/* Upload modal */}
       {showUpload && isAuthed && (
-        <div className={route !== 'files' ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} /></div></div>
+        <div className={!isFilesRoute ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} /></div></div>
       )}
 
       {/* Photo upload modal */}
       {showPhotoUpload && isAuthed && (
-        <div className={route !== 'files' ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} /></div></div>
+        <div className={!isFilesRoute ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} /></div></div>
       )}
 
     </div>

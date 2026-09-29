@@ -41,8 +41,11 @@ const fileIcon = (entry: Entry, size = 24) => {
   return <File size={size} className="text-slate-400" />;
 };
 
-export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: string; onSearchTermChange: (value: string) => void }) {
-  const { user } = useAuth();
+export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false }: { searchTerm: string; onSearchTermChange: (value: string) => void; publicOnly?: boolean }) {
+  const { user: authenticatedUser } = useAuth();
+  // Public browsing always uses the public RPC, including for signed-in owners.
+  // This scope also keeps tree loading, search and management controls read-only.
+  const user = publicOnly ? null : authenticatedUser;
   const { requestDelete } = useDeleteConfirmation();
   const guest = !user;
   const [shareEntry, setShareEntry] = useState<Entry | null>(null);
@@ -89,7 +92,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
     setEntries([]); setTreeEntries([]); setSelected([]); setMenu(null); setDetails(null); setPreview(null);
     setSharedOffset(0); setSharedHasMore(false); setRootHasMore(false); setLoading(true);
     onSearchTermChange('');
-  });
+  }, publicOnly ? '#/public-files' : '#/files');
   const goTo = (path: string) => navigate({ folder: path });
 
   useEffect(() => {
@@ -293,7 +296,7 @@ export function FileManager({ searchTerm, onSearchTermChange }: { searchTerm: st
   }, [preview]);
   const totalBytes = metadata.filter((item) => !item.is_folder && !item.trashed_at).reduce((sum, item) => sum + (item.file_size ?? 0), 0);
   const crumbs = folder ? folder.split('/') : [];
-  const title = guest ? publicFolder?.name ?? 'Public files' : view === 'files' ? folder ? 'My Files' : 'All files' : view === 'recent' ? 'Recent' : view === 'favorites' ? 'Favorites' : view === 'shared' ? 'Shared' : 'Trash';
+  const title = guest ? publicFolder?.name ?? 'Public Files Library' : view === 'files' ? folder ? 'My Files' : 'All files' : view === 'recent' ? 'Recent' : view === 'favorites' ? 'Favorites' : view === 'shared' ? 'Shared' : 'Trash';
 
   const register = async (path: string, isFolder: boolean, favorite = false, fileSize = 0, mimeType = '') => {
     const { error: dbError } = await supabase.from('user_file_metadata').upsert({ owner_id: user!.id, object_path: path, is_folder: isFolder, is_favorite: favorite, file_size: fileSize, mime_type: mimeType, updated_at: new Date().toISOString() }, { onConflict: 'owner_id,object_path' });
