@@ -85,6 +85,14 @@ function AppContent() {
     setSidebarOpen(false);
   };
 
+  const openPublicSection = (tab: 'videos' | 'photos' | 'files') => {
+    if (tab === 'files') navigate('public-files');
+    else {
+      setHomeTab(tab);
+      navigate('home');
+    }
+  };
+
   const openSignIn = () => { setAuthMode('signin'); setAuthOpen(true); };
 
   const isAuthed = !!user;
@@ -186,8 +194,8 @@ function AppContent() {
 
       {/* Main content */}
       <main className={`${!isFilesRoute ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {(route === 'library' || route === 'photos') && <div className="mg-page mg-page-nav"><MediaTabs active={route === 'photos' ? 'photos' : 'videos'} onSelect={(tab) => navigate(tab === 'files' ? 'public-files' : tab === 'photos' ? 'photos' : 'library')} /></div>}
-        {isFilesRoute ? <><div className="px-5 lg:px-8"><MediaTabs active="files" onSelect={(tab) => { if (tab === 'files') navigate('public-files'); else { setHomeTab(tab); navigate('home'); } }} /></div>{!loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={setHomeTab} onFiles={() => navigate('public-files')} /></FileDropArea>}
+        {(route === 'library' || route === 'photos') && <div className="mg-page mg-page-nav"><MediaTabs onSelect={openPublicSection} /></div>}
+        {isFilesRoute ? <><div className="px-5 lg:px-8"><MediaTabs active={route === 'public-files' ? 'files' : undefined} onSelect={openPublicSection} /></div>{!loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={openPublicSection} onFiles={() => openPublicSection('files')} /></FileDropArea>}
       </main>
 
       {/* Auth modal */}
@@ -211,6 +219,7 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; labe
   return (
     <button
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
       className={`group flex w-full items-center gap-4 rounded-xl px-3 py-3 text-left transition ${active ? 'bg-[#2a2a2a] font-medium' : 'text-[#c4c4c4] hover:bg-[#202020] hover:text-white'}`}
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>

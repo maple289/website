@@ -105,7 +105,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-export function MediaTabs({ active, onSelect }: { active: Tab | 'files'; onSelect: (tab: Tab | 'files') => void }) {
+export function MediaTabs({ active, onSelect }: { active?: Tab | 'files'; onSelect: (tab: Tab | 'files') => void }) {
   return <nav aria-label="Media navigation" className="mg-tabs flex gap-1 border-b border-[#1a2a4a] pt-6">
     <TabButton active={active === 'videos'} onClick={() => onSelect('videos')} icon={<Film size={18} />} label="Videos" />
     <TabButton active={active === 'photos'} onClick={() => onSelect('photos')} icon={<ImageIcon size={18} />} label="Photos" />
