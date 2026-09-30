@@ -40,6 +40,12 @@ is empty before deleting records. Cancelled worker tasks terminate the decoder
 process group and release their local temporary directory before acknowledging.
 Completed upload jobs only refresh the video gallery; they never render Ready cards.
 
+After confirmed deletion completes, `media-receipt-cleanup` removes orphaned local
+TUS upload-receipt JSON files once their payload is absent. The private tombstone
+retains the upload/preview job IDs needed for this cleanup. The cleaner validates
+the owner, job, version and metadata identity, and never removes media payloads,
+saved uploads, unconfirmed records or receipts whose payload still exists.
+
 Other `.remove()` calls in uploads roll back newly created, uncommitted files after
 failed uploads; they never implement a user-facing Delete action. JavaScript
 Set/Map cleanup does not delete stored application content. There is no separate

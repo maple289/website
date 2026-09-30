@@ -26,7 +26,8 @@ with tempfile.TemporaryDirectory() as temp:
     specs=[('mp4','libx264','mp4'),('mov','libx264','mov'),('avi','mpeg4','avi'),('mkv','libx264','matroska'),('wmv','wmv2','asf'),('webm','libvpx','webm'),('mpg','mpeg2video','mpeg'),('m4v','libx264','mp4'),('3gp','h263','3gp'),('ts','libx264','mpegts'),('mts','libx264','mpegts'),('m2ts','libx264','mpegts'),('ogv','libtheora','ogg'),('flv','flv','flv'),('nut','ffv1','nut')]
     for ext,codec,fmt in specs:
         source=root/('video.'+ext)
-        cmd=['ffmpeg','-nostdin','-v','error','-f','lavfi','-i','testsrc2=size=128x96:rate=25','-t','0.4','-an','-c:v',codec,'-threads','1','-f',fmt,str(source)]
+        audio=['-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-c:a',('wmav2' if ext=='wmv' else 'pcm_s16le' if ext=='avi' else 'aac')] if ext in ['mp4','mov','avi','mkv','wmv'] else ['-an']
+        cmd=['ffmpeg','-nostdin','-v','error','-f','lavfi','-i','testsrc2=size=128x96:rate=25',*audio,'-t','0.4','-c:v',codec,'-threads','1','-f',fmt,str(source)]
         subprocess.run(cmd,check=True)
         destination=root/('video-'+ext);destination.mkdir()
         result=video(source,destination)

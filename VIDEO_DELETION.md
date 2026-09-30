@@ -38,14 +38,11 @@ authenticated video-row deletion is replaced by the server cleanup operation.
 - `tests/video-deletion.sql` exercised the migration and lifecycle in a rolled-back
   server transaction: owner checks, cancellation acknowledgement, blocked late
   completion, persistent tombstones and idempotent retry.
-- Read-only production inspection found one completed orphan job. There were no
-  matching Storage catalog objects or remaining original/converted/preview payloads.
-  A 415-byte TUS upload-receipt JSON remained on the storage filesystem. This is
-  Storage's internal resumable-upload metadata, not a playable file or gallery row;
-  catalog-based deletion cannot enumerate an already orphaned receipt. It was not
-  manually removed. The worker scratch directory contained no conversion folders.
+- Production inspection found a completed orphan job with no remaining media
+  payloads, but with a small TUS upload-receipt JSON. The receipt cleaner now uses
+  completed deletion tombstones to remove these receipts after verifying that
+  their payloads are absent. See `VIDEO_TROUBLESHOOTING.md` for live checks.
 
-No live user content was deleted for these checks. A fresh end-to-end browser
-upload/delete and physical-filesystem verification of the new route remains a
-post-deployment check. A crashed worker may leave cancellation pending; do not
+Only dedicated temporary regression uploads were deleted in the live browser
+checks. A crashed worker may leave cancellation pending; do not
 force-complete such deletion until the old decoder is confirmed stopped.

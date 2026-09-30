@@ -2,6 +2,7 @@ import * as tus from 'tus-js-client';
 import { supabase } from '@/lib/supabase';
 import { dataUrlToBlob } from '@/lib/imageStorage';
 import { validateMediaFile } from '@/lib/mediaValidation';
+import { uploadFailureMessage } from '@/lib/uploadErrors';
 type Options = { file: File; user: { id: string; email?: string }; fileName: string; visibility: 'private' | 'public'; onProgress: (value: number) => void; previewImage?: string | null; onPhase?: (phase: 'Validating' | 'Uploading' | 'Processing') => void };
 
 export async function uploadObject(bucket: string, path: string, file: Blob, mimeType: string, onProgress: (value: number) => void): Promise<{ error: { message: string } | null }> {
@@ -19,14 +20,14 @@ export async function uploadObject(bucket: string, path: string, file: Blob, mim
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) resolve({ error: null });
       else {
-        let message = `Upload failed (${request.status}).`;
-        try { message = JSON.parse(request.responseText).message || message; } catch { /* Keep safe fallback. */ }
+        const message = uploadFailureMessage(request.status);
         resolve({ error: { message } });
       }
     };
-    request.onerror = () => resolve({ error: { message: 'Network error. Please try again.' } });
+    request.onerror = () => resolve({ error: { message: uploadFailureMessage() } });
     request.timeout = 300000;
-    request.ontimeout = () => resolve({ error: { message: 'Upload timed out. Please try again.' } });
+    request.ontimeout = () => resolve({ error: { message: uploadFailureMessage(0, true) } });
+    request.onabort = () => resolve({ error: { message: 'Upload was cancelled before completion.' } });
     request.send(file);
   });
 }
@@ -67,7 +68,7 @@ async function validatedUpload(options: Options, kind: 'video' | 'photo' | 'prev
   const paths: string[] = [];
   try {
     onPhase?.('Uploading');
-    if (file.size > 50 * 1024 * 1024) await uploadLargeFile(file, prefix + '/source', file.type, pct => onProgress(Math.round(pct*.9)));
+    if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, prefix + '/source', file.type, pct => onProgress(Math.round(pct*.9)));
     else {
       const { error } = await uploadObject('media-staging', prefix + '/source', file, file.type, pct => onProgress(Math.round(pct*.9)));
       if (error) throw new Error(error.message);
@@ -150,7 +151,7 @@ async function uploadLargeFile(
         contentType: mimeType || 'application/octet-stream',
         cacheControl: '3600',
       },
-      onError: (error) => reject(error),
+      onError: (error) => reject(new Error(uploadFailureMessage('originalResponse' in error ? error.originalResponse?.getStatus() ?? 0 : 0))),
       onProgress: (bytesUploaded, bytesTotal) => {
         onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100));
       },

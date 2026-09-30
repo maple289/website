@@ -4,6 +4,7 @@ import sys
 import warnings
 import tempfile
 import math
+import re
 from fractions import Fraction
 from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -26,14 +27,37 @@ FORMATS = {'mov': ('mov','video/quicktime'), 'mp4': ('mp4','video/mp4'),
            'mpegts': ('ts','video/mp2t'), 'flv': ('flv','video/x-flv'),
            'ogg': ('ogv','video/ogg'), 'rm': ('rm','application/vnd.rn-realmedia'),
            'mxf': ('mxf','application/mxf'), 'nut': ('nut','video/x-nut')}
-class InvalidMedia(Exception): pass
+MEDIA_CONTEXT = {}
+MEDIA_DIAGNOSTICS = []
+class InvalidMedia(Exception):
+    def __init__(self, message, diagnostic=None):
+        super().__init__(message)
+        self.diagnostic = diagnostic
 
 def run(args, timeout=120):
     try:
-        return subprocess.run(args, check=True, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, timeout=timeout).stdout
+        result=subprocess.run(args, check=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, timeout=timeout)
+        if result.stderr:
+            detail=result.stderr.decode(errors='replace')
+            detail=re.sub(r'https?://\S+|/(?:work|tmp)/\S+', '[redacted]', detail)
+            MEDIA_DIAGNOSTICS.append({'tool':args[0], 'input':MEDIA_CONTEXT, 'stderr':detail})
+        return result.stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        raise InvalidMedia('The file is corrupted, unsupported, or exceeded the processing limit.') from error
+        detail=(getattr(error,'stderr',b'') or b'').decode(errors='replace')
+        # Diagnostics stay server-side. Strip URLs, local paths and control codes.
+        detail=re.sub(r'https?://\S+|/(?:work|tmp)/\S+', '[redacted]', detail)
+        detail=re.sub(r'[\x00-\x08\x0b-\x1f]', '', detail)
+        message='The video could not be decoded. It may be damaged or use an unsupported codec.'
+        if isinstance(error,subprocess.TimeoutExpired): message='Video processing exceeded the time limit. Try a shorter video.'
+        elif 'No space left' in detail: message='The server ran out of processing space. Contact the administrator and retry later.'
+        elif 'Permission denied' in detail: message='The server cannot access its processing files. Contact the administrator.'
+        elif 'Non-monoton' in detail or 'non monoton' in detail: message='The video contains invalid timestamps that could not be repaired.'
+        elif 'Unknown decoder' in detail or 'Decoder not found' in detail: message='The server does not have a decoder for this video codec.'
+        command=[re.sub(r'https?://\S+|/(?:work|tmp)/\S+', '[redacted]', str(arg)) for arg in args]
+        raise InvalidMedia(message, {'tool':args[0], 'command':command, 'input':MEDIA_CONTEXT,
+            'exit_code':getattr(error,'returncode',None),
+            'timeout':isinstance(error,subprocess.TimeoutExpired), 'stderr':detail}) from error
 
 def photo(source, destination):
     try:
@@ -114,12 +138,19 @@ def measured_bitrate(source, stream, duration):
 
 
 def video(source, destination):
+    global MEDIA_CONTEXT, MEDIA_DIAGNOSTICS
+    MEDIA_CONTEXT = {}
+    MEDIA_DIAGNOSTICS = []
     try:
         with Image.open(source):
             raise InvalidMedia('The Videos section accepts video files only, not still or animated images.')
     except UnidentifiedImageError:
         pass
     info = probe(source)
+    MEDIA_CONTEXT = {'container':info.get('format',{}).get('format_name'),
+        'duration':info.get('format',{}).get('duration'), 'source_bytes':source.stat().st_size,
+        'streams':[{key:s.get(key) for key in ('codec_type','codec_name','width','height','pix_fmt','sample_rate','channels')}
+                   for s in info.get('streams',[])]}
     streams = [s for s in info.get('streams', []) if s.get('codec_type') == 'video' and not s.get('disposition', {}).get('attached_pic')]
     if not streams:
         raise InvalidMedia('The file contains no playable video stream.')
@@ -147,8 +178,10 @@ def video(source, destination):
         video_bitrate=round(bitrate / 1000, 3) if bitrate else None, width=width, height=height,
         frame_rate=fps, duration_seconds=duration, audio_codec=audio.get('codec_name') if audio else None,
         audio_bitrate=round(audio_bitrate / 1000, 3) if audio_bitrate else None)
-    command = ['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-err_detect', 'explode',
-        '-protocol_whitelist', 'file', '-format_whitelist', CONTAINERS, '-i', str(source),
+    # Let the source decoder recover damaged frames/packets where possible.
+    # The resulting MP4 still must pass a complete strict decode before release.
+    command = ['ffmpeg', '-nostdin', '-v', 'error',
+        '-fflags', '+genpts+discardcorrupt', '-protocol_whitelist', 'file', '-format_whitelist', CONTAINERS, '-i', str(source),
         '-map', '0:' + str(stream['index']), '-map', '0:a:0?']
     if transcode:
         # Normalize display aspect ratio (including anamorphic sources) without
@@ -159,10 +192,10 @@ def video(source, destination):
             # MP4 does not support x264's nal-hrd=cbr signaling. Filler plus
             # matching VBV rates provides a tightly controlled constant target.
             '-x264-params', 'nal-hrd=vbr:filler=1', '-pix_fmt', 'yuv420p',
-            '-threads', '2', '-fps_mode', 'passthrough', '-metadata:s:v:0', 'rotate=0']
+            '-threads', '2', '-fps_mode', 'vfr', '-metadata:s:v:0', 'rotate=0']
     else:
         command += ['-c:v', 'copy']
-    command += ['-c:a', 'copy'] if copy_audio and not transcode else ['-c:a', 'aac', '-b:a', '128k']
+    command += ['-c:a', 'copy'] if copy_audio and not transcode else ['-af', 'aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '128k']
     playable = destination / 'stream.mp4'
     command += ['-map_metadata', '-1', '-movflags', '+faststart', str(playable)]
     run(command, 3600)
@@ -170,7 +203,8 @@ def video(source, destination):
     output_video = next((s for s in output.get('streams', []) if s.get('codec_type') == 'video'), {})
     output_audio = next((s for s in output.get('streams', []) if s.get('codec_type') == 'audio'), None)
     output_duration = number(output.get('format', {}).get('duration'))
-    if (not output_duration or output_duration > 14400 or output_video.get('codec_name') != 'h264'
+    if (not output_duration or output_duration > 14400 or (duration and output_duration < duration * .98 - 2)
+        or output_video.get('codec_name') != 'h264'
         or output_video.get('width', 0) > 1920 or output_video.get('height', 0) > 1080
         or (output_audio and output_audio.get('codec_name') != 'aac')):
         raise InvalidMedia('The converted video did not meet the playback requirements.')
@@ -188,14 +222,15 @@ def video(source, destination):
         frame_rate=number(output_video.get('avg_frame_rate')) or fps,
         source_metadata=source_metadata, processing_action='transcoded' if transcode else 'remuxed_without_video_reencoding',
         audio_codec=output_audio.get('codec_name') if output_audio else None,
-        audio_bitrate=number(output_audio.get('bit_rate')) / 1000 if output_audio and number(output_audio.get('bit_rate')) else None)
+        audio_bitrate=number(output_audio.get('bit_rate')) / 1000 if output_audio and number(output_audio.get('bit_rate')) else None,
+        diagnostics=MEDIA_DIAGNOSTICS)
 
 if __name__ == '__main__':
     try:
         result = (video if sys.argv[1]=='video' else photo)(Path(sys.argv[2]), Path(sys.argv[3]))
         print(json.dumps(result))
     except InvalidMedia as error:
-        print(json.dumps({'error': str(error)}))
+        print(json.dumps({'error': str(error), 'diagnostic': error.diagnostic}))
         sys.exit(1)
     except Exception:
         print(json.dumps({'error': 'Media validation failed. The file may be corrupted or unsupported.'}))

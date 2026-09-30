@@ -11,6 +11,8 @@ BEGIN
     RAISE EXCEPTION 'Ownership bypass';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   ready := public.begin_video_deletion(jid,owner);
+  IF NOT (SELECT jid=ANY(staging_ids) FROM public.video_deletions WHERE id=jid) THEN
+    RAISE EXCEPTION 'Staging cleanup manifest was not retained'; END IF;
   IF ready THEN RAISE EXCEPTION 'Running worker was not awaited'; END IF;
   UPDATE public.media_upload_jobs SET status='complete' WHERE id=jid;
   IF (SELECT status FROM public.media_upload_jobs WHERE id=jid)<>'cancelling' THEN

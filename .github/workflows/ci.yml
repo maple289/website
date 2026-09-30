@@ -59,3 +59,4 @@ jobs:
         run: |
           docker run --rm --network none --memory 2g --cpus 2 --entrypoint python streamly-media-validation:ci test_validation.py
           docker run --rm --network none --entrypoint python streamly-media-validation:ci test_worker.py
+          docker run --rm --network none --entrypoint python streamly-media-validation:ci test_cleanup_receipts.py

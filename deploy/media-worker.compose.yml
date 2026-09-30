@@ -1,5 +1,6 @@
 services:
   media-worker:
+    image: ${MEDIA_WORKER_IMAGE:-supabase-media-worker}
     build:
       context: ${STREAMLY_PROJECT_ROOT:?Set the absolute project checkout path}/services/media-worker
     restart: unless-stopped
@@ -26,6 +27,35 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  media-receipt-cleanup:
+    image: ${MEDIA_WORKER_IMAGE:-supabase-media-worker}
+    command: ["python", "cleanup_receipts.py"]
+    user: "0:0"
+    restart: unless-stopped
+    environment:
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      GLOBAL_S3_BUCKET: ${GLOBAL_S3_BUCKET}
+      TENANT_ID: ${STORAGE_TENANT_ID}
+    volumes:
+      - ${STREAMLY_STORAGE_ROOT:-./volumes/storage}:/storage
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.2
+    pids_limit: 16
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/receipt-heartbeat') < 150"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   media_scratch:

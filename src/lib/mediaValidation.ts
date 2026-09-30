@@ -8,7 +8,8 @@ export function mediaTypeError(file: Pick<File,'name'|'type'|'size'>, kind: Medi
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   const mime = file.type.toLowerCase();
   const prefix = kind === 'video' ? 'video/' : 'image/';
-  const extra = kind === 'video' && ['application/x-matroska','application/ogg','application/mxf','application/vnd.rn-realmedia'].includes(mime);
+  const extra = kind === 'video' && ['application/x-matroska','application/ogg','application/mxf','application/vnd.rn-realmedia',
+    'application/x-troff-msvideo','application/x-msvideo','application/vnd.ms-asf'].includes(mime);
   const extensions = kind === 'video' ? videoExtensions : photoExtensions;
   const knownMime = mime.startsWith(prefix) || extra;
   if ((!knownMime && !generic.has(mime)) || (!knownMime && !extensions.includes(extension)) || (kind === 'photo' && !extensions.includes(extension))) {

@@ -88,6 +88,10 @@ def validate(kind,source,directory,job_id=None):
         raise
     try: metadata=json.loads(stdout)
     except Exception: raise ValueError('Media decoding failed or exceeded processing limits.')
+    if metadata.get('diagnostic'):
+        LOG.error(json.dumps({'operation':'media_decoder','id':job_id,'diagnostic':metadata['diagnostic']}))
+    for diagnostic in metadata.get('diagnostics',[]):
+        LOG.warning(json.dumps({'operation':'media_decoder_recovery','id':job_id,'diagnostic':diagnostic}))
     if process.returncode or metadata.get('error'): raise ValueError(metadata.get('error','Media validation failed.'))
     return metadata
 
