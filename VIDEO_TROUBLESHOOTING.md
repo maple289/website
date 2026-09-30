@@ -82,3 +82,24 @@ checks and rolled-back SQL tests in `tests/video-deletion.sql` and
 
 FFmpeg options follow the [FFmpeg command documentation](https://ffmpeg.org/ffmpeg.html)
 and [audio resampling documentation](https://ffmpeg.org/ffmpeg-filters.html#aresample-1).
+
+## Follow-up: failed-card buttons were clipped
+
+The original live click test missed a layout defect. Processing cards applied
+both `mg-thumbnail` and `mg-placeholder` to the same element. The placeholder's
+`height: 100%` expanded the grey area to the whole grid card height, pushing its
+name, error and action buttons below the card's `overflow: hidden` boundary.
+The Delete callback existed, but a normal pointer could not reach it. Automated
+`scrollIntoView` used during clicks could scroll the hidden card internally and
+make the test pass despite the inaccessible layout.
+
+Processing placeholders now sit inside a separate thumbnail container, matching
+the existing media-card structure. The thumbnail keeps its 16:9 ratio, and the
+name, failure explanation, Retry and Delete actions fit inside the card. This
+applies to existing uploads as well as newly queued/failed uploads.
+
+`tests/video-processing-cards.mjs` exercises four long-name/error failed cards
+alongside queued and cancelled cards at desktop, tablet and mobile widths. It
+checks action bounds and pointer hit testing before any automated button scroll,
+then clicks the actual visible button coordinates and verifies confirmation,
+Cancel, outside/Escape protection and confirmed removal.

@@ -89,9 +89,11 @@ export function VideoProcessingJobs({ searchTerm, visibleIds }: { searchTerm: st
       <div className="mg-grid">{filtered.map(job => {
         const failed = job.status === 'error';
         return <article key={job.id} data-upload-id={job.id} className="mg-card">
-          <div className="mg-thumbnail mg-video-thumbnail mg-placeholder mg-processing">
+          <div className="mg-thumbnail mg-video-thumbnail">
+            <div className="mg-placeholder mg-processing">
             {failed ? <AlertCircle size={28} /> : <LoaderCircle size={28} className="animate-spin" />}
             <span role="status">{job.status === 'cancelling' || job.status === 'cancelled' ? 'Deletion pending' : failed ? 'Processing Failed' : 'Processing'}</span>
+            </div>
           </div>
           <div className="mg-card-body">
             <h3 className="mg-title" title={job.file_name}>{job.file_name}</h3>
