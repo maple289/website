@@ -37,6 +37,7 @@ try{
     const context=await browser.newContext({viewport:{width,height},hasTouch:touch,isMobile:touch});
     const page=await context.newPage(),errors=[],writes=[];
     let failNext=false,delayNext=false;
+    let detailNames=['Alexander','river'];
     page.on('pageerror',error=>errors.push(error.message));
     const entries=new Map();
     const entry=(type,id)=>{
@@ -60,7 +61,7 @@ try{
         if(data.p_reaction)value.counts[data.p_reaction]=(value.counts[data.p_reaction]??0)+1;
         value.own=data.p_reaction;return route.fulfill({json:null});
       }
-      if(operation==='get_media_reaction_users')return route.fulfill({json:[{user_id:'11111111-1111-4111-8111-111111111111',display_name:'Alex'},{user_id:'44444444-4444-4444-8444-444444444444',display_name:'river'}]});
+      if(operation==='get_media_reaction_users')return route.fulfill({json:detailNames.map((display_name,index)=>({user_id:index?'44444444-4444-4444-8444-444444444444':'11111111-1111-4111-8111-111111111111',display_name}))});
       if(operation==='get_storage_base_path')return route.fulfill({json:''});
       if(operation==='serve-media')return route.fulfill({json:{url:base+'/tests/fixtures/media-valid.mp4'}});
       if(url.pathname.startsWith('/storage/v1/object/sign/')&&request.method()==='POST')return route.fulfill({json:{signedURL:'/object/sign/user-images/fixture/photo.svg?token=fixture'}});
@@ -155,16 +156,40 @@ try{
       pass(label+': '+kind+' same menu reaction toggles off');
       const writesBeforeDetails=writes.length;
       await act(card.locator('.reaction-summary button').first());
-      const details=page.getByRole('region',{name:'Like reactions',exact:true});await details.waitFor();await details.getByText('Alex',{exact:true}).waitFor();
+      const details=page.getByRole('region',{name:'Like reactions',exact:true});await details.waitFor();await details.getByText('Alexander',{exact:true}).waitFor();
       assert.equal(await details.getByText(/@/).count(),0,'details display names only');
       assert.equal(await details.locator('header button,svg,[aria-label*="Remove"],[aria-label*="Delete"]').count(),0,'details contain no close/delete/remove icons or actions');
-      await act(details.getByText('Alex',{exact:true}));
+      await act(details.getByText('Alexander',{exact:true}));
       assert.equal(writes.length,writesBeforeDetails,'informational details never change a reaction');
       const detailsBox=await details.boundingBox();
+      assert.ok(detailsBox.width<180,'short names produce a compact content-sized popup');
+      const aligned=await details.evaluate(node=>Math.abs(node.querySelector('strong').getBoundingClientRect().left-node.querySelector('li').getBoundingClientRect().left)<1);
+      assert.ok(aligned,'reaction title and user names share the same left alignment');
       assert.ok(detailsBox.x>=0&&detailsBox.x+detailsBox.width<=width+1&&detailsBox.y>=0&&detailsBox.y+detailsBox.height<=height+1,'details stay within visible viewport');
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'popover must not broaden mobile viewport');
       await act(page.getByRole('heading',{name:'Compact reactions',exact:true}));await details.waitFor({state:'detached'});
       pass(label+': '+kind+' informational details without close/delete icons, outside dismissal');
+      if(kind==='photo'){
+        detailNames=['Alexander Catherine Montgomery'];
+        await act(card.locator('.reaction-summary button').first());
+        await details.getByText(detailNames[0],{exact:true}).waitFor();
+        const longerBox=await details.boundingBox();
+        assert.ok(longerBox.width>detailsBox.width+40&&longerBox.width<=280.5,'longer names expand the popup only up to its maximum width');
+        await act(page.getByRole('heading',{name:'Compact reactions',exact:true}));await details.waitFor({state:'detached'});
+        detailNames=['Alexandria'.repeat(40)];
+        await act(card.locator('.reaction-summary button').first());
+        await details.getByText(detailNames[0],{exact:true}).waitFor();
+        const wrapped=await details.evaluate(node=>{
+          const item=node.querySelector('li'),people=node.querySelector('.reaction-people'),box=node.getBoundingClientRect();
+          return {width:box.width,right:box.right,height:item.getBoundingClientRect().height,lineHeight:parseFloat(getComputedStyle(item).lineHeight),scrollWidth:people.scrollWidth,clientWidth:people.clientWidth};
+        });
+        assert.ok(wrapped.width<=Math.min(280,width-16)+.5&&wrapped.right<=width+1,'extremely long names remain bounded within the viewport');
+        assert.ok(wrapped.height>wrapped.lineHeight*2,'extremely long names wrap');
+        assert.ok(wrapped.scrollWidth<=wrapped.clientWidth,'wrapped names do not create horizontal scrolling');
+        await act(page.getByRole('heading',{name:'Compact reactions',exact:true}));await details.waitFor({state:'detached'});
+        detailNames=['Alexander','river'];
+        pass(label+': content-sized details expand for longer names and wrap extreme names');
+      }
       if(touch){
         const summary=card.locator('.reaction-summary');
         // Outside dismissal may scroll the gallery to the heading. Native
