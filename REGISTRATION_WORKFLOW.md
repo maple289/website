@@ -5,10 +5,16 @@ Registration submits email and optional profile names to
 delivery starts. Recipients come from profiles with the `admin` role. Delivery
 errors are recorded independently and never roll back a saved registration.
 
-The form confirms receipt of the submission with privacy-preserving wording.
-An existing account or previously reviewed request does not create a new pending
-registration or send another email. A rejected request keeps its administrator
-decision; reopening it requires an explicit administrator decision.
+The backend checks for an existing account before saving a request. It returns
+HTTP 409 with `EMAIL_ALREADY_REGISTERED`, `REGISTRATION_ALREADY_PENDING` or
+`REGISTRATION_ALREADY_REVIEWED` when the address is already in use. The form
+displays a warning, retains the entered fields and allows another email to be
+submitted. Successful new requests disable repeat submission.
+Existing accounts and reviewed requests receive no new notifications. A duplicate
+pending request may retry unsent notifications through the existing delivery
+ledger, without creating another request or duplicating accepted emails. A rejected
+request keeps its administrator decision; reopening it requires an explicit
+administrator decision.
 
 `ADMIN_NOTIFICATION_RECIPIENTS` optionally limits these recipients to a
 comma-separated list of registered administrator addresses without changing their

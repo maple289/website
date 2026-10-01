@@ -61,7 +61,7 @@ const client = {
     };
     return builder;
   },
-  async rpc(name, args) { try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id ?? args.p_registration_id]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
+  async rpc(name, args) { try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id ?? args.p_registration_id ?? args.p_email]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
 };
 globalThis.__emailTestClient = client;
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString('base64');
@@ -71,6 +71,8 @@ try {
     CREATE TABLE profiles(id uuid DEFAULT gen_random_uuid(), email text, role text);
     INSERT INTO profiles(email,role) VALUES ('admin-one@example.test','admin'),('admin-two@example.test','admin'),('member@example.test','user');`);
   await db.query("UPDATE profiles SET id=$1 WHERE email='admin-one@example.test'", [adminId]);
+  await db.exec('CREATE SCHEMA auth; CREATE TABLE auth.users(email text);');
+  await db.exec(await readFile(new URL('../supabase/migrations/20260930200000_registration_email_check.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20260924050000_registration_email_delivery.sql', import.meta.url), 'utf8'));
   await db.exec(`ALTER TABLE registration_email_deliveries DROP CONSTRAINT registration_email_deliveries_registration_id_fkey;
     ALTER TABLE registration_email_deliveries ADD COLUMN plain_text text; ALTER TABLE registration_email_deliveries ADD COLUMN sender text;
@@ -106,7 +108,7 @@ try {
   check(sent[0].body.html.includes('https://myhostage.ca/video/') && sent[0].body.html.includes('pending administrator approval'), true, 'receipt identifies website and pending status');
   check(sent[1].body.html.includes('&lt;script&gt;'), true, 'admin names are HTML escaped');
   check(sent.every((mail) => mail.body.from === 'Streamly <mail@example.test>'), true, 'configured sender used');
-  await submit('new@example.test');
+  check((await submit('new@example.test')).status, 409, 'duplicate pending request displays a warning');
   check(sent.length, 3, 'duplicate submission sends no duplicate mail');
   check((await db.query('SELECT count(*)::int AS n FROM pending_registrations')).rows[0].n, 1, 'duplicate creates no extra registration');
   env.delete('RESEND_API_KEY');
@@ -148,7 +150,7 @@ try {
   const beforeReviewed = sent.length;
   for (const status of ['approved', 'rejected']) {
     await db.query('INSERT INTO pending_registrations(email,status) VALUES ($1,$2)', [`${status}@example.test`, status]);
-    check((await submit(`${status}@example.test`)).status, 200, `${status} duplicate keeps the generic response`);
+    check((await submit(`${status}@example.test`)).status, 409, `${status} duplicate displays a reviewed-request warning`);
     check((await db.query('SELECT status FROM pending_registrations WHERE email=$1', [`${status}@example.test`])).rows[0].status, status, `${status} duplicate cannot reopen a reviewed request`);
   }
   check(sent.length, beforeReviewed, 'reviewed duplicates send no new notifications');
@@ -190,8 +192,16 @@ try {
   check((await db.query('SELECT count(*)::int AS n FROM pending_registrations WHERE id=$1', [registrationId])).rows[0].n, 0, 'approved pending row removed');
   check((await approve(registrationId)).status, 200, 'approval retry succeeds after pending row removal');
   check(sent.length, beforeApproval + 1, 'approval retry does not duplicate email');
-  await submit('approval@example.test');
+  check((await submit('approval@example.test')).status, 409, 'registration retry after approval warns that the email exists');
   check(sent.length, beforeApproval + 1, 'registration retry after approval neither recreates request nor resends receipt');
+  const duplicateAccount = await submit('  ADMIN-ONE@EXAMPLE.TEST  ');
+  check(duplicateAccount.status, 409, 'existing account lookup ignores case and surrounding whitespace');
+  const duplicateBody = await duplicateAccount.json();
+  check(duplicateBody.code, 'EMAIL_ALREADY_REGISTERED', 'existing account response identifies email conflict');
+  check(duplicateBody.error.includes('Please enter another email address'), true, 'existing account warning suggests another email');
+  await db.exec("INSERT INTO auth.users(email) VALUES('orphan-auth@example.test')");
+  check((await submit('orphan-auth@example.test')).status, 409, 'Auth account without a profile also blocks duplicate registration');
+  check(sent.length, beforeApproval + 1, 'existing account warnings trigger no notifications');
   callerId = 'ordinary-member'; check((await approve(registrationId)).status, 403, 'non-admin cannot approve or trigger approval email'); callerId = adminId;
   await submit('approval-failure@example.test');
   const failedId = (await db.query("SELECT id FROM pending_registrations WHERE email='approval-failure@example.test'")).rows[0].id;

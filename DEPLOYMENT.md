@@ -267,11 +267,11 @@ Replace the example with a fresh address authorized to receive test emails.
 This sends a real registration receipt and notifications to configured admins. It
 requires the migrated backend plus `SUPABASE_PUBLIC_URL` (or `API_EXTERNAL_URL`),
 `ANON_KEY`, and `SERVICE_ROLE_KEY` in the backend environment. It does not bypass
-approval or create a duplicate auth account. If the address already has an approved
-request, use a separately authorized fresh address for a new registration test.
-The same applies to rejected requests: resubmission does not reopen an admin's
-decision. A generic successful response protects account privacy; inspect the
-record status when diagnosing a missing pending request.
+approval or create a duplicate auth account. Existing accounts, pending requests,
+and previously reviewed requests return HTTP 409 with a specific warning. Use a
+separately authorized fresh address for a new registration test. Resubmission does
+not reopen an admin's decision. A duplicate pending request may retry previously
+unsent notifications, but accepted notifications are not sent again.
 Verify the delivery rows and their message IDs against Resend Emails/Logs; API
 acceptance is not proof that the message arrived in the recipient inbox. Complete
 admin approval separately to verify the approval email and its direct login link.

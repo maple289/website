@@ -5,9 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mail, Lock, Eye, EyeOff, X, Youtube } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-// Keep the response private and accurate for both new and previously reviewed
-// requests. A generic API success does not mean a new pending row was created.
-const approvalMessage = 'Your request has been received. New registration requests await administrator approval and receive a confirmation email. Existing accounts and previously reviewed requests do not create another request or email. Contact an administrator if you need help with a previous request. After approval, sign in with your email and leave the password blank to create your password.';
+const approvalMessage = 'Your registration request has been submitted for administrator approval. Check your email for confirmation. After approval, sign in with your email and leave the password blank to create your password.';
 
 type AuthModalProps = {
   open: boolean;
@@ -161,7 +159,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           )}
 
           {error && (
-            <div className="mt-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">
+            <div role="alert" className="mt-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">
               {error}
             </div>
           )}
@@ -177,7 +175,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
             className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-[15px] font-semibold text-white transition hover:bg-[#ff5962] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting && <Loader2 size={18} className="animate-spin" />}
-            {mode === 'signup' ? (registrationSubmitted ? 'Request received' : 'Request account') : 'Sign in'}
+            {mode === 'signup' ? (registrationSubmitted ? 'Request submitted' : 'Request account') : 'Sign in'}
           </button>
 
           <p className="mt-5 text-center text-sm text-[#a5a5a5]">

@@ -27,9 +27,12 @@ Deno.serve(async (req: Request) => {
       if (body[key] != null && (typeof body[key] !== "string" || [...body[key].trim()].length > 100)) return json({ error: "Names must be text, up to 100 characters" }, 400);
     }
     const client = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
-    const { data: existingAccount, error: accountError } = await client.from("profiles").select("id").eq("email", email).maybeSingle();
+    const { data: existingAccount, error: accountError } = await client.rpc("registration_email_exists", { p_email: email });
     if (accountError) return json({ error: "Could not submit your request. Please try again." }, 500);
-    if (existingAccount) return json({ success: true });
+    if (existingAccount) {
+      console.info(JSON.stringify({ operation: "registration", result: "existing_account" }));
+      return json({ error: "This email address already exists. Please enter another email address, or sign in to your existing account.", code: "EMAIL_ALREADY_REGISTERED" }, 409);
+    }
     // Insert and trigger delivery in the same backend request. Duplicate submissions
     // never create another account/request or overwrite the original applicant's data.
     const { error: insertError } = await client.from("pending_registrations").insert({
@@ -47,7 +50,7 @@ Deno.serve(async (req: Request) => {
     }
     if (registration.status !== "pending") {
       console.info(JSON.stringify({ operation: "registration", result: "already_reviewed", registration_id: registration.id, status: registration.status }));
-      return json({ success: true });
+      return json({ error: "A registration request for this email has already been reviewed. Please enter another email address, or contact an administrator about your previous request.", code: "REGISTRATION_ALREADY_REVIEWED" }, 409);
     }
     console.info(JSON.stringify({ operation: "registration", result: insertError ? "existing_pending" : "pending_saved", registration_id: registration.id }));
     const sendNotifications = async () => { try {
@@ -77,7 +80,10 @@ Deno.serve(async (req: Request) => {
     } };
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(sendNotifications());
     else await sendNotifications();
-    // Mail failure does not undo registration or disclose account existence.
+    // Preserve safe retries of failed notifications for an existing pending
+    // request, while clearly explaining that another request was not created.
+    if (insertError) return json({ error: "A registration request for this email is already awaiting administrator approval. Please wait for approval, or enter another email address.", code: "REGISTRATION_ALREADY_PENDING" }, 409);
+    // Mail failure does not undo a successfully saved registration.
     return json({ success: true });
   } catch {
     console.error(JSON.stringify({ operation: "registration", type: "request_error" }));
