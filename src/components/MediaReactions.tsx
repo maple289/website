@@ -16,6 +16,7 @@ export function MediaReactions({ mediaType, mediaId, mediaName }: Props) {
 function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { store: ReactionStore }) {
   const { requestDelete } = useDeleteConfirmation();
   const root = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const popover = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const pointerType = useRef('');
@@ -24,6 +25,7 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
   const barId = useId();
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [focusBar, setFocusBar] = useState(false);
   const [opened, setOpened] = useState<{ reaction: Reaction; anchor: HTMLButtonElement; focus: boolean } | null>(null);
   const clearBarTimer = () => clearTimeout(barTimer.current);
   const clearDetailsTimer = () => clearTimeout(detailsTimer.current);
@@ -39,14 +41,14 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
     if (!expanded && !opened) return;
     const outside = (event: Event) => {
       const target = event.target as Node;
-      if (root.current?.contains(target) || popover.current?.contains(target)) return;
+      if (root.current?.contains(target) || bar.current?.contains(target) || popover.current?.contains(target)) return;
       setExpanded(false); setOpened(null);
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault(); event.stopPropagation();
       if (popover.current?.contains(document.activeElement)) opened?.anchor.focus({ preventScroll: true });
-      else if (root.current?.contains(document.activeElement)) trigger.current?.focus({ preventScroll: true });
+      else if (root.current?.contains(document.activeElement) || bar.current?.contains(document.activeElement)) trigger.current?.focus({ preventScroll: true });
       setExpanded(false); setOpened(null);
     };
     document.addEventListener('pointerdown', outside, true);
@@ -64,6 +66,16 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
   const snapshot = useCallback(() => store.entry(mediaType, mediaId).state, [store, mediaType, mediaId]);
   const state = useSyncExternalStore(subscribe, snapshot);
   const selected = reactions.find((reaction) => reaction.type === state.own);
+  const openBar = (event: React.MouseEvent<HTMLButtonElement>) => {
+    clearBarTimer(); closeDetails(); setFocusBar(event.detail === 0);
+    setExpanded((value) => pointerType.current === 'mouse' && event.detail > 0 ? true : !value);
+  };
+  const deferBarClose = (event: React.PointerEvent) => {
+    if (event.pointerType === 'mouse') { clearBarTimer(); barTimer.current = setTimeout(() => setExpanded(false), 280); }
+  };
+  const blurSelector = (event: React.FocusEvent) => {
+    if (!root.current?.contains(event.relatedTarget) && !bar.current?.contains(event.relatedTarget)) setExpanded(false);
+  };
   const apply = (reaction: Reaction | null) => {
     clearBarTimer(); setExpanded(false); closeDetails();
     trigger.current?.focus({ preventScroll: true });
@@ -80,28 +92,22 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
     } else void store.react(mediaType, mediaId, reaction);
   };
   return <div ref={root} className="media-reactions" data-reaction-control onClick={(event) => event.stopPropagation()}>
+    <div className="reaction-row">
     {store.userId ? <div className="reaction-selector"
-      onPointerEnter={(event) => { if (event.pointerType === 'mouse') { clearBarTimer(); if (state.available && !state.saving) setExpanded(true); } }}
-      onPointerLeave={(event) => { if (event.pointerType === 'mouse') { clearBarTimer(); barTimer.current = setTimeout(() => setExpanded(false), 280); } }}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false); }}>
-      <button ref={trigger} type="button" className={`reaction-add ${selected ? 'is-selected' : ''}`}
-        aria-label={selected ? `Your reaction: ${selected.label}. Change or remove reaction` : 'Add reaction'}
+      onPointerEnter={(event) => { if (event.pointerType === 'mouse') { clearBarTimer(); if (state.available && !state.saving) { setFocusBar(false); setExpanded(true); } } }}
+      onPointerLeave={deferBarClose} onBlur={blurSelector}>
+      <button ref={trigger} type="button" className="reaction-add" title={selected ? 'Change reaction' : 'Add reaction'}
+        aria-label={selected ? 'Change reaction' : 'Add reaction'}
         aria-expanded={expanded} aria-controls={barId} disabled={!state.loaded || !state.available || state.saving}
         onPointerDown={(event) => { pointerType.current = event.pointerType; }}
-        onClick={(event) => { clearBarTimer(); closeDetails(); setExpanded((value) => pointerType.current === 'mouse' && event.detail > 0 ? true : !value); }}>
-        {selected ? <span aria-hidden="true">{selected.emoji}</span> : <SmilePlus size={16} />}
-        <span>{selected ? selected.label : 'React'}</span>
+        onClick={openBar}>
+        <SmilePlus size={17} aria-hidden="true" />
       </button>
-      <div id={barId} className="reaction-bar-expander" data-expanded={expanded} aria-hidden={!expanded}>
-        <div className="reaction-bar-clip"><div className="reaction-bar" role="group" aria-label="Choose your reaction">
-          {reactions.map((reaction) => <button key={reaction.type} type="button" title={reaction.label}
-            aria-label={state.own === reaction.type ? `Remove ${reaction.label} reaction` : reaction.label} aria-pressed={state.own === reaction.type}
-            disabled={state.saving || !state.available} onClick={() => apply(state.own === reaction.type ? null : reaction.type)}>
-            <span aria-hidden="true">{reaction.emoji}</span>
-          </button>)}
-          {state.own && <button type="button" className="reaction-remove" disabled={state.saving} onClick={() => apply(null)}>Remove reaction</button>}
-        </div></div>
-      </div>
+      {selected && <button type="button" className="reaction-selected is-selected" title={`${selected.label} — change or remove`}
+        aria-label={`Your reaction: ${selected.label}. Change or remove reaction`} aria-expanded={expanded} aria-controls={barId}
+        disabled={state.saving || !state.available} onPointerDown={(event) => { pointerType.current = event.pointerType; }} onClick={openBar}>
+        <span aria-hidden="true">{selected.emoji}</span>
+      </button>}
     </div> : <span className="reaction-guest">Sign in to react</span>}
     <div className="reaction-summary" role="group" aria-label="Reaction counts">
       {reactions.filter((reaction) => (state.counts[reaction.type] ?? 0) > 0).map((reaction) => <button key={reaction.type} type="button"
@@ -113,10 +119,50 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
         <span aria-hidden="true">{reaction.emoji}</span><span>{state.counts[reaction.type]}</span>
       </button>)}
     </div>
+    </div>
     {state.error && <p className="reaction-error" role="alert">{state.error}</p>}
+    {expanded && trigger.current && <ReactionBar id={barId} anchor={trigger.current} barRef={bar} state={state} focus={focusBar}
+      onApply={apply} onEnter={clearBarTimer} onLeave={deferBarClose} onBlur={blurSelector} />}
     {opened && <ReactionDetails key={opened.reaction} mediaType={mediaType} mediaId={mediaId} state={state} selected={opened.reaction}
       anchor={opened.anchor} focus={opened.focus} popoverRef={popover} onClose={closeDetails} onEnter={clearDetailsTimer} onLeave={deferDetailsClose} />}
   </div>;
+}
+
+function ReactionBar({ id, anchor, barRef, state, focus, onApply, onEnter, onLeave, onBlur }: {
+  id: string; anchor: HTMLButtonElement; barRef: React.RefObject<HTMLDivElement>; state: ReactionState; focus: boolean;
+  onApply: (reaction: Reaction | null) => void; onEnter: () => void;
+  onLeave: (event: React.PointerEvent) => void; onBlur: (event: React.FocusEvent) => void;
+}) {
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  useLayoutEffect(() => {
+    const place = () => {
+      const bounds = anchor.getBoundingClientRect();
+      const box = barRef.current?.getBoundingClientRect();
+      const width = box?.width ?? 52, height = box?.height ?? 300;
+      const left = Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8));
+      const top = Math.max(8, Math.min(bounds.bottom + height + 6 <= window.innerHeight - 8 ? bounds.bottom + 6 : bounds.top - height - 6, window.innerHeight - height - 8));
+      setPosition({ top, left });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    if (barRef.current) observer.observe(barRef.current);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [anchor, barRef]);
+  useEffect(() => {
+    if (focus) (barRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? barRef.current?.querySelector<HTMLButtonElement>('button'))?.focus({ preventScroll: true });
+  }, [focus, barRef]);
+  return createPortal(<div id={id} ref={barRef} className="reaction-bar" style={position} role="group" aria-label="Choose your reaction" data-reaction-control
+    onPointerEnter={onEnter} onPointerLeave={onLeave} onBlur={onBlur} onClick={(event) => event.stopPropagation()}>
+    {reactions.map((reaction) => <button key={reaction.type} type="button" title={reaction.label}
+      aria-label={state.own === reaction.type ? `Remove ${reaction.label} reaction` : reaction.label} aria-pressed={state.own === reaction.type}
+      disabled={state.saving || !state.available} onClick={() => onApply(state.own === reaction.type ? null : reaction.type)}>
+      <span aria-hidden="true">{reaction.emoji}</span>
+    </button>)}
+    {state.own && <button type="button" className="reaction-remove" title="Remove reaction" aria-label="Remove reaction"
+      disabled={state.saving} onClick={() => onApply(null)}><X size={16} aria-hidden="true" /></button>}
+  </div>, anchor.closest('[data-task-modal]') ?? document.body);
 }
 
 type Person = { user_id: string; display_name: string };
