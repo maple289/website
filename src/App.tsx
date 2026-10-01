@@ -48,7 +48,7 @@ function AppContent() {
   const [search, setSearch] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
-  const [authOpen, setAuthOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(window.location.hash === '#/login');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [droppedMedia, setDroppedMedia] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
@@ -56,7 +56,10 @@ function AppContent() {
   const [homeTab, setHomeTab] = useState<'videos' | 'photos'>('videos');
 
   useEffect(() => {
-    const onHash = () => setRoute(getRoute());
+    const onHash = () => {
+      setRoute(getRoute());
+      if (window.location.hash === '#/login') { setAuthMode('signin'); setAuthOpen(true); }
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);

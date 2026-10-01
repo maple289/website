@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { PGlite } from '../.runtime/sharing-tests/node_modules/@electric-sql/pglite/dist/index.js';
 const db = new PGlite();
-const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>'], ['CUSTOMER_EMAILS_ENABLED', 'true']]);
+const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>'], ['CUSTOMER_EMAILS_ENABLED', 'true'], ['SITE_URL', 'https://myhostage.ca/video/'], ['SITE_NAME', 'Streamly']]);
 const logs = [], sent = [];
 const originalLog = console.log, originalInfo = console.info, originalError = console.error, originalWarn = console.warn;
 console.info = console.error = console.warn = (...args) => logs.push(args.join(' '));
@@ -61,7 +61,7 @@ const client = {
     };
     return builder;
   },
-  async rpc(name, args) { try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
+  async rpc(name, args) { try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id ?? args.p_registration_id]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
 };
 globalThis.__emailTestClient = client;
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString('base64');
@@ -72,16 +72,38 @@ try {
     INSERT INTO profiles(email,role) VALUES ('admin-one@example.test','admin'),('admin-two@example.test','admin'),('member@example.test','user');`);
   await db.query("UPDATE profiles SET id=$1 WHERE email='admin-one@example.test'", [adminId]);
   await db.exec(await readFile(new URL('../supabase/migrations/20260924050000_registration_email_delivery.sql', import.meta.url), 'utf8'));
+  await db.exec(`ALTER TABLE registration_email_deliveries DROP CONSTRAINT registration_email_deliveries_registration_id_fkey;
+    ALTER TABLE registration_email_deliveries ADD COLUMN plain_text text; ALTER TABLE registration_email_deliveries ADD COLUMN sender text;
+    CREATE TABLE account_activation(registration_id uuid UNIQUE,user_id uuid, email text,first_name text,must_change_password boolean DEFAULT true);
+    CREATE FUNCTION approve_pending_account(request_id uuid) RETURNS jsonb LANGUAGE plpgsql AS $$
+    DECLARE r pending_registrations%ROWTYPE; a account_activation%ROWTYPE;
+    BEGIN
+      SELECT * INTO a FROM account_activation WHERE registration_id=request_id;
+      IF FOUND THEN RETURN to_jsonb(a); END IF;
+      SELECT * INTO r FROM pending_registrations WHERE id=request_id FOR UPDATE;
+      IF NOT FOUND THEN RAISE EXCEPTION 'Pending registration not found'; END IF;
+      IF r.status<>'pending' THEN RAISE EXCEPTION 'Registration has already been reviewed'; END IF;
+      IF EXISTS(SELECT 1 FROM profiles WHERE email=r.email) THEN RAISE EXCEPTION 'An account with this email already exists'; END IF;
+      INSERT INTO account_activation(registration_id,user_id,email,first_name) VALUES(r.id,gen_random_uuid(),r.email,r.first_name) RETURNING * INTO a;
+      INSERT INTO profiles(id,email,role) VALUES(a.user_id,a.email,'user');
+      DELETE FROM pending_registrations WHERE id=r.id; RETURN to_jsonb(a);
+    END; $$;`);
   const sharedUrl = moduleUrl(await readFile(new URL('../supabase/functions/_shared/email.ts', import.meta.url), 'utf8'));
   const shared = await import(sharedUrl);
+  const templatesUrl = moduleUrl((await readFile(new URL('../supabase/functions/_shared/registration-templates.ts', import.meta.url), 'utf8')).replace('"./email.ts"', JSON.stringify(sharedUrl)));
   let endpoint = await readFile(new URL('../supabase/functions/notify-admin-registration/index.ts', import.meta.url), 'utf8');
-  endpoint = endpoint.replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";', '').replace('import { createClient } from "npm:@supabase/supabase-js@2.57.4";', 'const createClient = () => globalThis.__emailTestClient;').replace('"../_shared/email.ts"', JSON.stringify(sharedUrl));
+  const prepare = source => source.replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";', '').replace('import { createClient } from "npm:@supabase/supabase-js@2.57.4";', 'const createClient = () => globalThis.__emailTestClient;').replace('"../_shared/email.ts"', JSON.stringify(sharedUrl)).replace('"../_shared/registration-templates.ts"', JSON.stringify(templatesUrl));
+  endpoint = prepare(endpoint);
   await import(moduleUrl(endpoint));
-  const submit = (email, first_name = 'Alex') => handler(new Request('https://local.test/registration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, first_name, username: email.split('@')[0] }) }));
+  const registrationHandler = handler;
+  const submit = (email, first_name = 'Alex') => registrationHandler(new Request('https://local.test/registration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, first_name }) }));
   let response = await submit('new@example.test', '<script>');
   check(response.status, 200, 'registration succeeds');
   check(sent.length, 3, 'receipt plus notification to every admin (not ordinary members)');
   check(sent[0].body.to, ['new@example.test'], 'user receipt has correct recipient');
+  check(sent[0].body.subject, 'Registration Request Received', 'receipt uses requested subject');
+  check(sent.every(mail => mail.body.text?.length > 0), true, 'all notification emails include a plain-text alternative');
+  check(sent[0].body.html.includes('https://myhostage.ca/video/') && sent[0].body.html.includes('pending administrator approval'), true, 'receipt identifies website and pending status');
   check(sent[1].body.html.includes('&lt;script&gt;'), true, 'admin names are HTML escaped');
   check(sent.every((mail) => mail.body.from === 'Streamly <mail@example.test>'), true, 'configured sender used');
   await submit('new@example.test');
@@ -152,6 +174,36 @@ try {
   check(sent.slice(beforeSuppressed).every(mail => mail.body.to[0].startsWith('admin-')), true, 'only administrators receive registration notifications');
   check(logs.some(line => line.includes('customer_email_temporarily_disabled')), true, 'temporary customer suppression is visible in safe logs');
   check(logs.join('').includes('re_test_secret_not_real'), false, 'secrets stay redacted');
+  env.set('CUSTOMER_EMAILS_ENABLED', 'true');
+  env.set('RESEND_FROM_NAME', 'MyHostage'); env.set('RESEND_FROM_EMAIL', 'noreply@myhostage.ca');
+  await submit('approval@example.test');
+  const registrationId = (await db.query("SELECT id FROM pending_registrations WHERE email='approval@example.test'")).rows[0].id;
+  const approvalSource = prepare(await readFile(new URL('../supabase/functions/approve-registration/index.ts', import.meta.url), 'utf8'));
+  await import(moduleUrl(approvalSource));
+  const approve = id => handler(new Request('https://local.test/approval', { method: 'POST', headers: { Authorization: 'Bearer test-admin', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve', registrationId: id }) }));
+  const beforeApproval = sent.length;
+  check((await approve(registrationId)).status, 200, 'actual approval handler succeeds');
+  check(sent.length - beforeApproval, 1, 'approval sends one customer email');
+  check(sent.at(-1).body.from, 'MyHostage <noreply@myhostage.ca>', 'sender name and domain address are independently configurable');
+  check(sent.at(-1).body.subject, 'Your Account Has Been Approved', 'approval uses requested subject');
+  check(sent.at(-1).body.text.includes('https://myhostage.ca/video/#/login') && sent.at(-1).body.text.includes('leave the password field blank'), true, 'approval has direct login link and accurate initial setup instructions');
+  check((await db.query('SELECT count(*)::int AS n FROM pending_registrations WHERE id=$1', [registrationId])).rows[0].n, 0, 'approved pending row removed');
+  check((await approve(registrationId)).status, 200, 'approval retry succeeds after pending row removal');
+  check(sent.length, beforeApproval + 1, 'approval retry does not duplicate email');
+  await submit('approval@example.test');
+  check(sent.length, beforeApproval + 1, 'registration retry after approval neither recreates request nor resends receipt');
+  callerId = 'ordinary-member'; check((await approve(registrationId)).status, 403, 'non-admin cannot approve or trigger approval email'); callerId = adminId;
+  await submit('approval-failure@example.test');
+  const failedId = (await db.query("SELECT id FROM pending_registrations WHERE email='approval-failure@example.test'")).rows[0].id;
+  mode = 'domain'; check((await approve(failedId)).status, 200, 'approval email failure cannot cancel account creation');
+  check((await db.query("SELECT role FROM profiles WHERE email='approval-failure@example.test'")).rows[0].role, 'user', 'account retains user role when email fails');
+  check((await db.query("SELECT status FROM registration_email_deliveries WHERE registration_id=$1 AND operation='registration_approved'", [failedId])).rows[0].status, 'failed', 'approval failure persists diagnostics after pending row deletion');
+  mode = 'ok'; await db.query("UPDATE registration_email_deliveries SET last_attempt_at=now()-interval '2 minutes' WHERE registration_id=$1", [failedId]);
+  check((await approve(failedId)).status, 200, 'failed approval email can be retried without recreating account');
+  check((await db.query("SELECT status FROM registration_email_deliveries WHERE registration_id=$1 AND operation='registration_approved'", [failedId])).rows[0].status, 'sent', 'approval retry recovers failed delivery');
+  const beforeRejected = sent.length;
+  await shared.deliverEmail(client, crypto.randomUUID(), 'registration_rejected', 'a@example.test', 'Rejected', '<p>Rejected</p>');
+  check(sent.length, beforeRejected, 'unrequested customer notifications remain disabled');
   originalLog(`${checks} checks passed; no external emails sent.`);
 } finally {
   console.log = originalLog; console.info = originalInfo; console.error = originalError; console.warn = originalWarn;

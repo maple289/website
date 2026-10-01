@@ -85,11 +85,14 @@ if args.registration_test:
         print(json.dumps({key: clean(value) for key, value in row.items() if key != 'recipient'}))
     admin_query = urllib.parse.urlencode({'role': 'eq.admin', 'select': 'email'})
     admin_status, admins = request(url + '/rest/v1/profiles?' + admin_query, service, apikey=True)
-    expected_admins = {a['email'].strip() for a in admins if a.get('email')} if admin_status == 200 else set()
+    expected_admins = {a['email'].strip().lower() for a in admins if a.get('email')} if admin_status == 200 else set()
+    configured_admins = env.get('ADMIN_NOTIFICATION_RECIPIENTS', '').strip()
+    if configured_admins:
+        expected_admins &= {email.strip().lower() for email in configured_admins.split(',') if email.strip()}
     notified_admins = {row['recipient'] for row in rows if row['operation'] == 'admin_registration_notification' and row['status'] == 'sent'}
     receipt = any(row['operation'] == 'registration_receipt' and row['status'] == 'sent' for row in rows)
     accepted = receipt and bool(expected_admins) and expected_admins == notified_admins
-    print('Applicant and every admin accepted:', 'verified in delivery records' if accepted else 'NOT verified')
+    print('Applicant and every configured admin accepted:', 'verified in delivery records' if accepted else 'NOT verified')
     for row in rows:
         if row['status'] != 'sent' or not row.get('message_id'):
             continue

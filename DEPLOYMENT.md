@@ -209,13 +209,18 @@ Configure the **existing** key on the server in `/srv/streamly/supabase/.env`:
 
 ```dotenv
 RESEND_API_KEY=<existing server-side key>
-RESEND_FROM_EMAIL=Streamly <notifications@your-verified-domain.example>
+RESEND_FROM_EMAIL=noreply@myhostage.ca
+RESEND_FROM_NAME=MyHostage
+SITE_NAME=MyHostage
+SITE_URL=https://myhostage.ca/video/
+CUSTOMER_EMAILS_ENABLED=true
 ```
 
-Use a sender domain verified in your Resend account; the example is not a real
-sender. `RESEND_FROM_EMAIL` is required for registration notifications. It is
-separate from notification recipients, which are all registered profiles with
-the `admin` role. `SMTP_ADMIN_EMAIL` is Supabase Auth's SMTP **sender** setting,
+Use a sender domain verified in your Resend account. `RESEND_FROM_EMAIL` is required for registration notifications. It is
+separate from notification recipients, which are registered profiles with
+the `admin` role, optionally restricted by `ADMIN_NOTIFICATION_RECIPIENTS`.
+Production currently sends administrator notices to `maple289@gmail.com`.
+`SMTP_ADMIN_EMAIL` is Supabase Auth's SMTP **sender** setting,
 not an admin recipient or mailing list, and is no longer used as an API fallback.
 The Resend test sender `onboarding@resend.dev` can only send to the Resend account
 owner's email; it cannot enable registration emails for all users. Verify a
@@ -226,7 +231,8 @@ backend email settings into the Functions container and recreate it if changed.
 Deploy migration `20260924050000_registration_email_delivery.sql`, both updated
 registration Edge Functions, their `_shared` directory, and the frontend together.
 
-Supabase Auth invitations are a **separate SMTP delivery path**. A Resend API key
+Supabase Auth SMTP is a **separate delivery path**; the current approval workflow
+uses initial blank login/password setup, not an Auth invitation. A Resend API key
 in Functions alone does not configure Auth. Verify the runtime's existing
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL` and
 `SMTP_SENDER_NAME`. When Resend is your SMTP provider, its documented host is
@@ -254,10 +260,11 @@ Inspect the signed-in dashboard in that case. Never print `docker inspect` or
 For the user-authorized live registration test:
 
 ```bash
-python3 scripts/diagnose-registration-email.py --env-file /srv/streamly/supabase/.env --registration-test maple289@gmail.com
+python3 scripts/diagnose-registration-email.py --env-file /srv/streamly/supabase/.env --registration-test 'authorized-fresh-test-address@example.com'
 ```
 
-This sends a real registration receipt and real notifications to all admins. It
+Replace the example with a fresh address authorized to receive test emails.
+This sends a real registration receipt and notifications to configured admins. It
 requires the migrated backend plus `SUPABASE_PUBLIC_URL` (or `API_EXTERNAL_URL`),
 `ANON_KEY`, and `SERVICE_ROLE_KEY` in the backend environment. It does not bypass
 approval or create a duplicate auth account. If the address already has an approved
@@ -267,7 +274,9 @@ decision. A generic successful response protects account privacy; inspect the
 record status when diagnosing a missing pending request.
 Verify the delivery rows and their message IDs against Resend Emails/Logs; API
 acceptance is not proof that the message arrived in the recipient inbox. Complete
-admin approval separately to verify the Auth SMTP invitation and approval email.
+admin approval separately to verify the approval email and its direct login link.
+The approved account follows the existing first blank-password login and forced
+password setup. No Auth invitation is needed; keep the native Auth suppression hook.
 
 The Admin Console refreshes pending approvals every 15 seconds while visible and
 when returning to the page. It also has a Refresh button and shows query failures
@@ -284,9 +293,10 @@ Resubmitting the same pending registration retries only unsent emails; already
 sent messages are skipped. Provider rate-limit/server errors get two bounded
 retries with the same idempotency key. Concurrent sends have a database claim,
 a one-minute cooldown, and a five-attempt cap. No recurring retry job is installed. Repeating the same authenticated
-`approve-registration` action for an already approved/rejected request retries its
-unsent notification without another invitation/account creation. The admin UI
-warns if a saved review has an unconfirmed email.
+`approve-registration` action for an already approved request retries its unsent
+approval notification using the private activation record, without recreating
+the account. Rejection emails and other customer/Auth messages remain suppressed.
+See `REGISTRATION_WORKFLOW.md` for the notification-specific switch and sender settings.
 
 Before the first provider attempt, missing configuration does not consume the send-attempt budget. For ambiguous
 attempts older than 23 hours, inspect Resend logs before any operator retry;

@@ -11,10 +11,17 @@ export function safeEmailLog(value: unknown): string {
 }
 export type EmailResult = { accepted: boolean; status: number; type?: string; message?: string; id?: string };
 export const customerEmailsEnabled = () => Deno.env.get("CUSTOMER_EMAILS_ENABLED") === "true";
-export async function sendEmail(message: { to: string; subject: string; html: string; operation: string; key: string }): Promise<EmailResult> {
+export function configuredSender(): string {
+  const email = Deno.env.get("RESEND_FROM_EMAIL")?.trim() || "";
+  const name = Deno.env.get("RESEND_FROM_NAME")?.trim();
+  if (!email || /[\r\n]/.test(email) || (name && /[\r\n<>]/.test(name))) return "";
+  // Preserve existing combined sending identities, or compose a configured name.
+  return name && !email.includes("<") ? `${name} <${email}>` : email;
+}
+export async function sendEmail(message: { to: string; subject: string; html: string; text?: string; from?: string; operation: string; key: string }): Promise<EmailResult> {
   const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
   // Sender identity is separate from the registered admin recipient list.
-  const from = Deno.env.get("RESEND_FROM_EMAIL")?.trim();
+  const from = message.from ?? configuredSender();
   const fail = (status: number, type: string, error: unknown): EmailResult => {
     const result = { accepted: false, status, type: safeEmailLog(type), message: safeEmailLog(error) };
     console.error(JSON.stringify({ operation: message.operation, ...result }));
@@ -27,7 +34,7 @@ export async function sendEmail(message: { to: string; subject: string; html: st
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST", signal: AbortSignal.timeout(12000),
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "Idempotency-Key": message.key },
-        body: JSON.stringify({ from, to: [message.to], subject: message.subject, html: message.html }),
+        body: JSON.stringify({ from, to: [message.to], subject: message.subject, html: message.html, ...(message.text ? { text: message.text } : {}) }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -50,9 +57,9 @@ export async function sendEmail(message: { to: string; subject: string; html: st
 }
 
 // A persistent ledger and provider idempotency protect retries/concurrent requests.
-async function deliverEmailImpl(client: SupabaseClient, registrationId: string, operation: string, to: string, subject: string, html: string): Promise<boolean> {
+async function deliverEmailImpl(client: SupabaseClient, registrationId: string, operation: string, to: string, subject: string, html: string, text?: string): Promise<boolean> {
   const { error: queueError } = await client.from("registration_email_deliveries").upsert({
-    registration_id: registrationId, operation, recipient: to, subject, html,
+    registration_id: registrationId, operation, recipient: to, subject, html, plain_text: text ?? null, sender: configuredSender() || null,
   }, { onConflict: "registration_id,operation,recipient", ignoreDuplicates: true });
   if (queueError) { console.error(JSON.stringify({ operation, type: "queue_error", message: safeEmailLog(queueError.message) })); return false; }
   const { data: delivery, error: readError } = await client.from("registration_email_deliveries").select("*")
@@ -61,7 +68,7 @@ async function deliverEmailImpl(client: SupabaseClient, registrationId: string, 
   if (delivery.status === "sent") return true;
   const { data: claimed, error: claimError } = await client.rpc("claim_registration_email", { delivery_id: delivery.id });
   if (claimError || !claimed) { console.warn(JSON.stringify({ operation, delivery_id: delivery.id, result: "deferred", type: claimError ? "claim_error" : "retry_guard" })); return false; }
-  const result = await sendEmail({ to: delivery.recipient, subject: delivery.subject, html: delivery.html, operation, key: `registration/${delivery.id}` });
+  const result = await sendEmail({ to: delivery.recipient, subject: delivery.subject, html: delivery.html, text: delivery.plain_text, from: delivery.sender ?? undefined, operation, key: `registration/${delivery.id}` });
   const { error: saveError } = await client.from("registration_email_deliveries").update({
     status: result.accepted ? "sent" : "failed", message_id: result.id ?? null,
     ...(result.type === "configuration_error" && !delivery.first_attempt_at ? { attempts: 0, first_attempt_at: null } : {}),
@@ -71,11 +78,13 @@ async function deliverEmailImpl(client: SupabaseClient, registrationId: string, 
   return result.accepted;
 }
 
-export async function deliverEmail(client: SupabaseClient, registrationId: string, operation: string, to: string, subject: string, html: string): Promise<boolean> {
-  if (!operation.startsWith("admin_") && !customerEmailsEnabled()) {
+export async function deliverEmail(client: SupabaseClient, registrationId: string, operation: string, to: string, subject: string, html: string, text?: string): Promise<boolean> {
+  // Enable only the requested registration emails. Other customer/Auth emails
+  // remain suppressed until explicitly configured separately.
+  if (!operation.startsWith("admin_") && (!customerEmailsEnabled() || !["registration_receipt", "registration_approved"].includes(operation))) {
     console.info(JSON.stringify({ operation, result: "customer_email_temporarily_disabled" }));
     return true;
   }
-  try { return await deliverEmailImpl(client, registrationId, operation, to, subject, html); }
+  try { return await deliverEmailImpl(client, registrationId, operation, to, subject, html, text); }
   catch { console.error(JSON.stringify({ operation, type: "unexpected_delivery_failure" })); return false; }
 }

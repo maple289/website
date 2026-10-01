@@ -1,4 +1,5 @@
 import { deliverEmail, customerEmailsEnabled } from "../_shared/email.ts";
+import { registrationTemplate } from "../_shared/registration-templates.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
@@ -78,7 +79,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", registrationId)
       .maybeSingle();
 
-    if (regErr || !registration) {
+    if (regErr || (!registration && action !== "approve")) {
       return json({ error: "Registration not found" }, 404);
     }
 
@@ -92,14 +93,18 @@ Deno.serve(async (req: Request) => {
           ? approvalError.message : "Account creation could not be completed. The pending request was retained; please retry.";
         return json({ error: `Unable to approve user: ${useful}` }, approvalError.code === "42501" ? 403 : 409);
       }
-      // Retain the existing user-email service/template behind the feature flag.
-      // Delivery is never part of the account creation transaction.
+      // The RPC also resolves a previously committed approval from the private
+      // activation record. Retries never recreate an account or lose the email
+      // recipient when the pending request has already been removed.
       const notify = async () => {
-        if (customerEmailsEnabled()) await deliverEmail(adminClient, registrationId, "registration_approved", registration.email,
-          "Your Account Has Been Approved", "<h2>Your Account Has Been Approved</h2><p>Your account is ready for initial login. Sign in with your email and leave the password blank to create your password on the website.</p>");
+        if (!customerEmailsEnabled()) return;
+        try {
+          const mail = registrationTemplate("approved", account.first_name);
+          await deliverEmail(adminClient, registrationId, "registration_approved", account.email, mail.subject, mail.html, mail.text);
+        } catch { console.error(JSON.stringify({ operation: "registration_approved", type: "template_configuration_error" })); }
       };
       if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(notify()); else await notify();
-      return json({ success: true, user_id: account.user_id, must_change_password: true,
+      return json({ success: true, user_id: account.user_id, must_change_password: account.must_change_password,
         message: "User approved successfully. The account has been created and is ready for initial login." });
     }
     if (registration.status !== "pending") return json({ error: "Registration has already been reviewed" }, 409);
