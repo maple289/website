@@ -17,7 +17,6 @@
 .reaction-bar button[aria-pressed=true] { background: #dceaff; box-shadow: inset 0 0 0 1px #83a8de; }
 .reaction-bar button:hover, .reaction-bar button:focus-visible { background: #dceaff; }
 .reaction-bar button:hover span, .reaction-bar button:focus-visible span { transform: scale(1.2) translateY(-2px); }
-.reaction-bar .reaction-remove { margin-top: 3px; border-top: 1px solid #e2e9f1; border-radius: 0 0 9px 9px; color: #a3293c; }
 @keyframes reaction-bar-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 .reaction-guest { flex-shrink: 0; font-size: 11px; color: #758497; }
 .reaction-error { color: #bd3447; font-size: 12px; margin: 6px 0; }
@@ -33,7 +32,7 @@
 .pv-reactions .reaction-error, .video-reactions .reaction-error { color: #ffacb6; }
 .video-reactions { padding: 4px 16px 12px; }
 .photo-viewer .pv-reactions .reaction-guest, .video-player-surface .video-reactions .reaction-guest { color: #b5c3d6; font-size: 12px; }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .reaction-add, .reaction-selected, .reaction-count { min-height: 44px; min-width: 44px; }
   .reaction-bar { width: 56px; }.reaction-bar button { width: 44px; min-height: 44px; }
 }

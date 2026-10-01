@@ -17,14 +17,14 @@ requests; errors leave the dialog open for Cancel or retry.
 | Shared-content listings | Owner actions use the same guards; recipients remain read-only | Sharing grants allow reads, not deletes |
 | Admin user management | Delete named account; explain database cascades and storage limitations | `admin-users` authenticates and checks administrator role; self-deletion remains blocked |
 | Pending registrations | Approve consumes the pending row only after account creation; Reject retains the record with rejected status | Admin-only approval transaction/review endpoint |
-| Video/photo cards and viewers, including public galleries | Remove reaction via selected emoji or Remove reaction | RPC binds deletion to `auth.uid()` and checks media access |
+| Video/photo cards and viewers, including public galleries | Reversible reaction toggle; latest user instruction explicitly removes separate removal actions and confirmation | RPC binds the toggle to `auth.uid()` and checks media access |
 | Share dialog | Save removal of individual or Everyone permissions | Owner-only sharing RPC |
 | Video edit dialog | Save deletion/replacement of an existing preview | Owner-only video/storage policies |
 
 Sharing selections and preview edits are drafts until Save. If saving removes
 existing data/access, confirmation appears before saving. Cancelling the confirmation
 does not issue the mutation. Changing a reaction to another type remains an update;
-removing it requires confirmation. Favorite toggles change a reversible boolean,
+removing it is a direct reversible toggle without confirmation. Favorite toggles change a reversible boolean,
 without deleting the file or its metadata record.
 
 Media records are retained until storage cleanup succeeds. Storage and database

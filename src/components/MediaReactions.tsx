@@ -1,4 +1,3 @@
-import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { SmilePlus, X } from 'lucide-react';
@@ -7,14 +6,19 @@ import { ReactionContext, reactions, type MediaType, type Reaction, type Reactio
 import './MediaReactions.css';
 
 type Props = { mediaType: MediaType; mediaId: string; mediaName?: string };
+function reactionViewport() {
+  const viewport = window.visualViewport;
+  return { left: viewport?.offsetLeft ?? 0, top: viewport?.offsetTop ?? 0,
+    width: viewport?.width ?? document.documentElement.clientWidth,
+    height: viewport?.height ?? document.documentElement.clientHeight };
+}
 export function MediaReactions({ mediaType, mediaId, mediaName }: Props) {
   const store = useContext(ReactionContext);
   if (!store) return null;
   return <ReactionControl key={`${mediaType}:${mediaId}:${store.userId}`} store={store} mediaType={mediaType} mediaId={mediaId} mediaName={mediaName} />;
 }
 
-function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { store: ReactionStore }) {
-  const { requestDelete } = useDeleteConfirmation();
+function ReactionControl({ store, mediaType, mediaId }: Props & { store: ReactionStore }) {
   const root = useRef<HTMLDivElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const popover = useRef<HTMLDivElement>(null);
@@ -68,6 +72,7 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
   const selected = reactions.find((reaction) => reaction.type === state.own);
   const openBar = (event: React.MouseEvent<HTMLButtonElement>) => {
     clearBarTimer(); closeDetails(); setFocusBar(event.detail === 0);
+    if (event.currentTarget.getBoundingClientRect().top < 100) event.currentTarget.scrollIntoView({ block: 'center', inline: 'nearest' });
     setExpanded((value) => pointerType.current === 'mouse' && event.detail > 0 ? true : !value);
   };
   const deferBarClose = (event: React.PointerEvent) => {
@@ -79,17 +84,7 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
   const apply = (reaction: Reaction | null) => {
     clearBarTimer(); setExpanded(false); closeDetails();
     trigger.current?.focus({ preventScroll: true });
-    if (reaction === null) {
-      const previous = state.own;
-      void requestDelete({ title: 'Remove reaction',
-        message: `Are you sure you want to remove your ${selected?.label ?? ''} reaction${mediaName ? ` from "${mediaName}"` : ` from this ${mediaType}`}?`,
-        confirmLabel: 'Remove reaction', processingLabel: 'Removing…',
-        onConfirm: async () => {
-          if (store.entry(mediaType, mediaId).state.own !== previous) throw new Error('Your reaction changed. Cancel and try again.');
-          if (!await store.react(mediaType, mediaId, null)) throw new Error('Unable to remove your reaction. Please try again.');
-        },
-      });
-    } else void store.react(mediaType, mediaId, reaction);
+    void store.react(mediaType, mediaId, reaction);
   };
   return <div ref={root} className="media-reactions" data-reaction-control onClick={(event) => event.stopPropagation()}>
     <div className="reaction-row">
@@ -103,9 +98,9 @@ function ReactionControl({ store, mediaType, mediaId, mediaName }: Props & { sto
         onClick={openBar}>
         <SmilePlus size={17} aria-hidden="true" />
       </button>
-      {selected && <button type="button" className="reaction-selected is-selected" title={`${selected.label} — change or remove`}
-        aria-label={`Your reaction: ${selected.label}. Change or remove reaction`} aria-expanded={expanded} aria-controls={barId}
-        disabled={state.saving || !state.available} onPointerDown={(event) => { pointerType.current = event.pointerType; }} onClick={openBar}>
+      {selected && <button type="button" className="reaction-selected is-selected" title={`Remove ${selected.label} reaction`}
+        aria-label={`Your reaction: ${selected.label}. Click to remove`} aria-pressed="true"
+        disabled={state.saving || !state.available} onClick={() => apply(null)}>
         <span aria-hidden="true">{selected.emoji}</span>
       </button>}
     </div> : <span className="reaction-guest">Sign in to react</span>}
@@ -133,25 +128,38 @@ function ReactionBar({ id, anchor, barRef, state, focus, onApply, onEnter, onLea
   onApply: (reaction: Reaction | null) => void; onEnter: () => void;
   onLeave: (event: React.PointerEvent) => void; onBlur: (event: React.FocusEvent) => void;
 }) {
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState({ top: 0, left: 0, maxHeight: 1 });
   useLayoutEffect(() => {
     const place = () => {
       const bounds = anchor.getBoundingClientRect();
       const box = barRef.current?.getBoundingClientRect();
-      const width = box?.width ?? 52, height = box?.height ?? 300;
-      const left = Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8));
-      const top = Math.max(8, Math.min(bounds.bottom + height + 6 <= window.innerHeight - 8 ? bounds.bottom + 6 : bounds.top - height - 6, window.innerHeight - height - 8));
-      setPosition({ top, left });
+      const viewport = reactionViewport();
+      const width = box?.width ?? 52;
+      const maxHeight = Math.max(1, bounds.top - viewport.top - 14);
+      const height = Math.min((barRef.current?.scrollHeight ?? 298) + 2, maxHeight);
+      const left = Math.max(viewport.left + 8, Math.min(bounds.left, viewport.left + viewport.width - width - 8));
+      const top = Math.max(viewport.top + 8, bounds.top - height - 6);
+      setPosition({ top, left, maxHeight });
     };
     place();
     const observer = new ResizeObserver(place);
     if (barRef.current) observer.observe(barRef.current);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
-    return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true);
+      window.visualViewport?.removeEventListener('resize', place); window.visualViewport?.removeEventListener('scroll', place);
+    };
   }, [anchor, barRef]);
   useEffect(() => {
-    if (focus) (barRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? barRef.current?.querySelector<HTMLButtonElement>('button'))?.focus({ preventScroll: true });
+    const element = barRef.current;
+    const button = element?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? element?.querySelector<HTMLButtonElement>('button');
+    if (!focus || !element || !button) return;
+    button.focus({ preventScroll: true });
+    if (button.offsetTop < element.scrollTop) element.scrollTop = button.offsetTop;
+    else if (button.offsetTop + button.offsetHeight > element.scrollTop + element.clientHeight) element.scrollTop = button.offsetTop + button.offsetHeight - element.clientHeight;
   }, [focus, barRef]);
   return createPortal(<div id={id} ref={barRef} className="reaction-bar" style={position} role="group" aria-label="Choose your reaction" data-reaction-control
     onPointerEnter={onEnter} onPointerLeave={onLeave} onBlur={onBlur} onClick={(event) => event.stopPropagation()}>
@@ -160,8 +168,6 @@ function ReactionBar({ id, anchor, barRef, state, focus, onApply, onEnter, onLea
       disabled={state.saving || !state.available} onClick={() => onApply(state.own === reaction.type ? null : reaction.type)}>
       <span aria-hidden="true">{reaction.emoji}</span>
     </button>)}
-    {state.own && <button type="button" className="reaction-remove" title="Remove reaction" aria-label="Remove reaction"
-      disabled={state.saving} onClick={() => onApply(null)}><X size={16} aria-hidden="true" /></button>}
   </div>, anchor.closest('[data-task-modal]') ?? document.body);
 }
 
@@ -178,9 +184,10 @@ function ReactionDetails({ mediaType, mediaId, state, selected, anchor, focus, p
     const place = () => {
       const bounds = anchor.getBoundingClientRect();
       const box = popoverRef.current?.getBoundingClientRect();
+      const viewport = reactionViewport();
       const width = box?.width ?? 280, height = box?.height ?? 220;
-      const left = Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8));
-      const top = Math.max(8, Math.min(bounds.bottom + height + 8 <= window.innerHeight ? bounds.bottom + 6 : bounds.top - height - 6, window.innerHeight - height - 8));
+      const left = Math.max(viewport.left + 8, Math.min(bounds.left, viewport.left + viewport.width - width - 8));
+      const top = Math.max(viewport.top + 8, Math.min(bounds.bottom + height + 8 <= viewport.top + viewport.height ? bounds.bottom + 6 : bounds.top - height - 6, viewport.top + viewport.height - height - 8));
       setPosition({ top, left });
     };
     place();
@@ -188,7 +195,12 @@ function ReactionDetails({ mediaType, mediaId, state, selected, anchor, focus, p
     if (popoverRef.current) observer.observe(popoverRef.current);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
-    return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true);
+      window.visualViewport?.removeEventListener('resize', place); window.visualViewport?.removeEventListener('scroll', place);
+    };
   }, [anchor, popoverRef]);
   const [people, setPeople] = useState<Person[]>([]);
   const [hasMore, setHasMore] = useState(false);

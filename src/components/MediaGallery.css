@@ -86,3 +86,8 @@
   .media-page .mg-grid[data-density='compact'] { grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr)); gap: 10px; }
   .media-page .mg-card-body { padding: 10px; }
 }
+/* Three adjacent touch controls need room on the smallest phone screens. */
+@media (max-width: 360px) {
+  body:has(.media-page) { min-width: 0; }
+  .media-page .mg-grid, .media-page .mg-grid[data-density='compact'] { grid-template-columns: minmax(0, 1fr); }
+}

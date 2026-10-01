@@ -3,7 +3,11 @@
 - Route every user-initiated destructive action through `useDeleteConfirmation`
   and `DeleteConfirmationProvider`. Perform the mutation only inside `onConfirm`.
   This includes menus, keyboard shortcuts, viewers, bulk actions, account deletion,
-  reaction removal, saved sharing removals and deletion/replacement of saved previews.
+  saved sharing removals and deletion/replacement of saved previews.
+- Reaction removal is an explicit, reversible toggle exception: clicking the
+  applied reaction removes it immediately, without a separate remove action or
+  confirmation. Changing a reaction replaces it. Preserve the server permission
+  check and pending-request guard.
 - Name the target. For bulk actions, give the selected count. For folders, explain
   that all contents are included. Distinguish moving to Trash from permanent deletion.
 - Describe only the cascades the backend actually performs. Account deletion does

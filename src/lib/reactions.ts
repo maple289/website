@@ -108,7 +108,7 @@ export class ReactionStore {
     if (reaction) counts[reaction] = (counts[reaction] ?? 0) + 1;
     entry.revision++;
     const epoch = this.epoch;
-    this.publish(entry, reaction === null ? { saving: true, error: '' } : { counts, own: reaction, saving: true, error: '' });
+    this.publish(entry, { counts, own: reaction, saving: true, error: '' });
     try {
       const { error } = await supabase.rpc('set_media_reaction', { p_type: type, p_id: id, p_reaction: reaction });
       if (error) throw error;
