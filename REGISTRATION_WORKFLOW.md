@@ -5,6 +5,11 @@ Registration submits email and optional profile names to
 delivery starts. Recipients come from profiles with the `admin` role. Delivery
 errors are recorded independently and never roll back a saved registration.
 
+The form confirms receipt of the submission with privacy-preserving wording.
+An existing account or previously reviewed request does not create a new pending
+registration or send another email. A rejected request keeps its administrator
+decision; reopening it requires an explicit administrator decision.
+
 `ADMIN_NOTIFICATION_RECIPIENTS` optionally limits these recipients to a
 comma-separated list of registered administrator addresses without changing their
 account permissions. Production currently restricts this list to
