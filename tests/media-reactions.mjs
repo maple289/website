@@ -153,15 +153,23 @@ try{
       await act(selector.getByRole('button',{name:'Love',exact:true}));await selector.waitFor({state:'detached'});
       await until(async()=>await card.locator('.reaction-add').isEnabled(),'replacement saved');
       pass(label+': '+kind+' same menu reaction toggles off');
+      const writesBeforeDetails=writes.length;
       await act(card.locator('.reaction-summary button').first());
       const details=page.getByRole('region',{name:'Like reactions',exact:true});await details.waitFor();await details.getByText('Alex',{exact:true}).waitFor();
       assert.equal(await details.getByText(/@/).count(),0,'details display names only');
+      assert.equal(await details.locator('header button,svg,[aria-label*="Remove"],[aria-label*="Delete"]').count(),0,'details contain no close/delete/remove icons or actions');
+      await act(details.getByText('Alex',{exact:true}));
+      assert.equal(writes.length,writesBeforeDetails,'informational details never change a reaction');
       const detailsBox=await details.boundingBox();
       assert.ok(detailsBox.x>=0&&detailsBox.x+detailsBox.width<=width+1&&detailsBox.y>=0&&detailsBox.y+detailsBox.height<=height+1,'details stay within visible viewport');
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),'popover must not broaden mobile viewport');
-      await act(details.getByRole('button',{name:'Close reaction details'}));pass(label+': '+kind+' reacting-user details available');
+      await act(page.getByRole('heading',{name:'Compact reactions',exact:true}));await details.waitFor({state:'detached'});
+      pass(label+': '+kind+' informational details without close/delete icons, outside dismissal');
       if(touch){
         const summary=card.locator('.reaction-summary');
+        // Outside dismissal may scroll the gallery to the heading. Native
+        // touch gestures require the count strip to be visible again.
+        await summary.scrollIntoViewIfNeeded();
         if(await summary.evaluate(node=>node.scrollWidth>node.clientWidth)){
           const before=await summary.evaluate(node=>node.scrollLeft);
           await swipe(page,summary,true);

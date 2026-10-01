@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { SmilePlus, X } from 'lucide-react';
+import { SmilePlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ReactionContext, reactions, type MediaType, type Reaction, type ReactionState, type ReactionStore } from '@/lib/reactions';
 import './MediaReactions.css';
@@ -119,7 +119,7 @@ function ReactionControl({ store, mediaType, mediaId }: Props & { store: Reactio
     {expanded && trigger.current && <ReactionBar id={barId} anchor={trigger.current} barRef={bar} state={state} focus={focusBar}
       onApply={apply} onEnter={clearBarTimer} onLeave={deferBarClose} onBlur={blurSelector} />}
     {opened && <ReactionDetails key={opened.reaction} mediaType={mediaType} mediaId={mediaId} state={state} selected={opened.reaction}
-      anchor={opened.anchor} focus={opened.focus} popoverRef={popover} onClose={closeDetails} onEnter={clearDetailsTimer} onLeave={deferDetailsClose} />}
+      anchor={opened.anchor} focus={opened.focus} popoverRef={popover} onEnter={clearDetailsTimer} onLeave={deferDetailsClose} />}
   </div>;
 }
 
@@ -172,13 +172,13 @@ function ReactionBar({ id, anchor, barRef, state, focus, onApply, onEnter, onLea
 }
 
 type Person = { user_id: string; display_name: string };
-function ReactionDetails({ mediaType, mediaId, state, selected, anchor, focus, popoverRef, onClose, onEnter, onLeave }: Props & {
+function ReactionDetails({ mediaType, mediaId, state, selected, anchor, focus, popoverRef, onEnter, onLeave }: Props & {
   state: ReactionState; selected: Reaction; anchor: HTMLButtonElement; focus: boolean;
-  popoverRef: React.RefObject<HTMLDivElement>; onClose: () => void; onEnter: () => void; onLeave: () => void;
+  popoverRef: React.RefObject<HTMLDivElement>; onEnter: () => void; onLeave: () => void;
 }) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const cursor = cursors[cursors.length - 1];
-  useEffect(() => { if (focus) popoverRef.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true }); }, [focus, popoverRef]);
+  useEffect(() => { if (focus) popoverRef.current?.focus({ preventScroll: true }); }, [focus, popoverRef]);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   useLayoutEffect(() => {
     const place = () => {
@@ -229,12 +229,12 @@ function ReactionDetails({ mediaType, mediaId, state, selected, anchor, focus, p
   }, [mediaType, mediaId, selected, cursor, state.version, state.saving]);
   const current = reactions.find((reaction) => reaction.type === selected)!;
   return createPortal(<div ref={popoverRef} className="reaction-details" style={position} data-reaction-control
-    role="region" aria-label={`${current.label} reactions`}
+    role="region" aria-label={`${current.label} reactions`} tabIndex={-1}
     onPointerEnter={(event) => { if (event.pointerType === 'mouse') onEnter(); }}
     onPointerLeave={(event) => { if (event.pointerType === 'mouse') onLeave(); }}
     onFocus={onEnter} onClick={(event) => event.stopPropagation()}
     onKeyDown={(event) => event.stopPropagation()}>
-    <header><strong>{current.emoji} {current.label}</strong><button type="button" onClick={() => { anchor.focus({ preventScroll: true }); onClose(); }} aria-label="Close reaction details"><X size={16} /></button></header>
+    <header><strong>{current.emoji} {current.label}</strong></header>
     <div className="reaction-people" aria-busy={loading}>
       {loading ? <p role="status">Loading…</p> : error ? <p role="alert">{error}</p> : people.length ? <ul>{people.map((person) => <li key={person.user_id}>{person.display_name}</li>)}</ul> : <p>No reactions on this page.</p>}
     </div>
