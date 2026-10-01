@@ -1,0 +1,71 @@
+/* Shared presentation only. Authorization, modal dismissal and mutations stay in their existing components. */
+.fluent-app { --fluent-text: #223348; --fluent-muted: #52657a; --fluent-primary: #2563eb; color: var(--fluent-text); }
+.fluent-shell { min-height: 100vh; background: linear-gradient(145deg, #f7f9fc, #eef3f8); }
+.fluent-header { background: #0f2344f7; color: #f7faff; border-bottom: 1px solid #203653; }
+.fluent-header > div { gap: 14px; }
+.fluent-brand { display: flex; flex-shrink: 0; align-items: center; gap: 10px; padding: 4px; min-height: 44px; font-size: 21px; font-weight: 650; letter-spacing: -.04em; }
+.fluent-brand-icon { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 11px; background: #2563eb; color: #fff; }
+.fluent-header button:hover { background-color: #ffffff12; }
+.fluent-header .fluent-brand:hover { background: transparent; }
+.fluent-header-upload { border: 1px solid #ffffff24; }
+.fluent-search > div { border: 1px solid #ffffff25; background: #ffffff0c; border-radius: 12px; }
+.fluent-search input { color: #fff; }
+.fluent-search input::placeholder, .fluent-search svg { color: #bccbdf; }
+.fluent-search > button[type='submit'] { display: none; }
+.fluent-search > div:focus-within { border-color: #93baff; box-shadow: 0 0 0 2px #93baff22; }
+.fluent-mobile-search { background: #0f2344; color: #fff; border-bottom: 1px solid #203653; }
+.fluent-sidebar { background: #f9fbfd; color: #52657a; border-right: 1px solid #e2e8f0; overflow-y: auto; overscroll-behavior: contain; }
+.fluent-nav-label { padding: 12px 12px 16px; color: #52657a; font-size: 11px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
+.fluent-sidebar nav button { color: #52657a; min-height: 48px; background: transparent; }
+.fluent-sidebar nav button:hover { color: #1d4ed8; background: #edf3fc; }
+.fluent-sidebar nav button[aria-current='page'] { background: #e7effc; color: #1d4ed8; box-shadow: inset 3px 0 #2563eb; }
+.fluent-sidebar-tip { background: #eff4fc; border: 1px solid #dce6f3; }
+.fluent-section-nav { max-width: 1680px; margin: auto; padding: 12px 24px 0; }
+.fluent-app .mg-tabs { padding-top: 0; gap: 6px; border-color: #dce5ef; }
+.fluent-app .mg-tabs button { min-height: 48px; border-radius: 10px 10px 0 0; color: #52657a; font-weight: 600; }
+.fluent-app .mg-tabs button[aria-current='page'] { background: #eaf1fc; color: #1d4ed8; border-color: #2563eb; }
+.fluent-app .mg-tabs button:hover { color: #1d4ed8; background: #edf3fc; }
+.fluent-app button, .fluent-app a, .fluent-app select { transition: background-color 160ms, border-color 160ms, color 160ms, box-shadow 160ms; }
+.fluent-app button:focus-visible, .fluent-app a:focus-visible, .fluent-app select:focus-visible { outline: 2px solid #6098f2; outline-offset: 3px; }
+.fluent-app .fluent-primary { background: #2563eb; color: #fff; }
+.fluent-app .fluent-primary:hover { background: #1d4ed8; }
+.fluent-account-button { min-width: 44px; min-height: 44px; border: 1px solid #ffffff30; color: #fff; border-radius: 12px; }
+.fluent-avatar { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border-radius: 50%; background: #2563eb; color: #fff; font-weight: 650; }
+.fluent-account-menu { position: absolute; right: 0; top: 54px; width: min(280px, calc(100vw - 24px)); padding: 8px; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; color: #223348; box-shadow: 0 12px 32px #0f234426; }
+.fluent-account-menu > div { border-color: #e2e8f0; }
+.fluent-account-menu p { color: #223348; }.fluent-account-menu p + p { color: #52657a; }
+.fluent-account-menu a, .fluent-account-menu button { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: #52657a; text-align: left; font-size: 14px; }
+.fluent-account-menu a:hover, .fluent-account-menu button:hover { background: #edf3fc; color: #1d4ed8; }
+/* Adapt the existing shared forms/settings/admin surfaces without touching their task behavior. */
+.fluent-app [class*='bg-[linear-gradient(180deg,'] { background: linear-gradient(145deg, #f7f9fc, #eef3f8); color: #223348; }
+.fluent-app [class~='bg-[#181818]'], .fluent-app [class~='bg-[#161616]'], .fluent-app [class~='bg-[#1c1c1c]'], .fluent-app [class~='bg-[#191919]'] { background: #fff; color: #223348; border-color: #e2e8f0; }
+.fluent-app [class~='bg-[#121212]'] { background: #f5f8fc; color: #223348; border-color: #dce5ef; }
+.fluent-app [class~='bg-[#242424]'], .fluent-app [class~='bg-[#272727]'] { background: #edf3fb; color: #365b80; }
+.fluent-app [class~='border-[#272727]'], .fluent-app [class~='border-[#2e2e2e]'], .fluent-app [class~='border-[#3a3a3a]'], .fluent-app [class~='border-[#3b3b3b]'], .fluent-app [class~='border-[#333]'] { border-color: #dce5ef; }
+.fluent-app :is([class~='bg-[#181818]'],[class~='bg-[#161616]'],[class~='bg-[#1c1c1c]'],[class~='bg-[#121212]']) :is(h1,h2,h3,h4,p,span,label,th,td).text-white:not(:where(button *, a *)) { color: #223348; }
+.fluent-app .fluent-primary.text-white, .fluent-app .fluent-primary .text-white, .fluent-app .fluent-avatar { color: #fff; }
+.fluent-app :is([class~='text-[#888]'],[class~='text-[#aaa]'],[class~='text-[#777]'],[class~='text-[#999]'],[class~='text-[#9a9a9a]'],[class~='text-[#a5a5a5]'],[class~='text-[#ccc]'],[class~='text-[#a7a7a7]'],[class~='text-[#9ab3d4]']) { color: #52657a; }
+.fluent-app :is([class~='hover:bg-[#272727]'],[class~='hover:bg-[#2a2a2a]']):hover { background: #edf3fc; color: #1d4ed8; }
+.fluent-app [class~='text-[#ff8a90]'], .fluent-app [class~='text-[#ff737b]'], .fluent-app .text-red-300 { color: #b4233c; }
+.fluent-app [class~='text-[#ff6971]'] { color: #1d4ed8; }
+.fluent-app .text-emerald-300 { color: #187550; }
+.fluent-app [class~='bg-[#001338]/50'] { background: #edf3fb; border-color: #dce5ef; }
+.fluent-app header[class~='bg-[#001338]/95'] { background: #0f2344; color: #fff; }
+.fluent-app header[class~='bg-[#001338]/95'] button:hover { background: #ffffff12; color: #fff; }
+.fluent-app :is(input, textarea, select) { accent-color: #2563eb; }
+.fluent-app :is(input, textarea):not([type='checkbox']):not([type='range']) { font-size: 16px; }
+.fluent-app .video-player-surface { color: #f7faff; border-color: #263447; }
+.fluent-app .video-player-surface :is([class~='text-[#888]'],[class~='text-[#a7a7a7]']) { color: #b5c3d6; }
+.fluent-app .fluent-search > div { background: #ffffff0c; border-color: #ffffff25; color: #fff; }
+.fluent-app .fluent-search button:hover { background: #ffffff12; color: #fff; }
+.fluent-app [data-task-modal] button[aria-label='Close'] { min-width: 44px; min-height: 44px; }
+.fluent-app .file-manager .text-slate-400 { color: #52657a; }
+.fluent-app .file-manager input::placeholder { color: #52657a; }
+@media (max-width: 767px) {
+  .fluent-header > div { gap: 6px; padding: 0 12px; }
+  .fluent-header-upload { padding: 10px; }
+  .fluent-main.fluent-search-open { padding-top: 141px; }
+  .fluent-section-nav { padding: 12px 12px 0; }
+  .fluent-sidebar { box-shadow: 10px 0 32px #0f234426; }
+}
+@media (prefers-reduced-motion: reduce) { .fluent-app *, .fluent-app *::before, .fluent-app *::after { transition: none !important; animation-duration: .01ms !important; } }

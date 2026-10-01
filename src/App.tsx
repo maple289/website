@@ -1,9 +1,10 @@
 import { ReactionProvider } from '@/components/ReactionProvider';
 import { DeleteConfirmationProvider } from '@/components/DeleteConfirmationProvider';
 import '@/components/MediaGallery.css';
+import '@/components/FluentTheme.css';
 import { FileDropArea } from '@/components/FileDropArea';
 import { useEffect, useRef, useState } from 'react';
-import { Bell, FolderOpen, Chrome as Home, Images, Menu, Search, Settings, Upload, Video, X, Youtube, ShieldCheck } from 'lucide-react';
+import { Clapperboard, FolderOpen, Home, Images, Menu, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -21,16 +22,18 @@ import { FileManager } from '@/components/FileManager';
 
 function App() {
   return (
-    <AuthProvider>
+    <div className="fluent-app"><AuthProvider>
       <DeleteConfirmationProvider><ReactionProvider><AppContent /></ReactionProvider></DeleteConfirmationProvider>
-    </AuthProvider>
+    </AuthProvider></div>
   );
 }
 
-type Route = 'home' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings';
+type Route = 'home' | 'public-videos' | 'public-photos' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings';
 
 function getRoute(): Route {
   const hash = window.location.hash;
+  if (hash === '#/public-videos') return 'public-videos';
+  if (hash === '#/public-photos') return 'public-photos';
   if (hash === '#/admin') return 'admin';
   if (hash === '#/library') return 'library';
   if (hash === '#/photos') return 'photos';
@@ -53,7 +56,7 @@ function AppContent() {
   const [droppedMedia, setDroppedMedia] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const [homeTab, setHomeTab] = useState<'videos' | 'photos'>('videos');
+  const homeTab = route === 'public-photos' ? 'photos' : 'videos';
 
   useEffect(() => {
     const onHash = () => {
@@ -61,7 +64,8 @@ function AppContent() {
       if (window.location.hash === '#/login') { setAuthMode('signin'); setAuthOpen(true); }
     };
     window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onHash);
+    return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('popstate', onHash); };
   }, []);
 
   // Redirect: if not signed in and trying to access library, go home
@@ -78,6 +82,8 @@ function AppContent() {
 
   const navigate = (r: Route) => {
     if (r === 'home') window.location.hash = '';
+    else if (r === 'public-videos') window.location.hash = '#/public-videos';
+    else if (r === 'public-photos') window.location.hash = '#/public-photos';
     else if (r === 'library') window.location.hash = '#/library';
     else if (r === 'photos') window.location.hash = '#/photos';
     else if (r === 'public-files') window.location.hash = '#/public-files';
@@ -86,21 +92,21 @@ function AppContent() {
     else if (r === 'settings') window.location.hash = '#/settings';
     setRoute(r);
     setSidebarOpen(false);
+    setSearch('');
+    setMobileSearchOpen(false);
   };
 
   const openPublicSection = (tab: 'videos' | 'photos' | 'files') => {
-    if (tab === 'files') navigate('public-files');
-    else {
-      setHomeTab(tab);
-      navigate('home');
-    }
+    navigate(tab === 'files' ? 'public-files' : tab === 'photos' ? 'public-photos' : 'public-videos');
   };
 
   const openSignIn = () => { setAuthMode('signin'); setAuthOpen(true); };
 
   const isAuthed = !!user;
   const isFilesRoute = route === 'files' || route === 'public-files';
-  const uploadsPhoto = route === 'photos' || (route === 'home' && homeTab === 'photos');
+  const uploadsPhoto = route === 'photos' || route === 'public-photos';
+  const searchLabel = uploadsPhoto ? 'Search photos' : 'Search videos';
+  const publicTab = route === 'public-files' ? 'files' : route === 'public-photos' ? 'photos' : route === 'home' || route === 'public-videos' ? 'videos' : undefined;
 
   // A setup capability is not an authenticated account session. No application
   // route is rendered until the server confirms that a password is established.
@@ -127,78 +133,74 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#033C8D_0%,#0062C7_50%,#001338_100%)] text-[#f1f1f1]">
+    <div className="fluent-shell">
       {/* Header */}
-      <header className="fixed inset-x-0 top-0 z-40 h-[72px] border-b border-[#1a2a4a] bg-[#001338]/95 backdrop-blur-xl">
+      <header className="fluent-header fixed inset-x-0 top-0 z-40 h-[72px] backdrop-blur-xl">
         <div className="mx-auto flex h-full max-w-[1560px] items-center gap-4 px-5 lg:px-8">
           {isAuthed && (
             <button aria-label="Open menu" onClick={() => setSidebarOpen(!sidebarOpen)} className="rounded-full p-3 transition hover:bg-[#272727] lg:hidden">
               {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           )}
-          <div className="flex items-center gap-2.5 pr-5">
-            <div className="flex h-8 w-11 items-center justify-center rounded-[10px] bg-[#ff3d46] shadow-[0_0_24px_rgba(255,61,70,0.22)]">
-              <Youtube size={23} fill="white" strokeWidth={1.5} />
-            </div>
-            <span className="hidden text-[21px] font-semibold tracking-[-0.06em] sm:inline">Videos</span>
-          </div>
+          <button onClick={() => navigate('home')} aria-label="MyHostage Home" className="fluent-brand">
+            <span className="fluent-brand-icon"><Clapperboard size={23} strokeWidth={1.8} /></span>
+            <span className="hidden sm:inline">MyHostage</span>
+          </button>
           {/* Search bar */}
-          <form onSubmit={(event) => event.preventDefault()} role="search" className="mx-auto hidden max-w-[690px] flex-1 items-center md:flex">
+          {!isFilesRoute && <form onSubmit={(event) => event.preventDefault()} role="search" className="fluent-search mx-auto hidden max-w-[590px] flex-1 items-center md:flex">
             <div className="flex h-11 flex-1 items-center overflow-hidden rounded-l-full border border-[#3f3f3f] bg-[#121212] transition focus-within:border-[#4b86ff]">
               <Search className="ml-4 text-[#a7a7a7]" size={20} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" aria-label="Search" className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#888]" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={searchLabel} aria-label={searchLabel} className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#888]" />
               {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="mr-2 rounded-full p-1 hover:bg-[#303030]"><X size={17} /></button>}
             </div>
             <button type="submit" aria-label="Search" className="flex h-11 w-16 items-center justify-center rounded-r-full border border-l-0 border-[#3f3f3f] bg-[#222] transition hover:bg-[#303030]"><Search size={21} /></button>
-          </form>
+          </form>}
           <div className="ml-auto flex items-center gap-2">
-            <button aria-label={mobileSearchOpen ? 'Close search' : 'Search'} onClick={() => setMobileSearchOpen((open) => !open)} className="rounded-full p-3 hover:bg-[#272727] md:hidden">{mobileSearchOpen ? <X size={21} /> : <Search size={21} />}</button>
-            {isAuthed && (
-              <>
+            {!isFilesRoute && <button aria-label={mobileSearchOpen ? 'Close search' : 'Search'} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)} className="rounded-full p-3 hover:bg-[#272727] md:hidden">{mobileSearchOpen ? <X size={21} /> : <Search size={21} />}</button>}
+            {isAuthed && !isFilesRoute && (
                 <button
                   onClick={() => { setDroppedMedia([]); if (uploadsPhoto) setShowPhotoUpload(true); else setShowUpload(true); }}
                   aria-label={uploadsPhoto ? 'Upload photo' : 'Upload video'}
-                  className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition hover:bg-[#272727]"
+                  className="fluent-header-upload flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition"
                 >
                   <Upload size={20} /> <span className="hidden sm:inline">{uploadsPhoto ? 'Upload photo' : 'Upload video'}</span>
                 </button>
-                <button aria-label="Notifications" className="relative rounded-full p-3 transition hover:bg-[#272727]"><Bell size={21} /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ff3d46]" /></button>
-              </>
             )}
             <AccountMenu onSignIn={openSignIn} />
           </div>
         </div>
       </header>
 
-      {mobileSearchOpen && <form onSubmit={(event) => { event.preventDefault(); mobileSearchRef.current?.blur(); }} role="search" className="fixed inset-x-0 top-[72px] z-40 border-b border-[#1a2a4a] bg-[#001338] p-3 shadow-xl md:hidden"><div className="flex h-11 items-center overflow-hidden rounded-full border border-[#3f3f3f] bg-[#121212] focus-within:border-[#4b86ff]"><Search className="ml-4 shrink-0 text-[#a7a7a7]" size={19} /><input ref={mobileSearchRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search videos, photos, and files" aria-label="Search videos, photos, and files" className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-[#888]" />{search && <button type="button" aria-label="Clear search" onClick={() => { setSearch(''); mobileSearchRef.current?.focus(); }} className="mr-3 rounded-full p-1 text-[#aaa] hover:bg-[#303030]"><X size={17} /></button>}</div></form>}
+      {mobileSearchOpen && !isFilesRoute && <form onSubmit={(event) => { event.preventDefault(); mobileSearchRef.current?.blur(); }} role="search" className="fluent-mobile-search fluent-search fixed inset-x-0 top-[72px] z-40 p-3 md:hidden"><div className="flex h-11 items-center overflow-hidden rounded-xl"><Search className="ml-4 shrink-0" size={19} /><input ref={mobileSearchRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchLabel} aria-label={searchLabel} className="h-full min-w-0 flex-1 bg-transparent px-3 text-base outline-none" />{search && <button type="button" aria-label="Clear search" onClick={() => { setSearch(''); mobileSearchRef.current?.focus(); }} className="mr-1 p-3"><X size={17} /></button>}</div></form>}
 
       {/* Sidebar — only for authenticated users */}
       {isAuthed && (
-        <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[72px] z-30 h-[calc(100vh-72px)] w-64 border-r border-[#1a2a4a] bg-[#001338] p-3 transition-transform duration-300 lg:translate-x-0`}>
+        <aside className={`fluent-sidebar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[72px] z-30 h-[calc(100dvh-72px)] w-64 p-3 transition-transform duration-200 lg:translate-x-0`}>
+          <p className="fluent-nav-label">Your workspace</p>
           <nav className="space-y-1 text-sm">
-            <NavItem icon={<Home size={20} />} label="Home" active={route === 'home'} onClick={() => navigate('home')} />
+            <NavItem icon={<Home size={20} />} label="Home" active={route === 'home' || route === 'public-videos' || route === 'public-photos'} onClick={() => navigate('home')} />
             <NavItem icon={<Video size={20} />} label="My Videos" active={route === 'library'} onClick={() => navigate('library')} />
             <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
             <NavItem icon={<FolderOpen size={20} />} label="File Storage" active={route === 'files'} onClick={() => navigate('files')} />
-            <div className="my-4 h-px bg-[#272727]" />
+            <div className="my-4 h-px bg-slate-200" />
             {isAdmin && (
               <NavItem icon={<ShieldCheck size={20} />} label="Admin Console" onClick={() => navigate('admin')} />
             )}
             <NavItem icon={<Settings size={20} />} label="Settings" active={route === 'settings'} onClick={() => navigate('settings')} />
           </nav>
-          <div className="absolute bottom-6 left-6 right-6 rounded-2xl border border-[#2e2e2e] bg-[#191919] p-4">
-            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff6670]"><Upload size={18} /></div>
+          <div className="fluent-sidebar-tip mt-8 rounded-2xl p-4">
+            <div className="mb-3 text-blue-600"><Upload size={20} /></div>
             <p className="text-sm font-medium">Share your story</p>
-            <p className="mt-1 text-xs leading-5 text-[#888]">Upload a video and inspire the world.</p>
-            <button onClick={() => { setDroppedMedia([]); setShowUpload(true); }} className="mt-3 text-xs font-semibold text-[#ff6971] hover:text-[#ff9ba0]">Upload now</button>
+            <p className="mt-1 text-xs leading-5 text-slate-600">Keep your memories private or share them with everyone.</p>
+            <button onClick={() => { setDroppedMedia([]); if (uploadsPhoto) setShowPhotoUpload(true); else setShowUpload(true); }} className="mt-3 min-h-11 text-sm font-semibold text-blue-700">Upload {uploadsPhoto ? 'photos' : 'videos'}</button>
           </div>
         </aside>
       )}
 
       {/* Main content */}
-      <main className={`${!isFilesRoute ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
-        {(route === 'library' || route === 'photos') && <div className="mg-page mg-page-nav"><MediaTabs onSelect={openPublicSection} /></div>}
-        {isFilesRoute ? <><div className="px-5 lg:px-8"><MediaTabs active={route === 'public-files' ? 'files' : undefined} onSelect={openPublicSection} /></div>{!loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} />}</> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} onTabChange={openPublicSection} onFiles={() => openPublicSection('files')} /></FileDropArea>}
+      <main className={`fluent-main ${mobileSearchOpen && !isFilesRoute ? 'fluent-search-open' : ''} ${!isFilesRoute ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
+        <div className="fluent-section-nav"><MediaTabs active={publicTab} onSelect={openPublicSection} /></div>
+        {isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} /></FileDropArea>}
       </main>
 
       {/* Auth modal */}

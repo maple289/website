@@ -54,7 +54,7 @@ export function AdminPage() {
         <p className="max-w-sm text-sm text-[#999]">
           You need an admin account to view this page. Sign in with an admin account to manage users and storage configuration.
         </p>
-        <a href="#/" className="mt-2 rounded-lg bg-[#ff3d46] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff5962]">
+        <a href="#/" className="mt-2 rounded-lg fluent-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
           Back to home
         </a>
       </div>
@@ -68,7 +68,7 @@ export function AdminPage() {
           <a href="#/" className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back to home">
             <ArrowLeft size={20} />
           </a>
-          <div className="flex h-8 w-10 items-center justify-center rounded-[10px] bg-[#ff3d46]">
+          <div className="flex h-8 w-10 items-center justify-center rounded-[10px] fluent-primary">
             <ShieldCheck size={20} className="text-white" />
           </div>
           <span className="text-[19px] font-semibold tracking-[-0.04em]">Admin Console</span>
@@ -90,7 +90,7 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${active ? 'bg-[#ff3d46] text-white' : 'text-[#a5a5a5] hover:text-white'}`}
+      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${active ? 'fluent-primary text-white' : 'text-[#a5a5a5] hover:text-white'}`}
     >
       {icon}
       {children}
@@ -178,7 +178,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-[#ff3d46] px-4 text-sm font-semibold text-white transition hover:bg-[#ff5962]"
+            className="flex h-11 shrink-0 items-center gap-2 rounded-xl fluent-primary px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             <UserPlus size={18} /> <span className="hidden sm:inline">Add user</span>
           </button>
@@ -528,7 +528,7 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
             <button
               onClick={onConfirm}
               disabled={saving}
-              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isPromotion ? 'bg-[#ff3d46] hover:bg-[#ff5962]' : 'bg-amber-600 hover:bg-amber-500'}`}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isPromotion ? 'fluent-primary hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-500'}`}
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : isPromotion ? <ShieldCheck size={16} /> : <Users size={16} />}
               {isPromotion ? 'Promote' : 'Demote'}
@@ -685,7 +685,7 @@ function StorageTab() {
           <button
             onClick={handleSaveSettings}
             disabled={savingSettings || !hasUnsavedChanges}
-            className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-5 text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex h-11 items-center gap-2 rounded-xl fluent-primary px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {savingSettings ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Storage Locations
@@ -860,7 +860,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
 
           <div className="flex gap-3">
             <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
+            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl fluent-primary text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
               {saving && <Loader2 size={16} className="animate-spin" />}
               Create user
             </button>
@@ -955,7 +955,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
 
           <div className="flex gap-3">
             <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
+            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl fluent-primary text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
               {saving && <Loader2 size={16} className="animate-spin" />}
               Save changes
             </button>

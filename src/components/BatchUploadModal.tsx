@@ -53,7 +53,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
         <p className={`mt-1 text-xs ${item.status === 'Failed' ? 'text-red-300' : 'text-[#aaa]'}`}>{item.status}{item.status === 'Uploading' ? ` · ${item.progress}%` : ''}{item.message ? ` — ${item.message}` : ''}</p>
         <progress aria-label={`Upload progress for ${item.file.name}`} value={item.progress} max={100} className="mt-2 h-1.5 w-full accent-blue-500" />
       </div>)}</div>
-      <button disabled={active} onClick={onClose} className="w-full rounded-xl bg-[#ff3d46] px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{active ? 'Uploading…' : 'Done'}</button>
+      <button disabled={active} onClick={onClose} className="w-full rounded-xl fluent-primary px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{active ? 'Uploading…' : 'Done'}</button>
     </div>
   </TaskModal>;
 }

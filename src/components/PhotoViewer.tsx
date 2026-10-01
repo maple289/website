@@ -12,14 +12,15 @@ const controls = 'input, textarea, select, button, a, [contenteditable]:not([con
 function ViewerPhoto({ photo, current }: { photo: Photo; current: boolean }) {
   const [failed, setFailed] = useState(false);
   const [usePreview, setUsePreview] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => { setFailed(false); setUsePreview(false); }, [photo.storage_path]);
-  const fallback = <div className="pv-loading">Unable to load photo.</div>;
-  return failed ? fallback : <StorageImage storagePath={usePreview ? photo.preview_path : photo.storage_path} alt={current ? photo.file_name : ''}
+  const fallback = <div className="pv-loading"><p>Unable to load photo.</p>{current && <button className="pv-retry" onClick={() => { setFailed(false); setUsePreview(false); setAttempt(value => value + 1); }}>Retry</button>}</div>;
+  return failed ? fallback : <StorageImage key={attempt} storagePath={usePreview ? photo.preview_path : photo.storage_path} alt={current ? photo.file_name : ''}
     draggable={false} className="pv-photo" onError={() => {
       // HEIC/TIFF and other valid originals may not have a browser decoder.
       if (!usePreview && photo.preview_path) setUsePreview(true);
       else setFailed(true);
-    }} fallback={fallback} />;
+    }} fallback={fallback} loadingFallback={<div className="pv-loading" role={current ? 'status' : undefined}>Loading photo…</div>} />;
 }
 
 export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: PhotoViewerProps) {

@@ -31,5 +31,6 @@
 .pv-reactions .reaction-summary { justify-content: center; }.pv-reactions .reaction-selector { text-align: center; }.pv-reactions .reaction-bar { margin-left: auto; margin-right: auto; }
 .pv-reactions .reaction-error, .video-reactions .reaction-error { color: #ffacb6; }
 .video-reactions { padding: 4px 16px 12px; }
+.photo-viewer .pv-reactions .reaction-guest, .video-player-surface .video-reactions .reaction-guest { color: #b5c3d6; font-size: 12px; }
 @media (pointer: coarse) { .reaction-add, .reaction-count { min-height: 44px; min-width: 44px; } }
 @media (prefers-reduced-motion: reduce) { .media-reactions *, .reaction-details button { transition: none !important; } }

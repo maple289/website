@@ -2,7 +2,7 @@ import { TaskModal } from '@/components/TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { ProfileNameFields } from './ProfileNameFields';
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Mail, Lock, Eye, EyeOff, X, Youtube } from 'lucide-react';
+import { Loader2, Mail, Lock, Eye, EyeOff, X, Clapperboard } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const approvalMessage = 'Your registration request has been submitted for administrator approval. Check your email for confirmation. After approval, sign in with your email and leave the password blank to create your password.';
@@ -103,8 +103,8 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           <button aria-label="Close" onClick={close} className="absolute right-4 top-4 rounded-full p-2 text-[#a7a7a7] transition hover:bg-[#2a2a2a] hover:text-white">
             <X size={20} />
           </button>
-          <div className="flex h-11 w-14 items-center justify-center rounded-xl bg-[#ff3d46] shadow-[0_0_28px_rgba(255,61,70,0.28)]">
-            <Youtube size={24} fill="white" strokeWidth={1.5} />
+          <div className="flex h-11 w-14 items-center justify-center rounded-xl fluent-primary ">
+            <Clapperboard size={24} strokeWidth={1.5} />
           </div>
           <h2 className="mt-5 text-[22px] font-semibold tracking-[-0.03em]">
             {mode === 'signup' ? 'Create your account' : 'Welcome back'}
@@ -172,14 +172,14 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
           <button
             type="submit"
             disabled={submitting || (mode === 'signup' && registrationSubmitted)}
-            className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-[15px] font-semibold text-white transition hover:bg-[#ff5962] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl fluent-primary text-[15px] font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting && <Loader2 size={18} className="animate-spin" />}
             {mode === 'signup' ? (registrationSubmitted ? 'Request submitted' : 'Request account') : 'Sign in'}
           </button>
 
           <p className="mt-5 text-center text-sm text-[#a5a5a5]">
-            {mode === 'signup' ? 'Already have an account?' : 'New to Streamly?'}{' '}
+            {mode === 'signup' ? 'Already have an account?' : 'New to MyHostage?'}{' '}
             <button
               type="button"
               disabled={submitting}

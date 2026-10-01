@@ -6,29 +6,35 @@ type StorageImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   storagePath?: string | null;
   legacyUrl?: string | null;
   fallback?: ReactNode;
+  loadingFallback?: ReactNode;
 };
 
-export function StorageImage({ storagePath, legacyUrl, fallback = null, ...imageProps }: StorageImageProps) {
-  const [source, setSource] = useState<string | null>(storagePath ? null : legacyUrl ?? null);
+export function StorageImage({ storagePath, legacyUrl, fallback = null, loadingFallback = fallback, ...imageProps }: StorageImageProps) {
+  const key = `${storagePath ?? ''}:${legacyUrl ?? ''}`;
+  const [image, setImage] = useState({ key, source: storagePath ? null : legacyUrl ?? null, loading: !!storagePath });
 
   useEffect(() => {
     let active = true;
-    setSource(storagePath ? null : legacyUrl ?? null);
-
-    if (storagePath) {
-      resolveBucketPath(storagePath, 'images').then((fullPath) => {
-        supabase.storage
-          .from('user-images')
-          .createSignedUrl(fullPath, 3600)
-          .then(({ data, error }) => {
-            if (active) setSource(error ? legacyUrl ?? null : data.signedUrl);
-          });
-      });
-    }
+    setImage({ key, source: storagePath ? null : legacyUrl ?? null, loading: !!storagePath });
+    const load = async () => {
+      if (!storagePath) return;
+      try {
+        const fullPath = await resolveBucketPath(storagePath, 'images');
+        const { data, error } = await supabase.storage.from('user-images').createSignedUrl(fullPath, 3600);
+        if (active) setImage({ key, source: error ? legacyUrl ?? null : data?.signedUrl ?? legacyUrl ?? null, loading: false });
+      } catch {
+        if (active) setImage({ key, source: legacyUrl ?? null, loading: false });
+      }
+    };
+    void load();
 
     return () => { active = false; };
-  }, [storagePath, legacyUrl]);
+  }, [storagePath, legacyUrl, key]);
 
-  if (!source) return <>{fallback}</>;
-  return <img {...imageProps} src={source} />;
+  if (image.key !== key || image.loading) return <>{loadingFallback}</>;
+  if (!image.source) return <>{fallback}</>;
+  return <img {...imageProps} src={image.source} onError={event => {
+    setImage(current => ({ ...current, source: null }));
+    imageProps.onError?.(event);
+  }} />;
 }

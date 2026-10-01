@@ -57,7 +57,7 @@ export function EditPhotoModal({ photo, onClose, onSaved }: { photo: Photo; onCl
         {error && <div role="alert" className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
         <div className="flex gap-3">
           <button type="button" disabled={saving} onClick={close} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-          <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">{saving ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}Save changes</button>
+          <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl fluent-primary text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">{saving ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}Save changes</button>
         </div>
       </form>
     </div>

@@ -22,7 +22,14 @@ async function setup(kind,mobile=false){
    return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Expose-Headers':'Location,Upload-Offset,Tus-Resumable','Tus-Resumable':'1.0.0','Upload-Offset':String(tusOffset)}});
   }
   if(url.pathname.includes('/storage/v1/object/media-staging/')){uploads.push(url.pathname);return route.fulfill({json:{Key:url.pathname}})}
-  if(url.pathname.endsWith('/queue-media-upload')){jobs.push(req.postDataJSON());return route.fulfill({status:202,json:{status:'queued'}})}
+  if(url.pathname.endsWith('/queue-media-upload')){
+   const job=req.postDataJSON();jobs.push(job);
+   // Video acceptance returns before background conversion finishes. Model an
+   // immediate server rejection here; asynchronous failures have their own card tests.
+   return job.file_name==='server-reject'
+    ? route.fulfill({status:400,json:{error:'The file is corrupted or unsupported.'}})
+    : route.fulfill({status:202,json:{status:'queued'}});
+  }
   if(url.pathname.includes('/rest/v1/media_upload_jobs')){const job=jobs.find(j=>'eq.'+j.id===url.searchParams.get('id'));return route.fulfill({json:job?.file_name==='server-reject'?{status:'error',error:'The file is corrupted or unsupported.'}:{status:'complete',result:{id:'fixture'}}});}
   return route.fulfill({json:[]});
  });

@@ -1,3 +1,5 @@
+import '@/components/MediaGallery.css';
+import '@/components/FluentTheme.css';
 /* eslint-disable react-refresh/only-export-components -- Standalone browser test entry, not an imported component module. */
 import { useFileNavigation } from '../src/hooks/useFileNavigation';
 import React, { useEffect, useState } from 'react';
@@ -26,13 +28,13 @@ function Harness() {
   const [route, setRoute] = useState(location.hash);
   useEffect(() => { const sync = () => setRoute(location.hash); window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync); }, []);
-  return <AuthContext.Provider value={auth}><DeleteConfirmationProvider>
+  return <div className="fluent-app"><AuthContext.Provider value={auth}><DeleteConfirmationProvider>
     {route === '#/settings' ? <SettingsPage /> : <div>
       <h1 data-testid="source">{route || 'Home'}</h1>
       <a href="#/settings">Settings</a>
       {route.startsWith('#/files') && <FilesFixture />} 
       {route === '#/photos' && <PhotoLibrary searchTerm="" />}
     </div>}
-  </DeleteConfirmationProvider></AuthContext.Provider>;
+  </DeleteConfirmationProvider></AuthContext.Provider></div>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Harness /></React.StrictMode>);

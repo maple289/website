@@ -177,7 +177,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
           {showCapture && (
             <div className="mb-4 rounded-xl border border-[#3a3a3a] bg-[#121212] p-3">
               {videoLoading ? (
-                <div className="flex h-40 items-center justify-center"><Loader2 size={24} className="animate-spin text-[#ff3d46]" /></div>
+                <div className="flex h-40 items-center justify-center"><Loader2 size={24} className="animate-spin text-blue-600" /></div>
               ) : videoUrl ? (
                 <>
                   <video
@@ -188,7 +188,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
                     preload="metadata"
                   />
                   <p className="mb-2 text-xs text-[#888]">Play the video and pause at the frame you want, then click capture.</p>
-                  <button type="button" onClick={captureFrame} className="rounded-lg bg-[#ff3d46] px-4 py-2 text-xs font-semibold text-white hover:bg-[#ff5962]">Capture current frame</button>
+                  <button type="button" onClick={captureFrame} className="rounded-lg fluent-primary px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">Capture current frame</button>
                 </>
               ) : (
                 <div className="flex h-40 items-center justify-center text-sm text-[#888]">Unable to load video for capture.</div>
@@ -202,7 +202,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
 
           <div className="flex gap-3">
             <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff3d46] text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-60">
+            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl fluent-primary text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}
               Save changes
             </button>

@@ -26,7 +26,7 @@ try{
         assert.ok(requests.some(r=>r.pathname.endsWith('/list_public_user_files')));
         assert.equal(await page.getByRole('button',{name:'New folder',exact:true}).count(),0);
       }else{
-        assert.equal(new URL(page.url()).hash,'');
+        assert.equal(new URL(page.url()).hash,target==='Videos'?'#/public-videos':'#/public-photos');
         const table=target==='Videos'?'videos':'photos';
         assert.ok(requests.some(r=>r.pathname.endsWith('/'+table)&&r.searchParams.get('visibility')==='eq.public'));
       }
@@ -36,7 +36,7 @@ try{
     for(const source of ['My Videos','My Photos','File Storage']){
       for(const target of ['Videos','Photos','Files']){
         await sidebar(source);
-        const privateHeading=source==='My Videos'?'My Library':source==='My Photos'?'My Photos':'All files';
+        const privateHeading=source==='My Videos'?'My Videos':source==='My Photos'?'My Photos':'All files';
         await page.getByRole('heading',{name:privateHeading,exact:true}).waitFor();
         assert.equal(await page.locator('aside button[aria-current=page]').innerText(),source);
         assert.equal(await top.locator('button[aria-current=page]').count(),0);
@@ -54,12 +54,31 @@ try{
     assert.deepEqual(errors,[]);await page.close();
   }
   const guest=await browser.newPage();
-  await guest.route('https://upload-test.supabase.co/**',route=>route.fulfill({json:[]}));
+  let failingTable='';
+  await guest.route('https://upload-test.supabase.co/**',route=> {
+    const path = new URL(route.request().url()).pathname;
+    return failingTable && path.endsWith('/'+failingTable)
+      ? route.fulfill({status:500,json:{message:'fixture unavailable'}})
+      : route.fulfill({json:[]});
+  });
   await guest.goto(base+'/tests/public-navigation.html?guest');
   const top=guest.getByRole('navigation',{name:'Media navigation'});
   for(const [target,heading] of [['Photos','Discover photos'],['Files','Public Files Library'],['Videos','Discover videos']]){
     await top.getByRole('button',{name:target,exact:true}).click();await guest.getByRole('heading',{name:heading,exact:true}).waitFor();
     assert.equal(await top.getByRole('button',{name:target,exact:true}).getAttribute('aria-current'),'page');
     assert.equal(await guest.locator('aside').count(),0);console.log('PASS guest public '+target);
+    await guest.reload(); await guest.getByRole('heading',{name:heading,exact:true}).waitFor();
+    assert.equal(await top.getByRole('button',{name:target,exact:true}).getAttribute('aria-current'),'page');
+    console.log('PASS guest refresh retains public '+target);
   }
+  for(const [table,target] of [['videos','Videos'],['photos','Photos']]) {
+    failingTable=table;
+    await top.getByRole('button',{name:target,exact:true}).click(); await guest.reload();
+    await guest.getByRole('alert').filter({hasText:'Could not load public'}).waitFor();
+    assert.equal(await guest.getByText(table==='videos'?'No public videos yet':'No public photos yet.').count(),0);
+    failingTable=''; await guest.getByRole('button',{name:'Retry',exact:true}).click();
+    await guest.getByRole('alert').filter({hasText:'Could not load public'}).waitFor({state:'detached'});
+    console.log('PASS public '+table+' loading error, no false empty state, Retry');
+  }
+  await guest.close();
 }finally{await browser.close()}

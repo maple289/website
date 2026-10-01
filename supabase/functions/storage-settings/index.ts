@@ -27,7 +27,7 @@ function validatePath(path: string): string | null {
   if (!path) return "Path cannot be empty.";
   if (path.length > 512) return "Path is too long (max 512 characters).";
   // Allow absolute Unix paths, relative paths, and drive-letter paths (Windows)
-  if (!/^[a-zA-Z0-9._\-\/: ]+$/.test(path)) {
+  if (!/^[a-zA-Z0-9._/: -]+$/.test(path)) {
     return "Path contains invalid characters. Only letters, numbers, dots, dashes, slashes, and colons are allowed.";
   }
   // Reject parent-directory traversal

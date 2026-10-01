@@ -109,7 +109,7 @@ export function SettingsPage() {
           <button type="button" onClick={back} disabled={saving || profileSaving} className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
-          <div className="flex h-8 w-10 items-center justify-center rounded-[10px] bg-[#ff3d46]">
+          <div className="flex h-8 w-10 items-center justify-center rounded-[10px] fluent-primary">
             <ShieldCheck size={20} className="text-white" />
           </div>
           <span className="text-[19px] font-semibold tracking-[-0.04em]">Settings</span>
@@ -125,7 +125,7 @@ export function SettingsPage() {
         {/* Account info */}
         <div className="mb-6 rounded-2xl border border-[#272727] bg-[#161616] p-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#ff5962] to-[#ff3d46] text-[15px] font-semibold text-white">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-[15px] font-semibold text-white">
               {(email || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -236,7 +236,7 @@ export function SettingsPage() {
               <button
                 type="submit"
                 disabled={saving || !hasInput}
-                className="flex h-11 items-center gap-2 rounded-xl bg-[#ff3d46] px-5 text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-11 items-center gap-2 rounded-xl fluent-primary px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
                 Change Password

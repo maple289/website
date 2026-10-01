@@ -68,7 +68,7 @@ export function ProfileNameSettings({ userId, onDirtyChange, onSavingChange }: {
       {error && <p role="alert" className="mb-4 text-sm text-[#ff8a90]">{error}</p>}
       {success && <p role="status" className="mb-4 text-sm text-emerald-400">Profile saved.</p>}
       <button type="submit" disabled={loading || saving || !loaded}
-        className="h-11 rounded-xl bg-[#ff3d46] px-5 text-sm font-semibold text-white transition hover:bg-[#ff5962] disabled:opacity-50">
+        className="h-11 rounded-xl fluent-primary px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50">
         {loading ? 'Loading…' : saving ? 'Saving…' : 'Save profile'}
       </button>
     </form>

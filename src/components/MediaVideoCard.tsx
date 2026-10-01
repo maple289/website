@@ -36,7 +36,6 @@ export function MediaVideoCard({ video, onPlay, onEdit, onDelete, showOwner = fa
         {ready ? <CheckCircle2 size={12} /> : failed ? <AlertCircle size={12} /> : <LoaderCircle size={12} className="animate-spin" />}{status}
       </span></div>
       <h3 className="mg-title" title={video.file_name}>{video.file_name}</h3>
-      {showOwner && <p className="mg-meta" title={video.owner_email ?? ''}>{video.owner_email ?? 'Unknown'}</p>}
       <p className="mg-meta">{!showOwner && `${formatBytes(video.file_size)} · `}{timeAgo(video.created_at)}</p>
       {failed && video.processing_error && !showOwner && <p className="mg-error">{video.processing_error}</p>}
       <MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} />

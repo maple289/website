@@ -1,38 +1,43 @@
-import { VideoProcessingJobs } from '@/components/VideoProcessingJobs';
-import { useCallback, useEffect, useState } from 'react';
+import { useGalleryView } from '@/hooks/useGalleryView';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Film, FolderOpen, Image as ImageIcon, Loader as Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { MediaVideoCard } from '@/components/MediaVideoCard';
 import { PublicPhotoGallery } from '@/components/PublicPhotoGallery';
+import { GalleryError, GalleryToolbar } from '@/components/GalleryToolbar';
 
 type Tab = 'videos' | 'photos';
 
 type HomePageProps = {
   tab: Tab;
   searchTerm: string;
-  onTabChange: (tab: Tab) => void;
-  onFiles: () => void;
 };
 
-export function HomePage({ tab, searchTerm, onTabChange, onFiles }: HomePageProps) {
+export function HomePage({ tab, searchTerm }: HomePageProps) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const loadVersion = useRef(0);
 
   const load = useCallback(async (quiet = false) => {
+    if (tab !== 'videos') return;
+    const version = ++loadVersion.current;
     if (!quiet) setLoading(true);
     const { data, error } = await supabase
       .from('videos')
       .select('*')
       .eq('visibility', 'public')
       .order('created_at', { ascending: false });
+    if (version !== loadVersion.current) return;
+    setError(error ? 'Could not load public videos. Please try again.' : null);
     if (!error) setVideos(data ?? []);
     setLoading(false);
-  }, []);
+  }, [tab]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const versionRef = loadVersion; void load(); return () => { versionRef.current++; }; }, [load]);
   useEffect(() => {
     const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'video') void load(); };
     window.addEventListener('media-uploaded', refresh);
@@ -41,40 +46,31 @@ export function HomePage({ tab, searchTerm, onTabChange, onFiles }: HomePageProp
 
   // Auto-refresh while any public video is still processing
   useEffect(() => {
-    if (!videos.length) return;
-    const interval = setInterval(() => void load(true), videos.some((v) => v.processing_status === 'processing') ? 5000 : 15000);
+    if (tab !== 'videos' || !videos.some((v) => v.processing_status === 'processing')) return;
+    const interval = setInterval(() => void load(true), 5000);
     return () => clearInterval(interval);
-  }, [videos, load]);
+  }, [videos, load, tab]);
 
-  const filtered = videos.filter((v) => {
-    const term = searchTerm.trim().toLowerCase();
-    return !term || v.file_name.toLowerCase().includes(term) || (v.owner_email ?? '').toLowerCase().includes(term);
-  });
+  const view = useGalleryView(videos, searchTerm);
+  const filtered = view.visible;
 
   return (
     <div className="mg-page">
-      {/* Tab switcher */}
-      <MediaTabs active={tab} onSelect={(value) => value === 'files' ? onFiles() : onTabChange(value)} />
-
       {tab === 'videos' ? (
         <section className="py-5">
-          <div className="mg-toolbar">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6971]">Public Gallery</p>
-            <h1 className="text-[27px] font-semibold tracking-[-0.04em] sm:text-[34px]">Discover videos</h1>
-          </div>
-
-      <VideoProcessingJobs searchTerm={searchTerm} visibleIds={videos.map(video => video.id)} />
+          <GalleryToolbar title="Discover videos" scope="Public Library" subtitle="Explore videos shared with everyone." view={view} />
+          {error && <GalleryError message={error} onRetry={() => void load()} />}
 
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-[#ff3d46]" /></div>
-          ) : filtered.length === 0 ? (
+          ) : !error && filtered.length === 0 ? (
             <div className="mg-empty rounded-2xl border border-dashed py-24 text-center">
               <Film className="mx-auto mb-4 text-[#707070]" size={40} />
               <p className="text-lg font-medium">{searchTerm ? 'No matching videos' : 'No public videos yet'}</p>
               <p className="mt-2 text-sm text-[#888]">{searchTerm ? 'Try a different search term.' : 'Videos marked as public by users will appear here.'}</p>
             </div>
           ) : (
-            <div className="mg-grid">
+            <div className="mg-grid" data-density={view.density}>
               {filtered.map((v) => (
                 <MediaVideoCard key={v.id} video={v} showOwner onPlay={() => setPlayingVideo(v)} />
               ))}
