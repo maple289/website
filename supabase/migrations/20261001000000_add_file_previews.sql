@@ -4,7 +4,7 @@ VALUES ('file-previews', 'file-previews', false, 52428800, ARRAY['application/pd
 ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
-CREATE TABLE public.file_preview_jobs (
+CREATE TABLE IF NOT EXISTS public.file_preview_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   source_id uuid NOT NULL REFERENCES storage.objects(id) ON DELETE CASCADE,
   owner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -19,8 +19,8 @@ CREATE TABLE public.file_preview_jobs (
   finished_at timestamptz,
   UNIQUE(source_id, source_version)
 );
-CREATE INDEX file_preview_queue ON public.file_preview_jobs(created_at) WHERE status = 'queued';
-CREATE TABLE public.file_preview_cleanup (
+CREATE INDEX IF NOT EXISTS file_preview_queue ON public.file_preview_jobs(created_at) WHERE status = 'queued';
+CREATE TABLE IF NOT EXISTS public.file_preview_cleanup (
   path text PRIMARY KEY,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -31,7 +31,7 @@ GRANT ALL ON public.file_preview_jobs, public.file_preview_cleanup TO service_ro
 
 -- The edge function authorizes the original first using can_read_user_file or
 -- resolve_public_user_file. This resolver is never callable by a browser.
-CREATE FUNCTION public.get_file_preview_source(p_path text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_file_preview_source(p_path text) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   SELECT jsonb_build_object('id', o.id, 'path', o.name,
     'version', coalesce(o.version, '') || ':' || o.updated_at::text,
@@ -40,7 +40,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   FROM storage.objects o WHERE o.bucket_id = 'user-files' AND o.name = p_path;
 $$;
 
-CREATE FUNCTION public.queue_file_preview(p_source_id uuid, p_version text, p_extension text)
+CREATE OR REPLACE FUNCTION public.queue_file_preview(p_source_id uuid, p_version text, p_extension text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE source storage.objects; job public.file_preview_jobs; new_id uuid; owner uuid;
 BEGIN
@@ -70,7 +70,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.claim_file_preview() RETURNS SETOF public.file_preview_jobs
+CREATE OR REPLACE FUNCTION public.claim_file_preview() RETURNS SETOF public.file_preview_jobs
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE next_id uuid;
 BEGIN
@@ -84,17 +84,18 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.enqueue_file_preview_cleanup() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.enqueue_file_preview_cleanup() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   INSERT INTO public.file_preview_cleanup(path) VALUES(OLD.preview_path) ON CONFLICT DO NOTHING;
   RETURN OLD;
 END;
 $$;
+DROP TRIGGER IF EXISTS file_preview_deleted ON public.file_preview_jobs;
 CREATE TRIGGER file_preview_deleted AFTER DELETE ON public.file_preview_jobs
 FOR EACH ROW EXECUTE FUNCTION public.enqueue_file_preview_cleanup();
 
-CREATE FUNCTION public.invalidate_file_previews_storage() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.invalidate_file_previews_storage() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   IF OLD.bucket_id='user-files' AND (OLD.name, OLD.updated_at, OLD.version, OLD.metadata)
@@ -104,10 +105,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS file_preview_source_changed ON storage.objects;
 CREATE TRIGGER file_preview_source_changed AFTER UPDATE ON storage.objects
 FOR EACH ROW EXECUTE FUNCTION public.invalidate_file_previews_storage();
 
-CREATE FUNCTION public.invalidate_file_previews_metadata() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.invalidate_file_previews_metadata() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   IF TG_OP='UPDATE' THEN
@@ -121,11 +123,12 @@ BEGIN
   RETURN OLD;
 END;
 $$;
+DROP TRIGGER IF EXISTS file_preview_metadata_changed ON public.user_file_metadata;
 CREATE TRIGGER file_preview_metadata_changed AFTER UPDATE OR DELETE ON public.user_file_metadata
 FOR EACH ROW EXECUTE FUNCTION public.invalidate_file_previews_metadata();
 
 -- Reconcile a late worker upload after cancellation, crashes, and expired failures.
-CREATE FUNCTION public.reconcile_file_preview_cache() RETURNS void
+CREATE OR REPLACE FUNCTION public.reconcile_file_preview_cache() RETURNS void
 LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$
   INSERT INTO public.file_preview_cleanup(path)
     SELECT o.name FROM storage.objects o WHERE o.bucket_id='file-previews'
