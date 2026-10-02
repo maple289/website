@@ -48,7 +48,7 @@ def process(job):
             root = Path(folder)
             root.chmod(0o755)
             source = root / ('source.' + job['extension'])
-            maximum = (20 if job['extension'] == 'xlsx' else 25) * 1048576
+            maximum = (20 if job['extension'] in ('xlsx', 'xls') else 25) * 1048576
             if not source_current(job) or not current(job):
                 return
             # Streaming, bounded download. The converter has read-only source access.

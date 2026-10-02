@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileVideo, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
+import { FileTypeIcon } from './FileTypeIcon';
 import type { FileEntry } from '@/lib/fileTree';
 import { downloadFile } from '@/lib/publicFiles';
 import { captureVideoPreview } from '@/lib/mediaUploads';
@@ -43,7 +44,7 @@ export function FileVideoThumbnail({ entry }: { entry: FileEntry }) {
     };
   }, [entry]);
   return <div ref={tile} className="fm-video-poster">
-    {poster ? <img src={poster} alt={entry.name} className="h-full w-full object-cover" /> : <FileVideo size={28} className="text-slate-500" />}
+    {poster ? <img src={poster} alt={entry.name} className="h-full w-full object-cover" /> : <FileTypeIcon entry={entry} size={28} />}
     <span className="fm-play-badge" aria-hidden="true"><Play size={11} fill="currentColor" /></span>
   </div>;
 }

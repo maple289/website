@@ -14,7 +14,7 @@ Existing video preview behavior is preserved.
 | TXT, JSON, XML | Escaped plain text; JSON formatted when valid | 2 MB |
 | CSV | Read-only table; quoted commas/newlines supported | 2 MB |
 | DOCX | LibreOffice Writer → cached PDF | 25 MB |
-| XLSX | LibreOffice Calc → cached PDF | 20 MB |
+| XLSX / XLS | LibreOffice Calc → cached PDF | 20 MB |
 | PPTX | LibreOffice Impress → cached PDF | 25 MB |
 
 Office previews contain at most 200 pages. CSV displays at most 200 rows,
@@ -64,6 +64,35 @@ are 10,000 entries, 100 MB expanded, and 30 MB per entry. Workbooks are limited 
 100 sheets and 200,000 cells. LibreOffice subprocess diagnostics remain server-side.
 No source document is altered; incomplete PDFs/profiles are removed on failure,
 timeout, cancellation or source invalidation.
+
+## Excel print layout and file icons
+
+Calc loads XLSX and legacy BIFF/OLE XLS read-only through its local UNO pipe.
+For every visible worksheet, existing print areas are retained. If absent, a
+temporary print range is set to the populated used range, expanded to include
+overlapping merged cells. Charts/images-only sheets use Calc's used range.
+These changes affect only the in-memory copy; it is never saved to the original.
+Workbook page styles are left intact: paper/orientation, margins, print titles,
+grid settings, scale/fit-to-page, page breaks/order, widths/heights and cell styles
+are imported and rendered by Calc. Whole-sheet export is explicitly disabled
+because it ignores print areas, page sizes and hidden-sheet state, as described
+in [LibreOffice's PDF export options](https://help.libreoffice.org/latest/en-US/text/shared/guide/pdf_params.html).
+Visible worksheets retain workbook order. Hidden rows/columns/sheets retain their
+saved state. This remains a print-layout PDF, rather than an editable spreadsheet.
+Excel-only features/font substitutions may differ from Microsoft Excel.
+
+Workbooks have the existing 20 MB/120 second/200 page/100 sheet/200,000 populated
+cell limits, plus a 2,000,000-cell printable-area bound. Legacy XLS is validated
+as an OLE/BIFF workbook; encrypted files, VBA/macro sheets, embedded objects and
+external data are rejected. Macro execution and external-link refresh are also
+disabled when loading Calc. Carlito/Caladea fonts improve common Office font
+substitution. Existing Excel caches regenerate once after deploying this renderer.
+
+FileTypeIcon is shared by Files grid/list/tree/search/recent/shared/public listings,
+upload progress, properties and preview headers. Specific MIME metadata takes
+precedence; missing/generic MIME uses the final extension. PDF, Word, Excel,
+PowerPoint, text, CSV, image, archive, audio and video have dedicated icons.
+Image/video thumbnails remain available with a small file-type badge.
 
 The UI polls generating previews every two seconds while visible, cancels on
 Close, and stops after five minutes. It reports failure/limits while preserving

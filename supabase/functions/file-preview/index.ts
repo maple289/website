@@ -13,6 +13,7 @@ const types: Record<string, [string, string, number]> = {
   txt: ["text", "text/plain", 2 * 1048576], json: ["text", "text/plain", 2 * 1048576],
   xml: ["text", "text/plain", 2 * 1048576], csv: ["csv", "text/plain", 2 * 1048576],
   docx: ["office", "application/pdf", 25 * 1048576], xlsx: ["office", "application/pdf", 20 * 1048576],
+  xls: ["office", "application/pdf", 20 * 1048576],
   pptx: ["office", "application/pdf", 25 * 1048576],
 };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {

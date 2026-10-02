@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Download, FileText, LoaderCircle, X } from 'lucide-react';
 import { TaskModal } from '@/components/TaskModal';
+import { FileTypeIcon } from '@/components/FileTypeIcon';
 import type { FileEntry } from '@/lib/fileTree';
 import { downloadFile } from '@/lib/publicFiles';
 import { boundedPreviewBlob, decodePreviewText, filePreviewKind, parsePreviewCsv, requestFilePreview, type PreviewKind, type PreviewStatus } from '@/lib/filePreviews';
@@ -80,7 +81,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
   return <TaskModal aria-label="File preview" className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-2 sm:p-6">
     <section className="flex h-[90dvh] max-h-full w-full max-w-6xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
       <header className="flex shrink-0 items-center gap-2 border-b border-slate-100 px-3 py-2 sm:px-5 sm:py-3">
-        <FileText size={20} className="shrink-0 text-blue-600" />
+        <FileTypeIcon entry={entry} size={24} />
         <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold text-slate-800" title={entry.name}>{entry.name}</h2><p className="text-xs text-slate-500">Read-only preview · Original file unchanged</p></div>
         <button onClick={onDownload} aria-label="Download original file" title="Download original file" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><Download size={19} /></button>
         <button onClick={onClose} aria-label="Close preview" title="Close preview" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={20} /></button>

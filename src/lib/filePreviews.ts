@@ -4,7 +4,7 @@ import type { FileEntry } from '@/lib/fileTree';
 export type PreviewKind = 'pdf' | 'image' | 'text' | 'csv' | 'office' | 'video';
 const formats: Record<string, PreviewKind> = {
   pdf: 'pdf', jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image',
-  txt: 'text', json: 'text', xml: 'text', csv: 'csv', docx: 'office', xlsx: 'office', pptx: 'office',
+  txt: 'text', json: 'text', xml: 'text', csv: 'csv', docx: 'office', xlsx: 'office', xls: 'office', pptx: 'office',
 };
 export function filePreviewKind(entry: FileEntry): PreviewKind | undefined {
   if (entry.isFolder) return undefined;

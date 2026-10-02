@@ -7,6 +7,7 @@ import resource
 from pathlib import Path
 import subprocess
 import sys
+import struct
 import zipfile
 from defusedxml import ElementTree as ET
 from pypdf import PdfReader
@@ -45,6 +46,9 @@ def block_network():
 
 
 def validate_package(source, extension):
+    if extension == 'xls':
+        validate_legacy_workbook(source)
+        return
     expected = {'docx': 'word/document.xml', 'xlsx': 'xl/workbook.xml', 'pptx': 'ppt/presentation.xml'}[extension]
     with zipfile.ZipFile(source) as archive:
         entries = archive.infolist()
@@ -83,6 +87,55 @@ def validate_package(source, extension):
                         element.clear()
 
 
+def validate_legacy_workbook(source):
+    # BIFF/OLE validation precedes LibreOffice; an .xls suffix never makes an
+    # arbitrary file eligible. The decoder still runs without network or macros.
+    import olefile
+    import xlrd
+    if not olefile.isOleFile(source):
+        raise ValueError('This file is not a valid Excel workbook.')
+    with olefile.OleFileIO(source, raise_defects=olefile.DEFECT_INCORRECT) as archive:
+        streams = archive.listdir(streams=True, storages=True)
+        for parts in streams:
+            name = '/'.join(parts).lower()
+            if any(token in name for token in ('vba', '_vba_project', 'objectpool', 'mbd', 'embeddings')):
+                raise ValueError('Workbooks with macros or embedded objects cannot be previewed.')
+        name = 'Workbook' if archive.exists('Workbook') else 'Book'
+        if not archive.exists(name):
+            raise ValueError('This file is not a valid Excel workbook.')
+        data = archive.openstream(name).read()
+        offset = 0
+        while offset < len(data):
+            if offset + 4 > len(data): raise ValueError('This workbook is corrupted.')
+            record, length = struct.unpack_from('<HH', data, offset)
+            if record == 0 and length == 0 and not any(data[offset:]): break  # OLE padding.
+            offset += 4
+            if offset + length > len(data): raise ValueError('This workbook is corrupted.')
+            body = data[offset:offset + length]; offset += length
+            if record == 0x002f:
+                raise ValueError('Password-protected workbooks cannot be previewed.')
+            if record == 0x0085 and len(body) >= 6 and body[5] in (1, 6):
+                raise ValueError('Workbooks with macro sheets cannot be previewed.')
+            if record == 0x01ae and len(body) >= 4 and struct.unpack_from('<H', body, 2)[0] not in (0x0401, 0x3a01):
+                raise ValueError('Workbooks with external data cannot be previewed.')
+    book = xlrd.open_workbook(source, on_demand=True, ragged_rows=True)
+    try:
+        if book.nsheets > 100:
+            raise ValueError('This workbook has too many sheets to preview.')
+        cells = 0
+        for index in range(book.nsheets):
+            sheet = book.sheet_by_index(index)
+            if sheet.nrows * sheet.ncols > 2000000:
+                raise ValueError('This workbook is too large or complex to preview.')
+            for row in range(sheet.nrows):
+                cells += sum(kind not in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK) for kind in sheet.row_types(row))
+                if cells > 200000:
+                    raise ValueError('This workbook has too many cells to preview.')
+            book.unload_sheet(index)
+    finally:
+        book.release_resources()
+
+
 def convert(source, extension, output, profile):
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1048576, 50 * 1048576))
@@ -98,11 +151,14 @@ def convert(source, extension, output, profile):
 <item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item>
 <item oor:path="/org.openoffice.Office.Calc/Content/Update"><prop oor:name="Link" oor:op="fuse"><value>0</value></prop></item>
 </oor:items>''')
-    filter_name = {'docx': 'writer_pdf_Export', 'xlsx': 'calc_pdf_Export', 'pptx': 'impress_pdf_Export'}[extension]
-    options = json.dumps({'PageRange': {'type': 'string', 'value': '1-200'}})
-    command = ['libreoffice', '-env:UserInstallation=' + profile.as_uri(), '--headless', '--nologo',
-               '--nodefault', '--norestore', '--convert-to', 'pdf:' + filter_name + ':' + options,
-               '--outdir', str(output), str(source)]
+    if extension in ('xlsx', 'xls'):
+        command = ['/usr/bin/python3', '/app/spreadsheet.py', str(source), str(output), str(profile)]
+    else:
+        filter_name = {'docx': 'writer_pdf_Export', 'pptx': 'impress_pdf_Export'}[extension]
+        options = json.dumps({'PageRange': {'type': 'string', 'value': '1-200'}})
+        command = ['libreoffice', '-env:UserInstallation=' + profile.as_uri(), '--headless', '--nologo',
+                   '--nodefault', '--norestore', '--convert-to', 'pdf:' + filter_name + ':' + options,
+                   '--outdir', str(output), str(source)]
     result = subprocess.run(command, capture_output=True, text=True)
     # Server-only diagnostics; output may contain local paths but never credentials.
     print(json.dumps({'operation': 'libreoffice_conversion', 'exit': result.returncode,
