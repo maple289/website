@@ -1,4 +1,6 @@
 import { TaskModal } from './TaskModal';
+import { FilePreview } from './FilePreview';
+import { filePreviewKind } from '@/lib/filePreviews';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { FileDropArea } from '@/components/FileDropArea';
@@ -72,7 +74,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   const [selected, setSelected] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry } | null>(null);
   const [details, setDetails] = useState<Entry | null>(null);
-  const [preview, setPreview] = useState<{ entry: Entry; url: string; text?: string } | null>(null);
+  const [preview, setPreview] = useState<Entry | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -290,10 +292,6 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     void readIndicators();
     return () => { active = false; };
   }, [actionEntries, shareVersion, guest]);
-  useEffect(() => {
-    if (!preview) return;
-    return () => URL.revokeObjectURL(preview.url);
-  }, [preview]);
   const totalBytes = metadata.filter((item) => !item.is_folder && !item.trashed_at).reduce((sum, item) => sum + (item.file_size ?? 0), 0);
   const crumbs = folder ? folder.split('/') : [];
   const title = guest ? publicFolder?.name ?? 'Public Files Library' : view === 'files' ? folder ? 'My Files' : 'All files' : view === 'recent' ? 'Recent' : view === 'favorites' ? 'Favorites' : view === 'shared' ? 'Shared' : 'Trash';
@@ -320,13 +318,8 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     return `${owns(entry) ? 'My Files' : 'Shared'}${parent ? ` / ${parent}` : ''}`;
   };
 
-  const openPreview = async (entry: Entry) => {
-    if (entry.isFolder) return;
-    // Authenticated downloads recheck storage RLS; do not mint transferable signed links.
-    const { data: blob, error: downloadError } = await downloadFile(entry);
-    if (downloadError || !blob) { setError(downloadError?.message ?? 'File unavailable'); return; }
-    setPreview({ entry, url: URL.createObjectURL(blob), text: entry.mimeType.startsWith('text/') ? await blob.text() : undefined });
-  };
+  const openPreview = (entry: Entry) => { if (!entry.isFolder) setPreview(entry); };
+
   const download = async (entry: Entry) => {
     if (entry.isFolder) return;
     const { data, error: downloadError } = await downloadFile(entry);
@@ -540,7 +533,10 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   if (menu?.entry.trashedAt && owns(menu.entry)) menuActions.push(['restore', RotateCcw, 'Restore'], ['delete', Trash2, 'Delete forever']);
   else {
     menuActions.push(['open', Folder, 'Open']);
-    if (menu && !menu.entry.isFolder) menuActions.push(['preview', Info, 'Preview'], ['download', Download, 'Download']);
+    if (menu && !menu.entry.isFolder) {
+      if (filePreviewKind(menu.entry)) menuActions.push(['preview', FileText, 'Preview']);
+      menuActions.push(['download', Download, 'Download']);
+    }
     if (menu && owns(menu.entry)) menuActions.push(['share', Share2, 'Share'], ['rename', Pencil, 'Rename'], ['move', Move, 'Move'], ['copy', Copy, 'Make a copy'], ['favorite', Star, menu.entry.favorite ? 'Remove from Favorites' : 'Add to Favorites'], ['delete', Trash2, 'Move to Trash']);
     menuActions.push(['properties', Info, 'Properties']);
   }
@@ -626,7 +622,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
 
       {uploadOpen && <TaskModal aria-label="Upload files" className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4"><div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!guest && event.dataTransfer.files.length) void uploadFiles(event.dataTransfer.files); }} className="fm-dialog w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8"><div className="mb-6 flex items-start justify-between"><div><h2 className="text-xl font-bold text-slate-900">Upload files</h2><p className="mt-1 text-sm text-slate-500">Add files to {folder.split('/')[folder.split('/').length - 1] || 'My Files'}</p></div><button disabled={uploads.some((item) => item.state === 'uploading' || item.state === 'waiting')} onClick={() => setUploadOpen(false)} aria-label="Close upload dialog" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X size={19} /></button></div><button disabled={uploads.some((item) => item.state === 'uploading' || item.state === 'waiting')} onClick={() => uploadInput.current?.click()} className="flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/60 px-6 py-10 text-center transition hover:border-blue-400 hover:bg-blue-50"><span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm"><Upload size={24} /></span><span className="font-semibold text-slate-800">Drop files here to upload</span><span className="mt-1 text-sm text-slate-500">or click to browse · multiple files supported</span></button><input ref={uploadInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />{uploads.length > 0 && <div className="mt-5 max-h-52 space-y-2 overflow-y-auto">{uploads.map((item, index) => <div key={`${item.file.name}-${index}`} className="rounded-xl border border-slate-100 px-3 py-2.5"><div className="flex items-center gap-3"><File size={18} className="shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-800">{item.file.name}</p><p className="text-xs text-slate-400">{item.state === 'done' ? 'Completed · ' : item.state === 'error' ? `Failed: ${item.message} · ` : item.state === 'uploading' ? `Uploading ${item.progress ?? 0}% · ` : 'Waiting · '}{formatSize(item.file.size)}</p></div>{item.state === 'uploading' ? <LoaderCircle className="animate-spin text-blue-600" size={18} /> : item.state === 'done' ? <Check className="text-emerald-500" size={18} /> : item.state === 'error' ? <X className="text-rose-500" size={18} /> : <span className="text-xs text-slate-400">Waiting</span>}</div>{item.state === 'uploading' && <div className="ml-8 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${item.progress ?? 0}%` }} /></div>}</div>)}</div>}<div className="mt-6 flex justify-end"><button onClick={() => setUploadOpen(false)} disabled={uploads.some((item) => item.state === 'uploading' || item.state === 'waiting')} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{uploads.length && uploads.every((item) => item.state === 'done' || item.state === 'error') ? 'Done' : 'Close'}</button></div></div></TaskModal>}
 
-      {preview && <TaskModal aria-label="File preview" className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-3 sm:p-8"><div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3"><div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{preview.entry.name}</div><button onClick={() => void download(preview.entry)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Download"><Download size={17} /></button><button onClick={() => setPreview(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Close"><X size={18} /></button></div><div className="flex min-h-[300px] items-center justify-center overflow-auto bg-slate-100 p-3 sm:min-h-[500px]">{preview.entry.mimeType.startsWith('image/') ? <img src={preview.url} alt={preview.entry.name} className="max-h-[75vh] max-w-full object-contain" /> : preview.entry.mimeType.startsWith('video/') ? <video src={preview.url} controls className="max-h-[75vh] max-w-full" /> : preview.entry.mimeType === 'application/pdf' ? <iframe title={preview.entry.name} src={preview.url} className="h-[75vh] w-full rounded-lg bg-white" /> : preview.text !== undefined ? <pre className="max-h-[75vh] w-full overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white p-5 text-sm text-slate-800">{preview.text}</pre> : <div className="text-center"><div className="mb-3 flex justify-center">{fileIcon(preview.entry, 48)}</div><p className="font-semibold text-slate-800">Preview isn’t available</p><p className="mt-1 text-sm text-slate-500">{kindLabel(preview.entry)} · {formatSize(preview.entry.size)}</p><button onClick={() => void download(preview.entry)} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Download file</button></div>}</div></div></TaskModal>}
+      {preview && <FilePreview entry={preview} onClose={() => setPreview(null)} onDownload={() => void download(preview)} />}
     </div>
     </FileDropArea>
   );

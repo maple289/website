@@ -36,6 +36,11 @@ are not task dialogs and keep their lightweight dismissal. Route/browser navigat
 is not globally intercepted by this modal policy. Settings additionally registers a
 history guard; see SETTINGS_NAVIGATION.md.
 
+FilePreview uses TaskModal for the public and private Files interfaces. Loading,
+queued conversion, failures and unsupported-file information stay inside the
+same modal. Close aborts fetches/polling and releases local Blob URLs, retaining
+the current folder, selection and browser-history entry. It has no editable draft.
+
 ## Scope of validation
 
 TypeScript and production compilation checked. No automated UI or physical-device

@@ -51,3 +51,9 @@ failed uploads; they never implement a user-facing Delete action. JavaScript
 Set/Map cleanup does not delete stored application content. There is no separate
 pending-registration Delete button, storage-location Delete UI or viewer Delete
 action beyond the surfaces listed above.
+
+File-preview jobs are derived data. Source deletion, replacement, move, Trash or
+account deletion invalidates their cache through database triggers/cascades.
+The preview worker removes cached PDFs through the Storage API and retries failed
+cleanup. Cancellation terminates the decoder before temporary files are removed.
+This internal cleanup never deletes or modifies original uploaded documents.

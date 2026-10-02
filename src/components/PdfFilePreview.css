@@ -1,0 +1,5 @@
+/* PDF.js manages visible-page rendering and bounded canvas caching. */
+.fp-pdf { --pdfViewer-padding-bottom: 8px; }
+.fp-pdf .fp-pdf-scroll { overscroll-behavior: contain; }
+.fp-pdf .pdfViewer .page { margin: 8px auto; border: 0; box-shadow: 0 1px 5px #0f172a1a; }
+.fp-pdf .pdfViewer .canvasWrapper { overflow: hidden; }

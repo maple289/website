@@ -275,7 +275,7 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
                       <button
                         onClick={() => void requestDelete({ title: 'Delete user',
                           message: `Are you sure you want to delete user "${[p.first_name, p.last_name].filter(Boolean).join(' ') || p.email}" (${p.email})?`,
-                          details: 'The account, profile, video/photo records, file metadata, related shares and reactions will be permanently deleted. Uploaded storage files are not automatically removed; account deletion may be blocked while the user owns stored files. This cannot be undone.',
+                          details: 'The account, profile, video/photo records, file metadata, related shares and reactions will be permanently deleted. Cached document previews will be removed. Original uploaded storage files are not automatically removed; account deletion may be blocked while the user owns stored files. This cannot be undone.',
                           confirmLabel: 'Delete User', onConfirm: async () => {
                             const headers = await getAuthHeaders();
                             const response = await fetch(`${adminFnUrl}?id=${encodeURIComponent(p.id)}`, { method: 'DELETE', headers });

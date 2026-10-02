@@ -27,3 +27,6 @@ verify_jwt = true
 
 [functions.delete-video]
 verify_jwt = true
+
+[functions.file-preview]
+verify_jwt = false
