@@ -27,18 +27,19 @@ export function DistributionChart({ title, data, bytes = false }: { title: strin
   </div></section>;
 }
 
-export function TimeChart({ title, series, metric, types = ['video', 'photo', 'file'] }: { title: string; series: Dashboard['series']; metric: 'uploads' | 'views'; types?: ('video' | 'photo' | 'file')[] }) {
+export function TimeChart({ title, series, metric, types = ['video', 'photo', 'file'], labels = {} }: { title: string; series: Dashboard['series']; metric: 'uploads' | 'views'; types?: ('video' | 'photo' | 'file')[]; labels?: Partial<Record<'video' | 'photo' | 'file', string>> }) {
   const [visible, setVisible] = useState([true, true, true]);
   const keys = types.map(type => `${type}_${metric}`);
   const maximum = Math.max(1, ...series.flatMap(row => keys.map((key, i) => visible[i] ? Number(row[key] ?? 0) : 0)));
   const w = 640, h = 195, x = (index: number) => 35 + index / Math.max(1, series.length - 1) * (w - 50), y = (value: number) => h - 25 - value / maximum * (h - 45);
   const label = (date: string) => date.replace('T', ' ').slice(0, series.length <= 48 ? 16 : 10);
-  return <section className="analytics-panel"><h3>{title}</h3><div className="analytics-chart-legend">{types.map((name, i) => <button key={name} aria-pressed={visible[i]} onClick={() => setVisible(current => current.map((item, index) => index === i ? !item : item))}><span className="analytics-dot" style={{ background: visible[i] ? colors[i] : '#cbd5e1' }} />{name[0].toUpperCase() + name.slice(1)}s</button>)}</div>
+  const typeLabel = (type: 'video' | 'photo' | 'file') => labels[type] ?? `${type[0].toUpperCase() + type.slice(1)}s`;
+  return <section className="analytics-panel"><h3>{title}</h3><div className="analytics-chart-legend">{types.map((name, i) => <button key={name} aria-pressed={visible[i]} onClick={() => setVisible(current => current.map((item, index) => index === i ? !item : item))}><span className="analytics-dot" style={{ background: visible[i] ? colors[i] : '#cbd5e1' }} />{typeLabel(name)}</button>)}</div>
     <svg className="analytics-time-chart" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`${title}. Exact values are in the table below.`}>
       {[0, .5, 1].map(fraction => <g key={fraction}><line x1="35" x2={w - 15} y1={y(maximum * fraction)} y2={y(maximum * fraction)} stroke="#e2e8f0" strokeDasharray="3 4" /><text x="28" y={y(maximum * fraction) + 4} textAnchor="end" fill="#64748b" fontSize="11">{(maximum * fraction).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text></g>)}
       {keys.map((key, index) => visible[index] && <g key={key}><polyline points={series.map((row, i) => `${x(i)},${y(Number(row[key]))}`).join(' ')} fill="none" stroke={colors[index]} strokeWidth="2.5" strokeLinejoin="round" />{series.length <= 48 && series.map((row, i) => <circle key={row.date} cx={x(i)} cy={y(Number(row[key]))} r="3" fill={colors[index]}><title>{label(row.date)}: {Number(row[key])} {key.replace('_', ' ')}</title></circle>)}</g>)}
       {series.length > 0 && <><text x="35" y={h - 5} fill="#64748b" fontSize="10">{label(series[0].date)}</text><text x={w - 15} y={h - 5} textAnchor="end" fill="#64748b" fontSize="10">{label(series[series.length - 1].date)}</text></>}
     </svg>
-    <details className="analytics-values"><summary>Exact values</summary><div className="analytics-table-scroll"><table><thead><tr><th>Date / time</th>{types.map(type => <th key={type}>{type[0].toUpperCase() + type.slice(1)}s</th>)}</tr></thead><tbody>{series.map(row => <tr key={row.date}><td>{label(row.date)}</td>{keys.map(key => <td key={key}>{count(Number(row[key]))}</td>)}</tr>)}</tbody></table></div></details>
+    <details className="analytics-values"><summary>Exact values</summary><div className="analytics-table-scroll"><table><thead><tr><th>Date / time</th>{types.map(type => <th key={type}>{typeLabel(type)}</th>)}</tr></thead><tbody>{series.map(row => <tr key={row.date}><td>{label(row.date)}</td>{keys.map(key => <td key={key}>{count(Number(row[key]))}</td>)}</tr>)}</tbody></table></div></details>
   </section>;
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowLeft, BarChart3, ChevronLeft, ChevronRight, FileText, HardDrive, Image, LayoutDashboard, LoaderCircle, RefreshCw, Search, Users, Video } from 'lucide-react';
-import { fetchAnalytics, formatBytes, type AnalyticsFilters, type AnalyticsPage, type AnalyticsRow, type AnalyticsSection, type ContentType, type Dashboard, type Metric, type StorageSnapshot } from '@/lib/analytics';
+import { fetchAnalytics, formatBytes, type AnalyticsFilters, type AnalyticsPage, type AnalyticsSection, type ContentType, type Dashboard, type Metric, type StorageSnapshot } from '@/lib/analytics';
+import { StatisticsTable as RecordsTable } from './StatisticsTable';
+import { statisticsColumn as col, statisticsDate as date, statisticsNumber as number } from '@/lib/statisticsPresentation';
 import { BarChart, DistributionChart, TimeChart } from './AnalyticsCharts';
 import './AdminStatistics.css';
 
@@ -9,10 +11,6 @@ const sections: { id: AnalyticsSection; name: string; icon: typeof Users }[] = [
   { id: 'videos', name: 'Videos', icon: Video }, { id: 'photos', name: 'Photos', icon: Image },
   { id: 'files', name: 'Files', icon: FileText }, { id: 'storage', name: 'Storage', icon: HardDrive }, { id: 'activity', name: 'Activity', icon: Activity },
 ];
-const date = (value: unknown) => value ? new Date(String(value)).toLocaleString() : '—';
-const number = (value: unknown) => Number(value ?? 0).toLocaleString();
-type Column = { key: string; name: string; format?: 'date' | 'bytes' | 'number'; sortable?: boolean };
-const col = (key: string, name: string, format?: Column['format'], sortable = true): Column => ({ key, name, format, sortable });
 const userColumns = [col('display_name', 'Name'), col('email', 'Email / username'), col('created_at', 'Created', 'date'), col('last_login', 'Last login', 'date'), col('last_activity', 'Last activity', 'date'), col('status', 'Account status', undefined, false),
   col('videos', 'Videos', 'number'), col('photos', 'Photos', 'number'), col('files', 'Files', 'number'), col('video_storage', 'Video storage', 'bytes', false), col('photo_storage', 'Photo storage', 'bytes', false), col('file_storage', 'File storage', 'bytes', false), col('total_storage', 'Total storage', 'bytes'), col('views', 'Content views', 'number'), col('uploads', 'Uploads', 'number')];
 const mediaColumns = [col('name', 'Name'), col('owner', 'Owner'), col('created_at', 'Uploaded', 'date'), col('file_size', 'Original size', 'bytes'), col('visibility', 'Visibility', undefined, false), col('shared', 'Shared', undefined, false), col('status', 'Processing state', undefined, false), col('views', 'Views', 'number'), col('unique_viewers', 'Registered viewers', 'number', false), col('reactions', 'Reactions', 'number'), col('last_viewed_at', 'Last viewed', 'date')];
@@ -125,10 +123,6 @@ function SummaryCards({ data, onSelect }: { data: Dashboard; onSelect: (section:
     ['Video views', number(data.overview.video_views), 'videos'], ['Photo views', number(data.overview.photo_views), 'photos'], ['File views / previews', number(data.overview.file_previews), 'files'], ['File downloads', number(data.overview.file_downloads), 'files'], ['Uploads today', number(data.overview.uploads_today), 'activity'], ['Uploads this week', number(data.overview.uploads_week), 'activity'], ['Uploads this month', number(data.overview.uploads_month), 'activity'],
   ];
   return <div className="analytics-summary">{metrics.map(([label, value, section]) => <button key={label} onClick={() => onSelect(section)}><span>{label}</span><strong>{value}</strong><ChevronRight size={15} /></button>)}</div>;
-}
-
-function RecordsTable({ columns, rows, sort, direction, onSort, onUser }: { columns: Column[]; rows: AnalyticsRow[]; sort: string; direction: string; onSort: (key: string) => void; onUser?: (id: string) => void }) {
-  return <div className="analytics-table-scroll" tabIndex={0} aria-label="Statistics records"><table><thead><tr>{columns.map(column => <th key={column.key} aria-sort={sort === column.key ? direction === 'asc' ? 'ascending' : 'descending' : undefined}>{column.sortable ? <button onClick={() => onSort(column.key)}>{column.name}{sort === column.key && (direction === 'asc' ? ' ↑' : ' ↓')}</button> : column.name}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={String(row.id ?? row.content_id)}>{columns.map(column => { const value = column.key === 'resolution' ? row.resolution_width && row.resolution_height ? `${row.resolution_width} × ${row.resolution_height}` : '—' : row[column.key]; const formatted = column.format === 'date' ? date(value) : column.format === 'bytes' ? value == null ? '—' : formatBytes(Number(value)) : column.format === 'number' ? value == null ? '—' : number(value) : typeof value === 'boolean' ? value ? 'Yes' : 'No' : String(value ?? '—').replace(/_/g, ' '); return <td key={column.key} title={formatted}>{onUser && column.key === 'display_name' ? <button className="analytics-user-link" onClick={() => onUser(String(row.id))}>{formatted}</button> : formatted}</td>; })}</tr>)}</tbody></table>{!rows.length && <p className="analytics-empty">No matching records.</p>}</div>;
 }
 
 function UserDetail({ data, onBack }: { data: Dashboard; onBack: () => void }) {

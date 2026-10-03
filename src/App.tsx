@@ -3,8 +3,8 @@ import { DeleteConfirmationProvider } from '@/components/DeleteConfirmationProvi
 import '@/components/MediaGallery.css';
 import '@/components/FluentTheme.css';
 import { FileDropArea } from '@/components/FileDropArea';
-import { useEffect, useRef, useState } from 'react';
-import { Clapperboard, FolderOpen, Home, Images, Menu, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { BarChart3, Clapperboard, FolderOpen, Home, Images, Menu, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -20,6 +20,8 @@ import { SettingsPage } from '@/components/SettingsPage';
 import { InitialPasswordPage } from '@/components/InitialPasswordPage';
 import { FileManager } from '@/components/FileManager';
 
+const UserStatistics = lazy(() => import('@/components/UserStatistics').then(module => ({ default: module.UserStatistics })));
+
 function App() {
   return (
     <div className="fluent-app"><AuthProvider>
@@ -28,7 +30,7 @@ function App() {
   );
 }
 
-type Route = 'home' | 'public-videos' | 'public-photos' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings';
+type Route = 'home' | 'public-videos' | 'public-photos' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings' | 'statistics';
 
 function getRoute(): Route {
   const hash = window.location.hash;
@@ -40,6 +42,7 @@ function getRoute(): Route {
   if (hash.split('?')[0] === '#/public-files') return 'public-files';
   if (hash.split('?')[0] === '#/files') return 'files';
   if (hash === '#/settings') return 'settings';
+  if (hash === '#/statistics') return 'statistics';
   return 'home';
 }
 
@@ -74,7 +77,7 @@ function AppContent() {
       window.location.hash = '';
       setRoute('home');
     }
-    if (!loading && !user && (route === 'admin' || route === 'settings')) {
+    if (!loading && !user && (route === 'admin' || route === 'settings' || route === 'statistics')) {
       window.location.hash = '';
       setRoute('home');
     }
@@ -90,6 +93,7 @@ function AppContent() {
     else if (r === 'files') window.location.hash = '#/files';
     else if (r === 'admin') window.location.hash = '#/admin';
     else if (r === 'settings') window.location.hash = '#/settings';
+    else if (r === 'statistics') window.location.hash = '#/statistics';
     setRoute(r);
     setSidebarOpen(false);
     setSearch('');
@@ -104,6 +108,8 @@ function AppContent() {
 
   const isAuthed = !!user;
   const isFilesRoute = route === 'files' || route === 'public-files';
+  const isStatisticsRoute = route === 'statistics';
+  const hasMediaControls = !isFilesRoute && !isStatisticsRoute;
   const uploadsPhoto = route === 'photos' || route === 'public-photos';
   const searchLabel = uploadsPhoto ? 'Search photos' : 'Search videos';
   const publicTab = route === 'public-files' ? 'files' : route === 'public-photos' ? 'photos' : route === 'home' || route === 'public-videos' ? 'videos' : undefined;
@@ -147,7 +153,7 @@ function AppContent() {
             <span className="hidden sm:inline">MyHostage</span>
           </button>
           {/* Search bar */}
-          {!isFilesRoute && <form onSubmit={(event) => event.preventDefault()} role="search" className="fluent-search mx-auto hidden max-w-[590px] flex-1 items-center md:flex">
+          {hasMediaControls && <form onSubmit={(event) => event.preventDefault()} role="search" className="fluent-search mx-auto hidden max-w-[590px] flex-1 items-center md:flex">
             <div className="flex h-11 flex-1 items-center overflow-hidden rounded-l-full border border-[#3f3f3f] bg-[#121212] transition focus-within:border-[#4b86ff]">
               <Search className="ml-4 text-[#a7a7a7]" size={20} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={searchLabel} aria-label={searchLabel} className="h-full w-full bg-transparent px-3 text-[15px] outline-none placeholder:text-[#888]" />
@@ -156,8 +162,8 @@ function AppContent() {
             <button type="submit" aria-label="Search" className="flex h-11 w-16 items-center justify-center rounded-r-full border border-l-0 border-[#3f3f3f] bg-[#222] transition hover:bg-[#303030]"><Search size={21} /></button>
           </form>}
           <div className="ml-auto flex items-center gap-2">
-            {!isFilesRoute && <button aria-label={mobileSearchOpen ? 'Close search' : 'Search'} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)} className="rounded-full p-3 hover:bg-[#272727] md:hidden">{mobileSearchOpen ? <X size={21} /> : <Search size={21} />}</button>}
-            {isAuthed && !isFilesRoute && (
+            {hasMediaControls && <button aria-label={mobileSearchOpen ? 'Close search' : 'Search'} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)} className="rounded-full p-3 hover:bg-[#272727] md:hidden">{mobileSearchOpen ? <X size={21} /> : <Search size={21} />}</button>}
+            {isAuthed && hasMediaControls && (
                 <button
                   onClick={() => { setDroppedMedia([]); if (uploadsPhoto) setShowPhotoUpload(true); else setShowUpload(true); }}
                   aria-label={uploadsPhoto ? 'Upload photo' : 'Upload video'}
@@ -171,7 +177,7 @@ function AppContent() {
         </div>
       </header>
 
-      {mobileSearchOpen && !isFilesRoute && <form onSubmit={(event) => { event.preventDefault(); mobileSearchRef.current?.blur(); }} role="search" className="fluent-mobile-search fluent-search fixed inset-x-0 top-[72px] z-40 p-3 md:hidden"><div className="flex h-11 items-center overflow-hidden rounded-xl"><Search className="ml-4 shrink-0" size={19} /><input ref={mobileSearchRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchLabel} aria-label={searchLabel} className="h-full min-w-0 flex-1 bg-transparent px-3 text-base outline-none" />{search && <button type="button" aria-label="Clear search" onClick={() => { setSearch(''); mobileSearchRef.current?.focus(); }} className="mr-1 p-3"><X size={17} /></button>}</div></form>}
+      {mobileSearchOpen && hasMediaControls && <form onSubmit={(event) => { event.preventDefault(); mobileSearchRef.current?.blur(); }} role="search" className="fluent-mobile-search fluent-search fixed inset-x-0 top-[72px] z-40 p-3 md:hidden"><div className="flex h-11 items-center overflow-hidden rounded-xl"><Search className="ml-4 shrink-0" size={19} /><input ref={mobileSearchRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchLabel} aria-label={searchLabel} className="h-full min-w-0 flex-1 bg-transparent px-3 text-base outline-none" />{search && <button type="button" aria-label="Clear search" onClick={() => { setSearch(''); mobileSearchRef.current?.focus(); }} className="mr-1 p-3"><X size={17} /></button>}</div></form>}
 
       {/* Sidebar — only for authenticated users */}
       {isAuthed && (
@@ -187,6 +193,7 @@ function AppContent() {
               <NavItem icon={<ShieldCheck size={20} />} label="Admin Console" onClick={() => navigate('admin')} />
             )}
             <NavItem icon={<Settings size={20} />} label="Settings" active={route === 'settings'} onClick={() => navigate('settings')} />
+            <NavItem icon={<BarChart3 size={20} />} label="Statistics" active={isStatisticsRoute} onClick={() => navigate('statistics')} />
           </nav>
           <div className="fluent-sidebar-tip mt-8 rounded-2xl p-4">
             <div className="mb-3 text-blue-600"><Upload size={20} /></div>
@@ -198,9 +205,10 @@ function AppContent() {
       )}
 
       {/* Main content */}
-      <main className={`fluent-main ${mobileSearchOpen && !isFilesRoute ? 'fluent-search-open' : ''} ${!isFilesRoute ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
+      <main className={`fluent-main ${mobileSearchOpen && hasMediaControls ? 'fluent-search-open' : ''} ${hasMediaControls ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
         <div className="fluent-section-nav"><MediaTabs active={publicTab} onSelect={openPublicSection} /></div>
-        {isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} /></FileDropArea>}
+        {isStatisticsRoute ? isAuthed ? <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading your statistics…</p>}><UserStatistics key={user.id} /></Suspense> : <p role="status" className="p-8 text-center text-slate-600">Please sign in to view your statistics.</p>
+          : isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} /></FileDropArea>}
       </main>
 
       {/* Auth modal */}
@@ -208,12 +216,12 @@ function AppContent() {
 
       {/* Upload modal */}
       {showUpload && isAuthed && (
-        <div className={!isFilesRoute ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} /></div></div>
+        <div className={hasMediaControls ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} /></div></div>
       )}
 
       {/* Photo upload modal */}
       {showPhotoUpload && isAuthed && (
-        <div className={!isFilesRoute ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} /></div></div>
+        <div className={hasMediaControls ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} /></div></div>
       )}
 
     </div>

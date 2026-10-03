@@ -15,6 +15,26 @@ export type Dashboard = {
 };
 export type AnalyticsPage = { rows: AnalyticsRow[]; total: number; page: number; page_size: number };
 export type AnalyticsFilters = { from: string; to: string; page?: number; search?: string; sort?: string; direction?: 'asc' | 'desc'; owner?: string; visibility?: string; fileType?: string; filterDates?: boolean };
+export type PersonalSection = 'overview' | 'videos' | 'photos' | 'files';
+export type PersonalFilters = Omit<AnalyticsFilters, 'owner'>;
+// This response has no admin/system fields or other users' identities.
+export type PersonalDashboard = {
+  overview: Record<string, number>; series: Dashboard['series']; personal_storage: Metric[];
+  file_types: Metric[]; top: Record<ContentType, Metric[]>;
+  most_reacted: Record<'video' | 'photo', Metric[]>; generated_at: string; timezone: string;
+};
+
+export async function fetchPersonalAnalytics<T>(section: PersonalSection, filters: PersonalFilters, signal?: AbortSignal): Promise<T> {
+  const query = supabase.rpc('user_analytics', {
+    p_section: section, p_from: filters.from, p_to: filters.to, p_page: filters.page ?? 0,
+    p_search: filters.search ?? '', p_sort: filters.sort ?? '', p_direction: filters.direction ?? 'desc',
+    p_visibility: filters.visibility ?? '', p_file_type: filters.fileType ?? '',
+    p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, p_filter_dates: filters.filterDates ?? false,
+  });
+  const { data, error } = await (signal ? query.abortSignal(signal) : query);
+  if (error) throw new Error(error.code === '42501' ? 'Sign in with an active account to view your statistics.' : 'Your statistics could not be loaded. Please try again.');
+  return data as T;
+}
 
 export async function fetchAnalytics<T>(section: AnalyticsSection | 'user' | 'owners', filters: AnalyticsFilters, signal?: AbortSignal): Promise<T> {
   const query = supabase.rpc('admin_analytics', {

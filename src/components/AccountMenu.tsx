@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LogOut, UserRound, Settings, ShieldCheck } from 'lucide-react';
+import { BarChart3, LogOut, UserRound, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 
@@ -64,6 +64,7 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
           <a href="#/settings" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#d4d4d4] transition hover:bg-[#262626]">
             <Settings size={18} /> Settings
           </a>
+          <a href="#/statistics" onClick={() => setOpen(false)}><BarChart3 size={18} />Statistics</a>
           <div className="my-1 h-px bg-[#2e2e2e]" />
           <button
             onClick={async () => { await signOut(); setOpen(false); }}
