@@ -37,6 +37,12 @@ operations are not one distributed transaction: partial storage failures are
 reported explicitly and retries can finish the cleanup. Folder/bulk failures reload
 actual state, retain remaining selections, and skip fully completed targets on retry.
 
+Analytics cache invalidation uses an explicit non-null cache primary-key predicate.
+PostgREST preloads `safeupdate`; a cache DELETE without WHERE would roll back the
+confirmed source deletion and leave a blank card after successful storage cleanup.
+The forward migration `20261003010000_safe_analytics_cache_invalidation.sql` fixes
+both source-removal and ownership-change invalidation without disabling this guard.
+
 Video deletion retains a private server-only tombstone to prevent late publication.
 The server removes the original, processed video, all previews under the video's
 directory, related preview jobs and staging objects using their actual Storage
