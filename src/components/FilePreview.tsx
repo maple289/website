@@ -1,16 +1,24 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Download, FileText, LoaderCircle, X } from 'lucide-react';
 import { TaskModal } from '@/components/TaskModal';
 import { FileTypeIcon } from '@/components/FileTypeIcon';
 import type { FileEntry } from '@/lib/fileTree';
 import { downloadFile } from '@/lib/publicFiles';
 import { boundedPreviewBlob, decodePreviewText, filePreviewKind, parsePreviewCsv, requestFilePreview, type PreviewKind, type PreviewStatus } from '@/lib/filePreviews';
+import { analyticsRequestId, recordFileEvent } from '@/lib/analytics';
 
 type State = { status: 'loading' | 'generating' | 'ready' | 'failed' | 'unsupported'; kind?: PreviewKind; url?: string; text?: string; csv?: ReturnType<typeof parsePreviewCsv>; message?: string };
 const PdfFilePreview = lazy(() => import('./PdfFilePreview').then(module => ({ default: module.PdfFilePreview })));
 
 export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; onClose: () => void; onDownload: () => void }) {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const previewEvent = useRef({ path: entry.path, requestId: analyticsRequestId(), sent: false });
+  const readySource = useRef('');
+  useEffect(() => {
+    if (state.status !== 'ready' || readySource.current !== entry.path) return;
+    if (previewEvent.current.path !== entry.path) previewEvent.current = { path: entry.path, requestId: analyticsRequestId(), sent: false };
+    if (!previewEvent.current.sent) { previewEvent.current.sent = true; recordFileEvent(entry, 'preview', previewEvent.current.requestId); }
+  }, [state.status, entry]);
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -23,6 +31,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
     });
     const load = async () => {
       const kind = filePreviewKind(entry);
+      readySource.current = '';
       if (!kind) { setState({ status: 'unsupported' }); return; }
       setState({ status: 'loading', kind });
       try {
@@ -32,6 +41,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
           signal.throwIfAborted();
           if (error || !data) throw new Error(error?.message || 'Video preview could not be loaded.');
           objectUrl = URL.createObjectURL(data);
+          readySource.current = entry.path;
           setState({ status: 'ready', kind, url: objectUrl });
           return;
         }
@@ -54,6 +64,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
           const actualKind = status.kind ?? kind;
           const blob = await boundedPreviewBlob(content, actualKind, signal);
           signal.throwIfAborted();
+          readySource.current = entry.path;
           if (actualKind === 'text' || actualKind === 'csv') {
             let text = decodePreviewText(await blob.arrayBuffer());
             signal.throwIfAborted();

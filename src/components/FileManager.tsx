@@ -1,5 +1,6 @@
 import { TaskModal } from './TaskModal';
 import { FilePreview } from './FilePreview';
+import { recordFileEvent } from '@/lib/analytics';
 import { FileTypeIcon } from './FileTypeIcon';
 import { fileCategory, fileCategoryLabels } from '@/lib/fileTypes';
 import { filePreviewKind } from '@/lib/filePreviews';
@@ -318,6 +319,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     const { data, error: downloadError } = await downloadFile(entry);
     if (downloadError || !data) { setError(downloadError?.message ?? 'File unavailable'); return; }
     const url = URL.createObjectURL(data); const link = document.createElement('a'); link.href = url; link.download = entry.name; link.click(); URL.revokeObjectURL(url);
+    recordFileEvent(entry, 'download');
   };
   const toggleFavorite = async (entry: Entry) => {
     const { error: updateError } = await supabase.from('user_file_metadata').upsert({ owner_id: user!.id, object_path: entry.path, is_folder: entry.isFolder, is_favorite: !entry.favorite, file_size: entry.size, mime_type: entry.mimeType, trashed_at: entry.trashedAt, updated_at: new Date().toISOString() }, { onConflict: 'owner_id,object_path' });
@@ -363,6 +365,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
           stored = true;
           await register(path, false, false, file.size, file.type || 'application/octet-stream');
           stored = false;
+          recordFileEvent({ path }, 'upload');
           update({ state: 'done', progress: 100 });
           await latestLoad.current();
         } catch (cause) {

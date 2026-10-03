@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
 import { useVideoVolume } from '@/hooks/useVideoVolume';
+import { analyticsRequestId, recordMediaView } from '@/lib/analytics';
 
 type VideoPlayerProps = {
   video: Video;
@@ -18,6 +19,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [attempt, setAttempt] = useState(0);
+  const viewEvent = useRef({ id: video.id, requestId: analyticsRequestId(), sent: false });
 
   useVideoVolume(videoRef, url);
 
@@ -70,7 +72,10 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
               <button onClick={() => setAttempt(value => value + 1)} className="min-h-11 rounded-xl border border-slate-600 px-5 text-sm text-white">Retry</button>
             </div>
           ) : (
-            <video ref={videoRef} src={url ?? undefined} controls autoPlay className="h-full w-full" />
+            <video ref={videoRef} src={url ?? undefined} controls autoPlay className="h-full w-full" onPlaying={() => {
+              if (viewEvent.current.id !== video.id) viewEvent.current = { id: video.id, requestId: analyticsRequestId(), sent: false };
+              if (!viewEvent.current.sent) { viewEvent.current.sent = true; recordMediaView('video', video.id, viewEvent.current.requestId); }
+            }} />
           )}
         </div>
         <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} /></div>

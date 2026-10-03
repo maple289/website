@@ -2,18 +2,20 @@ import { TaskModal } from './TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { ProfileNameFields } from './ProfileNameFields';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchStorageSettings, saveStorageSettings } from '@/lib/storageSettings';
 import { Server } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
+const AdminStatistics = lazy(() => import('./AdminStatistics').then(module => ({ default: module.AdminStatistics })));
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
 const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
 
-type Tab = 'users' | 'storage';
+type Tab = 'users' | 'storage' | 'statistics';
 
 type Profile = {
   first_name: string | null;
@@ -75,12 +77,13 @@ export function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1100px] px-5 pb-20 pt-8 lg:px-8">
-        <div className="mb-8 flex gap-1 rounded-xl border border-[#272727] bg-[#161616] p-1.5">
+      <main className={`mx-auto ${tab === 'statistics' ? 'max-w-[1440px]' : 'max-w-[1100px]'} px-5 pb-20 pt-8 lg:px-8`}>
+        <div className="mb-8 flex flex-wrap gap-1 rounded-xl border border-[#272727] bg-[#161616] p-1.5">
           <TabButton active={tab === 'users'} onClick={() => setTab('users')} icon={<Users size={17} />}>User Accounts</TabButton>
           <TabButton active={tab === 'storage'} onClick={() => setTab('storage')} icon={<FolderTree size={17} />}>File Locations</TabButton>
+          <TabButton active={tab === 'statistics'} onClick={() => setTab('statistics')} icon={<BarChart3 size={17} />}>Statistics</TabButton>
         </div>
-        {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : <StorageTab />}
+        {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-slate-300">Loading Statistics…</p>}><AdminStatistics /></Suspense> : <StorageTab />}
       </main>
     </div>
   );

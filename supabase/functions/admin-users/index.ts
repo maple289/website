@@ -105,6 +105,11 @@ Deno.serve(async (req: Request) => {
       });
       if (profileError) return json({ error: profileError.message }, 400);
 
+      try {
+        const { error } = await adminClient.rpc("analytics_admin_action", { p_actor: callerData.user.id, p_action: "account_created", p_account: newUser.user.id });
+        if (error) console.warn(JSON.stringify({ operation: "analytics_admin_action", code: error.code }));
+      } catch { /* Analytics cannot change account-creation success. */ }
+
       return json({ id: newUser.user.id, email, role: assignedRole });
     }
 
@@ -172,6 +177,10 @@ Deno.serve(async (req: Request) => {
         responseEmail = updatedProfile.email;
       }
 
+      try {
+        const { error } = await adminClient.rpc("analytics_admin_action", { p_actor: callerData.user.id, p_action: "profile_updated", p_account: id });
+        if (error) console.warn(JSON.stringify({ operation: "analytics_admin_action", code: error.code }));
+      } catch { /* Analytics cannot change account-update success. */ }
       return json({ id, email: responseEmail });
     }
 

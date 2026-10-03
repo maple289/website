@@ -2,6 +2,7 @@ import { createContext, useEffect, useMemo, useState, type ReactNode } from 'rea
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseAnonKey, isSupabaseConfigured } from '@/lib/supabase';
 import { accountAction } from '@/lib/accountAuth';
+import { touchActivity } from '@/lib/analytics';
 
 type PasswordSetup = { token: string; identifier: string; expiresAt: number };
 const setupStorageKey = 'streamly.initial-password-setup';
@@ -39,6 +40,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [passwordSetup, setPasswordSetup] = useState<PasswordSetup | null>(readPasswordSetup);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    let last = 0;
+    const active = () => {
+      if (document.hidden || Date.now() - last < 5 * 60 * 1000) return;
+      last = Date.now(); touchActivity();
+    };
+    active();
+    window.addEventListener('pointerdown', active, { passive: true });
+    window.addEventListener('keydown', active);
+    window.addEventListener('hashchange', active);
+    return () => { window.removeEventListener('pointerdown', active); window.removeEventListener('keydown', active); window.removeEventListener('hashchange', active); };
+  }, [session?.user.id]);
 
   useEffect(() => {
     try {

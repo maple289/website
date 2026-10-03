@@ -26,11 +26,12 @@ runtime_stack() {
     -f "$project_root/deploy/supabase-email.compose.yml" \
     -f "$project_root/deploy/supabase-auth.compose.yml" \
     -f "$project_root/deploy/media-worker.compose.yml" \
-    -f "$project_root/deploy/file-preview-worker.compose.yml" "$@"
+    -f "$project_root/deploy/file-preview-worker.compose.yml" \
+    -f "$project_root/deploy/analytics-collector.compose.yml" "$@"
 }
 # Build the decoder before changing upload policies. A failed build must not
 # switch the database to a queue that has no worker image.
-runtime_stack build media-worker file-preview-worker
+runtime_stack build media-worker file-preview-worker analytics-collector
 runtime_stack up -d db
 
 attempt=0
@@ -47,6 +48,6 @@ STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/apply-migrations.sh"
 STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/sync-functions.sh"
 runtime_stack up -d
 runtime_stack restart functions
-runtime_stack up -d --wait --wait-timeout 120 media-worker file-preview-worker
+runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" up -d --build
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" ps

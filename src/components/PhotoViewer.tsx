@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { Photo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
 import './PhotoViewer.css';
+import { analyticsRequestId, recordMediaView } from '@/lib/analytics';
 
 type PhotoViewerProps = { photos: Photo[]; startIndex: number; onClose: () => void; onPhotoChange?: (id: string) => void };
 const controls = 'input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="menu"], [role="combobox"], [data-reaction-control]';
@@ -40,6 +41,14 @@ export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: Phot
   const gesture = useRef<{ x: number; y: number; dx: number; horizontal: boolean; cancelled: boolean; startedAt: number; moved: boolean; onPhoto: boolean } | null>(null);
   const lastTap = useRef<{ x: number; y: number; time: number } | null>(null);
   const suppressClick = useRef(false);
+  const viewedPhoto = useRef<string>();
+
+  useEffect(() => {
+    if (photo?.id && viewedPhoto.current !== photo.id) {
+      viewedPhoto.current = photo.id;
+      recordMediaView('photo', photo.id, analyticsRequestId());
+    }
+  }, [photo?.id]);
 
   useEffect(() => {
     setExpanded(false);

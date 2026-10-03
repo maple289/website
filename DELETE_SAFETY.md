@@ -1,5 +1,10 @@
 # Delete-action inventory
 
+Admin analytics add only cascading derived records and cache invalidation. They do
+not add deletion controls, deletion history or another caller of a delete helper.
+The existing sharing Save RPC now preserves unchanged grants; actual saved removals
+still use the same owner check and confirmed UI operation.
+
 All destructive UI operations use the application-level confirmation provider.
 It captures the target before displaying the warning, focuses Cancel, traps focus,
 makes the underlying application inert and prevents outside/Escape dismissal.
