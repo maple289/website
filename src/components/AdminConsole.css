@@ -1,0 +1,122 @@
+/* Admin presentation shares Fluent tokens; permissions and task behavior stay in their components. */
+.admin-console { color: var(--fluent-text); min-width: 0; }
+.admin-header-control { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 12px; }
+.admin-header-control:hover { background: #ffffff12; }
+.admin-console .admin-brand { display: none; }
+.admin-header-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 16px; font-weight: 600; letter-spacing: -.025em; white-space: nowrap; }
+.admin-header-title svg { color: #a9c8ff; flex-shrink: 0; }
+.admin-sidebar { position: fixed; inset: 72px auto 0 0; z-index: 35; width: 256px; padding: 12px; visibility: hidden; transform: translateX(-100%); transition: transform 180ms, visibility 180ms; }
+.admin-sidebar.is-open { visibility: visible; transform: translateX(0); }
+.admin-sidebar-footer { display: flex; gap: 10px; margin: 28px 4px 0; padding: 16px 12px; border-top: 1px solid var(--fluent-border); font-size: 12px; line-height: 1.6; }
+.admin-sidebar-footer > svg { flex-shrink: 0; color: var(--fluent-primary); margin-top: 2px; }
+.admin-nav-backdrop { position: fixed; inset: 72px 0 0; z-index: 30; background: #0f234438; cursor: default; }
+.admin-main { padding-top: 72px; min-width: 0; }
+.admin-content { width: 100%; max-width: 1160px; margin: auto; padding: 24px 28px 64px; min-width: 0; }
+.admin-content-wide { max-width: 1480px; }
+.admin-location { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 24px; font-size: 12px; color: var(--fluent-muted); }
+.admin-location > span:last-child { color: var(--fluent-text); font-weight: 600; }
+.admin-panel { min-width: 0; padding: 20px; border: 1px solid var(--fluent-border); border-radius: var(--fluent-radius); background: var(--fluent-surface); box-shadow: var(--fluent-shadow); }
+.admin-panel + .admin-panel { margin-top: 20px; }
+.admin-panel-header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.admin-panel-header h2, .admin-panel-header h3 { font-weight: 650; letter-spacing: -.025em; }
+.admin-section-heading { margin-bottom: 20px; }
+.admin-section-heading h2 { font-size: 22px; font-weight: 650; letter-spacing: -.03em; }
+.admin-section-heading p { margin-top: 6px; font-size: 14px; line-height: 1.6; color: var(--fluent-muted); }
+.admin-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.admin-toolbar h2 { font-size: 20px; font-weight: 650; letter-spacing: -.03em; }
+.admin-toolbar p { margin-top: 4px; color: var(--fluent-muted); font-size: 13px; }
+.admin-toolbar-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.admin-search { flex: 1; width: 260px; min-width: 0; }
+.admin-search > svg { margin-left: 12px; }
+.admin-search button { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px; color: var(--fluent-muted); }
+.admin-search button:hover { background: var(--fluent-hover); }
+.admin-loading { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 48px 16px; color: var(--fluent-muted); font-size: 14px; }
+.admin-empty { padding: 40px 16px; border: 1px dashed var(--fluent-border); border-radius: 12px; text-align: center; color: var(--fluent-muted); }
+.admin-empty > svg { margin: 0 auto 12px; }
+.admin-empty button { min-height: 44px; margin-top: 8px; color: var(--fluent-primary); font-size: 14px; font-weight: 600; }
+.admin-table-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--fluent-border); border-radius: 12px; overscroll-behavior: contain; }
+.admin-table-scroll:focus-visible, .admin-code-preview:focus-visible { outline: 2px solid var(--fluent-primary); outline-offset: 3px; }
+.admin-table { width: 100%; min-width: 640px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.admin-table th { padding: 12px 16px; background: var(--fluent-surface-muted); color: var(--fluent-muted); font-weight: 600; white-space: nowrap; }
+.admin-table td { padding: 12px 16px; border-top: 1px solid var(--fluent-border); vertical-align: middle; }
+.admin-table tbody tr { transition: background-color 160ms; }
+.admin-table tbody tr:hover { background: #f8fbff; }
+.admin-table td:first-child { min-width: 240px; max-width: 440px; }
+.admin-table .admin-date { white-space: nowrap; color: var(--fluent-muted); font-size: 12px; }
+.admin-user-avatar { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: var(--fluent-selected); color: var(--fluent-primary-hover); font-weight: 650; }
+.admin-user-avatar-pending { background: #fffbeb; color: var(--fluent-warning); }
+.admin-identity { min-width: 0; overflow-wrap: anywhere; }
+.admin-identity > p:first-child { font-weight: 600; }
+.admin-identity > p + p { margin-top: 3px; color: var(--fluent-muted); font-size: 11px; }
+.admin-role-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--fluent-border); border-radius: 12px; background: var(--fluent-surface-muted); color: var(--fluent-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.admin-role-button.is-admin { background: var(--fluent-selected); border-color: #c8daf7; color: var(--fluent-primary-hover); }
+.admin-role-button:hover:not(:disabled) { border-color: #93baff; }
+.admin-role-button:disabled { opacity: .6; cursor: not-allowed; }
+/* Keep this small menu inside the scrolling table so it cannot be clipped by its edges. */
+.admin-role-menu { width: 144px; margin-top: 6px; padding: 4px; border: 1px solid var(--fluent-border); border-radius: 12px; background: var(--fluent-surface); box-shadow: var(--fluent-shadow); }
+.admin-role-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px; border-radius: 8px; color: var(--fluent-muted); text-align: left; font-size: 12px; }
+.admin-role-menu button:hover, .admin-role-menu button[aria-pressed='true'] { background: var(--fluent-hover); color: var(--fluent-primary-hover); }
+.admin-icon-button { padding: 10px; }
+.admin-count { border-radius: 999px; padding: 3px 9px; background: #fffbeb; color: var(--fluent-warning); font-size: 12px; font-weight: 650; }
+.admin-warning-icon { color: var(--fluent-warning); }
+.admin-notice { margin-bottom: 16px; padding: 12px 14px; border: 1px solid var(--fluent-border); border-radius: 12px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.admin-notice-error { background: #fff1f2; border-color: #fecdd3; color: var(--fluent-danger); }
+.admin-notice-warning { background: #fffbeb; border-color: #fde68a; color: var(--fluent-warning); }
+.admin-notice-success { background: #ecfdf5; border-color: #bbf7d0; color: var(--fluent-success); }
+.admin-notice-info { display: flex; gap: 8px; align-items: flex-start; background: var(--fluent-hover); color: var(--fluent-muted); }
+.admin-form-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--fluent-muted); }
+.admin-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.admin-form-actions > span { font-size: 12px; color: var(--fluent-muted); }
+.admin-panel code { background: var(--fluent-surface-muted); color: var(--fluent-muted); }
+.admin-code-preview { max-width: 100%; overflow: auto; padding: 16px; border: 1px solid var(--fluent-border); border-radius: 12px; background: var(--fluent-surface-muted); color: var(--fluent-muted); }
+.admin-stat-card { padding: 14px; min-width: 0; border: 1px solid var(--fluent-border); border-radius: 12px; background: var(--fluent-surface-muted); }
+.admin-stat-card > div { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 11px; color: var(--fluent-muted); }
+.admin-stat-card p { font-size: 20px; font-weight: 650; }
+.admin-console .admin-dialog-panel { background: var(--fluent-surface); color: var(--fluent-text); border: 1px solid var(--fluent-border); border-radius: var(--fluent-radius); max-height: calc(100dvh - 32px); overflow-y: auto; overflow-wrap: anywhere; }
+.admin-dialog-icon { background: var(--fluent-selected); color: var(--fluent-primary-hover); }
+.admin-dialog-panel input { min-width: 0; color: var(--fluent-text); }
+.admin-dialog-panel input::placeholder { color: var(--fluent-muted); }
+.admin-dialog-panel .admin-form-label { letter-spacing: normal; }
+.admin-dialog-panel .admin-role-option { min-height: 44px; border: 1px solid var(--fluent-border); border-radius: 12px; padding: 12px; color: var(--fluent-muted); font-size: 14px; font-weight: 600; }
+.admin-dialog-panel .admin-role-option[aria-pressed='true'] { border-color: var(--fluent-primary); background: var(--fluent-selected); color: var(--fluent-primary-hover); }
+.admin-dialog-panel .admin-role-option:hover { background: var(--fluent-hover); }
+.admin-dialog-panel .admin-role-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; margin-bottom: 16px; border: 1px solid var(--fluent-border); border-radius: 12px; background: var(--fluent-surface-muted); color: var(--fluent-muted); font-size: 12px; }
+/* Analytics stays on the same light surfaces as the rest of the console. */
+.admin-console .analytics-shell { color: var(--fluent-text); --analytics-muted: var(--fluent-muted); }
+.admin-console .analytics-heading { color: var(--fluent-text); }
+.admin-console :is(.analytics-heading p, .analytics-footnote, .analytics-shell > .analytics-loading) { color: var(--fluent-muted); }
+.admin-console .analytics-eyebrow { color: var(--fluent-primary-hover); }
+.admin-console :is(.analytics-panel, .analytics-range, .analytics-filters, .analytics-chart-controls, .analytics-summary > button, .analytics-summary > div) { background: var(--fluent-surface); border-color: var(--fluent-border); border-radius: var(--fluent-radius); box-shadow: var(--fluent-shadow); }
+.admin-console :is(.analytics-nav, .analytics-table-scroll th) { background: var(--fluent-surface-muted); }
+.admin-console .analytics-nav button:hover { background: var(--fluent-hover); }
+.admin-console .analytics-nav button[aria-current='page'] { background: var(--fluent-selected); color: var(--fluent-primary-hover); }
+.admin-console :is(.analytics-summary span, .analytics-subtext, .analytics-shell label, .analytics-table-scroll th, .analytics-pagination, .analytics-chart-legend button, .analytics-values, .analytics-percent, .analytics-owner-pages) { color: var(--fluent-muted); }
+.admin-console :is(.analytics-shell input, .analytics-shell select) { background: var(--fluent-surface-muted); border-color: var(--fluent-border); border-radius: 12px; color: var(--fluent-text); }
+.admin-console .analytics-table-scroll tr:hover td { background: #f8fbff; }
+.admin-console :is(.analytics-heading > button, .analytics-back, .analytics-pagination button) { border-radius: 12px; border-color: var(--fluent-border); color: var(--fluent-muted); }
+.admin-console :is(.analytics-heading > button, .analytics-back, .analytics-pagination button):hover:not(:disabled) { background: var(--fluent-hover); color: var(--fluent-primary-hover); }
+@media (min-width: 640px) {
+  .admin-console .admin-brand { display: flex; }
+  .admin-header-title { padding-left: 18px; border-left: 1px solid #ffffff24; }
+}
+@media (min-width: 1024px) {
+  .admin-header-control[aria-controls='admin-navigation'] { display: none; }
+  .admin-sidebar { visibility: visible; transform: none; }
+  .admin-main { padding-left: 256px; }
+}
+@media (max-width: 767px) {
+  .admin-content { padding: 20px 16px 48px; }
+  .admin-panel { padding: 16px; }
+  .admin-location { margin-bottom: 20px; }
+  .admin-toolbar-actions { width: 100%; }
+  .admin-search { width: auto; }
+}
+@media (max-width: 479px) {
+  .admin-header-title { font-size: 14px; gap: 6px; }
+  .admin-header-title > svg { display: none; }
+  .admin-content { padding: 16px 12px 40px; }
+  .admin-panel { padding: 14px; }
+  .admin-dialog-panel > div, .admin-dialog-panel > form { padding-left: 20px; padding-right: 20px; }
+  .admin-form-actions > .fluent-primary { flex: 1; }
+  .admin-form-actions > span { width: 100%; }
+}

@@ -2,8 +2,10 @@ import { TaskModal } from './TaskModal';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { ProfileNameFields } from './ProfileNameFields';
+import { AccountMenu } from './AccountMenu';
+import './AdminConsole.css';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Clapperboard, Menu, Search, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,19 +41,38 @@ export function AdminPage() {
   const { isAdmin, checking, refreshAdmin } = useAdmin();
   const { user: currentUser } = useAuth();
   const [tab, setTab] = useState<Tab>('users');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const closeNavigation = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setSidebarOpen(false);
+      menuButton.current?.focus();
+    };
+    document.addEventListener('keydown', closeNavigation);
+    return () => document.removeEventListener('keydown', closeNavigation);
+  }, [sidebarOpen]);
+
+  const selectTab = (next: Tab) => {
+    setTab(next);
+    setSidebarOpen(false);
+    if (sidebarOpen) menuButton.current?.focus();
+  };
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(90deg,#033C8D_0%,#001338_48%,#0062C7_100%)] text-[#f1f1f1]">
-        <Loader2 size={28} className="animate-spin text-[#ff3d46]" />
+      <div className="fluent-shell admin-console flex min-h-screen items-center justify-center" role="status" aria-label="Checking administrator access">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[linear-gradient(90deg,#033C8D_0%,#001338_48%,#0062C7_100%)] px-6 text-center text-[#f1f1f1]">
-        <ShieldCheck size={48} className="text-[#ff3d46]" />
+      <div className="fluent-shell admin-console flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <ShieldCheck size={48} className="text-blue-600" />
         <h1 className="text-2xl font-semibold tracking-[-0.03em]">Admin access required</h1>
         <p className="max-w-sm text-sm text-[#999]">
           You need an admin account to view this page. Sign in with an admin account to manage users and storage configuration.
@@ -64,26 +85,45 @@ export function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(90deg,#033C8D_0%,#001338_48%,#0062C7_100%)] text-[#f1f1f1]">
-      <header className="sticky top-0 z-30 border-b border-[#1a2a4a] bg-[#001338]/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] max-w-[1100px] items-center gap-4 px-5 lg:px-8">
-          <a href="#/" className="rounded-full p-2.5 transition hover:bg-[#272727]" aria-label="Back to home">
+    <div className="fluent-shell admin-console">
+      <header className="fluent-header fixed inset-x-0 top-0 z-40 h-[72px] backdrop-blur-xl">
+        <div className="mx-auto flex h-full max-w-[1560px] items-center gap-4 px-5 lg:px-8">
+          <button ref={menuButton} type="button" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label={sidebarOpen ? 'Close admin navigation' : 'Open admin navigation'} aria-expanded={sidebarOpen} aria-controls="admin-navigation" className="admin-header-control lg:hidden">
+            {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+          <a href="#/" className="admin-header-control" aria-label="Back to home" title="Back to Home">
             <ArrowLeft size={20} />
           </a>
-          <div className="flex h-8 w-10 items-center justify-center rounded-[10px] fluent-primary">
-            <ShieldCheck size={20} className="text-white" />
+          <a href="#/" aria-label="MyHostage Home" className="fluent-brand admin-brand">
+            <span className="fluent-brand-icon"><Clapperboard size={23} strokeWidth={1.8} /></span>
+            <span className="hidden md:inline">MyHostage</span>
+          </a>
+          <div className="admin-header-title">
+            <ShieldCheck size={18} aria-hidden="true" />
+            <span>Admin Console</span>
           </div>
-          <span className="text-[19px] font-semibold tracking-[-0.04em]">Admin Console</span>
+          <div className="ml-auto shrink-0"><AccountMenu onSignIn={() => { window.location.hash = '#/login'; }} /></div>
         </div>
       </header>
 
-      <main className={`mx-auto ${tab === 'statistics' ? 'max-w-[1440px]' : 'max-w-[1100px]'} px-5 pb-20 pt-8 lg:px-8`}>
-        <div className="mb-8 flex flex-wrap gap-1 rounded-xl border border-[#272727] bg-[#161616] p-1.5">
-          <TabButton active={tab === 'users'} onClick={() => setTab('users')} icon={<Users size={17} />}>User Accounts</TabButton>
-          <TabButton active={tab === 'storage'} onClick={() => setTab('storage')} icon={<FolderTree size={17} />}>File Locations</TabButton>
-          <TabButton active={tab === 'statistics'} onClick={() => setTab('statistics')} icon={<BarChart3 size={17} />}>Statistics</TabButton>
+      {sidebarOpen && <button type="button" className="admin-nav-backdrop lg:hidden" aria-label="Close admin navigation" onClick={() => { setSidebarOpen(false); menuButton.current?.focus(); }} />}
+      <aside id="admin-navigation" className={`fluent-sidebar admin-sidebar ${sidebarOpen ? 'is-open' : ''}`}>
+        <p className="fluent-nav-label">Administration</p>
+        <nav aria-label="Admin sections" className="space-y-1 text-sm">
+          <TabButton active={tab === 'users'} onClick={() => selectTab('users')} icon={<Users size={20} />}>Users</TabButton>
+          <TabButton active={tab === 'storage'} onClick={() => selectTab('storage')} icon={<FolderTree size={20} />}>Storage</TabButton>
+          <TabButton active={tab === 'statistics'} onClick={() => selectTab('statistics')} icon={<BarChart3 size={20} />}>Statistics</TabButton>
+        </nav>
+        <div className="admin-sidebar-footer">
+          <ShieldCheck size={18} />
+          <div><p className="font-medium">Administrator workspace</p><p className="mt-1 text-xs">Manage accounts, storage and site statistics.</p></div>
         </div>
-        {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-slate-300">Loading Statistics…</p>}><AdminStatistics /></Suspense> : <StorageTab />}
+      </aside>
+      <main className="admin-main">
+        <div className={`admin-content ${tab === 'statistics' ? 'admin-content-wide' : ''}`}>
+          <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : 'Statistics'}</span></p>
+          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : <StorageTab />}
+        </div>
       </main>
     </div>
   );
@@ -93,7 +133,9 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${active ? 'fluent-primary text-white' : 'text-[#a5a5a5] hover:text-white'}`}
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition"
     >
       {icon}
       {children}
@@ -164,145 +206,152 @@ function UsersTab({ currentUserId, onRoleChanged }: { currentUserId: string | nu
     <div onClick={() => setOpenRoleMenu(null)}>
       <PendingRegistrations onResolved={load} getAuthHeaders={getAuthHeaders} />
 
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold tracking-[-0.03em]">User Accounts</h2>
-          <p className="mt-1 text-sm text-[#888]">{profiles.length} registered {profiles.length === 1 ? 'user' : 'users'}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] px-3 sm:w-60">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search email or name..."
-              className="h-full w-full bg-transparent text-sm outline-none placeholder:text-[#6a6a6a]"
-            />
-            {search && <button onClick={() => setSearch('')} className="rounded-full p-1 hover:bg-[#272727]"><X size={16} /></button>}
+      <section className="admin-panel" aria-labelledby="admin-users-heading">
+        <div className="admin-toolbar">
+          <div>
+            <h2 id="admin-users-heading">User Accounts</h2>
+            <p>{profiles.length} registered {profiles.length === 1 ? 'user' : 'users'}</p>
           </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex h-11 shrink-0 items-center gap-2 rounded-xl fluent-primary px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            <UserPlus size={18} /> <span className="hidden sm:inline">Add user</span>
-          </button>
+          <div className="admin-toolbar-actions">
+            <div className="fluent-field admin-search">
+              <Search size={17} aria-hidden="true" />
+              <input
+                aria-label="Search users by email or name"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search email or name..."
+              />
+              {search && <button onClick={() => setSearch('')} aria-label="Clear user search"><X size={16} /></button>}
+            </div>
+            <button
+              onClick={() => setShowAdd(true)}
+              aria-label="Add user"
+              className="fluent-button fluent-primary shrink-0"
+            >
+              <UserPlus size={18} /> <span className="hidden sm:inline">Add user</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {error && (
-        <div className="mb-5 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
-      )}
+        {error && (
+          <div role="alert" className="admin-notice admin-notice-error">{error}</div>
+        )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#3b3b3b] py-20 text-center">
-          <Users className="mx-auto mb-3 text-[#555]" size={32} />
-          <p className="text-sm text-[#888]">No users found.</p>
-          <button onClick={() => setShowAdd(true)} className="mt-4 text-sm font-semibold text-[#ff6971] hover:text-[#ff9ba0]">Add the first user</button>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-[#272727]">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#181818] text-[#888]">
-              <tr>
-                <th className="px-5 py-3.5 font-medium">Email</th>
-                <th className="px-5 py-3.5 font-medium">Role</th>
-                <th className="hidden px-5 py-3.5 font-medium sm:table-cell">Joined</th>
-                <th className="px-5 py-3.5 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#222]">
-              {filtered.map((p) => (
-                <tr key={p.id} className="transition hover:bg-[#181818]">
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#3a3a3a] to-[#222] text-sm font-semibold text-[#ccc]">
-                        {(p.email ?? '?').charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{p.email ?? 'Unknown'}</p><p className="mt-1 text-xs text-[#999]">First Name: {p.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {p.last_name || '—'}</p></div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => {
-                          if (p.id === currentUserId) return;
-                          setOpenRoleMenu(openRoleMenu === p.id ? null : p.id);
-                        }}
-                        disabled={actionId === p.id || p.id === currentUserId}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${p.role === 'admin' ? 'bg-[#ff3d46]/15 text-[#ff737b]' : 'bg-[#272727] text-[#a5a5a5]'} ${p.id !== currentUserId ? 'hover:opacity-80' : ''}`}
-                        title={p.id === currentUserId ? 'You cannot change your own role' : 'Change role'}
-                      >
-                        {actionId === p.id ? <Loader2 size={13} className="animate-spin" /> : p.role === 'admin' ? <ShieldCheck size={13} /> : null}
-                        {p.role === 'admin' ? 'Admin' : 'User'}
-                        {p.id !== currentUserId && <ChevronDown size={12} className="opacity-60" />}
-                      </button>
-                      {openRoleMenu === p.id && (
-                        <div className="absolute left-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#181818] py-1 shadow-2xl">
-                          <button
-                            onClick={() => {
-                              setOpenRoleMenu(null);
-                              if (p.role !== 'admin') setRoleChangeUser(p);
-                            }}
-                            className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium transition hover:bg-[#272727] ${p.role === 'admin' ? 'text-[#ff737b]' : 'text-[#ccc]'}`}
-                          >
-                            <ShieldCheck size={14} /> Admin
-                            {p.role === 'admin' && <span className="ml-auto text-[#555]">✓</span>}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setOpenRoleMenu(null);
-                              if (p.role !== 'user') setRoleChangeUser(p);
-                            }}
-                            className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium transition hover:bg-[#272727] ${p.role === 'user' ? 'text-white' : 'text-[#ccc]'}`}
-                          >
-                            <Users size={14} /> User
-                            {p.role === 'user' && <span className="ml-auto text-[#555]">✓</span>}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
-                    {new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setEditingUser(p)}
-                        className="rounded-lg p-2 text-[#888] transition hover:bg-[#272727] hover:text-white"
-                        aria-label="Edit user"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => void requestDelete({ title: 'Delete user',
-                          message: `Are you sure you want to delete user "${[p.first_name, p.last_name].filter(Boolean).join(' ') || p.email}" (${p.email})?`,
-                          details: 'The account, profile, video/photo records, file metadata, related shares and reactions will be permanently deleted. Cached document previews will be removed. Original uploaded storage files are not automatically removed; account deletion may be blocked while the user owns stored files. This cannot be undone.',
-                          confirmLabel: 'Delete User', onConfirm: async () => {
-                            const headers = await getAuthHeaders();
-                            const response = await fetch(`${adminFnUrl}?id=${encodeURIComponent(p.id)}`, { method: 'DELETE', headers });
-                            const data = await response.json();
-                            if (!response.ok) throw new Error(data.error || 'Unable to delete this user. Please try again.');
-                            setProfiles((current) => current.filter((profile) => profile.id !== p.id));
-                            await load();
-                          },
-                        })}
-                        disabled={p.id === currentUserId}
-                        className="rounded-lg p-2 text-[#888] transition hover:bg-[#ff3d46]/15 hover:text-[#ff737b] disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Delete user"
-                        title={p.id === currentUserId ? 'You cannot delete your own account' : 'Delete user'}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+        {loading ? (
+          <div role="status" aria-label="Loading users" className="admin-loading"><Loader2 size={26} className="animate-spin text-blue-600" /></div>
+        ) : filtered.length === 0 ? (
+          <div className="admin-empty">
+            <Users size={32} />
+            <p>No users found.</p>
+            <button onClick={() => setShowAdd(true)}>Add the first user</button>
+          </div>
+        ) : (
+          <div className="admin-table-scroll" role="region" aria-label="User accounts" tabIndex={0}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Joined</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {filtered.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="admin-user-avatar">
+                          {(p.email ?? '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="admin-identity"><p>{p.email ?? 'Unknown'}</p><p>First Name: {p.first_name || '—'}</p><p>Last Name: {p.last_name || '—'}</p></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="relative" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => {
+                            if (p.id === currentUserId) return;
+                            setOpenRoleMenu(openRoleMenu === p.id ? null : p.id);
+                          }}
+                          disabled={actionId === p.id || p.id === currentUserId}
+                          className={`admin-role-button ${p.role === 'admin' ? 'is-admin' : ''}`}
+                          aria-expanded={openRoleMenu === p.id}
+                          title={p.id === currentUserId ? 'You cannot change your own role' : 'Change role'}
+                        >
+                          {actionId === p.id ? <Loader2 size={13} className="animate-spin" /> : p.role === 'admin' ? <ShieldCheck size={13} /> : null}
+                          {p.role === 'admin' ? 'Admin' : 'User'}
+                          {p.id !== currentUserId && <ChevronDown size={12} className="opacity-60" />}
+                        </button>
+                        {openRoleMenu === p.id && (
+                          <div className="admin-role-menu" aria-label={`Role for ${p.email}`}>
+                            <button
+                              onClick={() => {
+                                setOpenRoleMenu(null);
+                                if (p.role !== 'admin') setRoleChangeUser(p);
+                              }}
+                              aria-pressed={p.role === 'admin'}
+                            >
+                              <ShieldCheck size={14} /> Admin
+                              {p.role === 'admin' && <span className="ml-auto">✓</span>}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenRoleMenu(null);
+                                if (p.role !== 'user') setRoleChangeUser(p);
+                              }}
+                              aria-pressed={p.role === 'user'}
+                            >
+                              <Users size={14} /> User
+                              {p.role === 'user' && <span className="ml-auto">✓</span>}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="admin-date">
+                      {new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </td>
+                    <td>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setEditingUser(p)}
+                          className="fluent-button fluent-secondary admin-icon-button"
+                          aria-label="Edit user"
+                          title="Edit user"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => void requestDelete({ title: 'Delete user',
+                            message: `Are you sure you want to delete user "${[p.first_name, p.last_name].filter(Boolean).join(' ') || p.email}" (${p.email})?`,
+                            details: 'The account, profile, video/photo records, file metadata, related shares and reactions will be permanently deleted. Cached document previews will be removed. Original uploaded storage files are not automatically removed; account deletion may be blocked while the user owns stored files. This cannot be undone.',
+                            confirmLabel: 'Delete User', onConfirm: async () => {
+                              const headers = await getAuthHeaders();
+                              const response = await fetch(`${adminFnUrl}?id=${encodeURIComponent(p.id)}`, { method: 'DELETE', headers });
+                              const data = await response.json();
+                              if (!response.ok) throw new Error(data.error || 'Unable to delete this user. Please try again.');
+                              setProfiles((current) => current.filter((profile) => profile.id !== p.id));
+                              await load();
+                            },
+                          })}
+                          disabled={p.id === currentUserId}
+                          className="fluent-button fluent-danger admin-icon-button"
+                          aria-label="Delete user"
+                          title={p.id === currentUserId ? 'You cannot delete your own account' : 'Delete user'}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+      </section>
 
       {showAdd && (
         <AddUserModal
@@ -420,53 +469,53 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
   };
 
   return (
-    <div className="mb-8">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Clock size={18} className="text-amber-400" />
-        <h3 className="text-base font-semibold tracking-[-0.02em]">Pending Approvals</h3>
-        <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-400">{pending.length}</span>
-        <button type="button" onClick={() => void load()} disabled={refreshing} className="ml-auto rounded-lg border border-amber-500/30 px-3 py-2 text-sm text-amber-200 transition hover:bg-amber-500/10 disabled:opacity-50">
+    <div className="admin-panel mb-5" role="region" aria-labelledby="admin-approvals-heading">
+      <div className="admin-panel-header">
+        <Clock size={18} className="admin-warning-icon" />
+        <h3 id="admin-approvals-heading" className="text-base">Pending Approvals</h3>
+        <span className="admin-count">{pending.length}</span>
+        <button type="button" onClick={() => void load()} disabled={refreshing} className="fluent-button fluent-secondary ml-auto">
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
-      {loadError && <p role="alert" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">{loadError}</p>}
-      {notice && <p role="status" className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">{notice}</p>}
+      {loadError && <p role="alert" className="admin-notice admin-notice-warning">{loadError}</p>}
+      {notice && <p role="status" className="admin-notice admin-notice-success">{notice}</p>}
       {error && (
-        <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>
+        <div role="alert" className="admin-notice admin-notice-error">{error}</div>
       )}
 
       {pending.length === 0 && <p role="status" className="mb-4 text-sm text-[#aaa]">{loading ? 'Loading pending approvals…' : loadError ? 'Pending approvals could not be checked.' : 'No pending approval requests.'}</p>}
       {pending.length > 0 && (
-      <div className="overflow-x-auto rounded-2xl border border-amber-500/20">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-amber-500/5 text-[#888]">
+      <div className="admin-table-scroll" role="region" aria-label="Pending registrations" tabIndex={0}>
+        <table className="admin-table">
+          <thead>
             <tr>
-              <th className="px-5 py-3.5 font-medium">Email</th>
-              <th className="hidden px-5 py-3.5 font-medium sm:table-cell">Requested</th>
-              <th className="px-5 py-3.5 text-right font-medium">Actions</th>
+              <th>Email</th>
+              <th>Requested</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#222]">
+          <tbody>
             {pending.map((reg) => (
-              <tr key={reg.id} className="transition hover:bg-amber-500/5">
-                <td className="px-5 py-4">
+              <tr key={reg.id}>
+                <td>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">
+                    <div className="admin-user-avatar admin-user-avatar-pending">
                       {(reg.email ?? '?').charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0 break-words"><p className="text-[#e8e8e8]">{reg.email}</p><p className="mt-1 text-xs text-[#999]">First Name: {reg.first_name || '—'}</p><p className="text-xs text-[#999]">Last Name: {reg.last_name || '—'}</p></div>
+                    <div className="admin-identity"><p>{reg.email}</p><p>First Name: {reg.first_name || '—'}</p><p>Last Name: {reg.last_name || '—'}</p></div>
                   </div>
                 </td>
-                <td className="hidden px-5 py-4 text-[#888] sm:table-cell">
+                <td className="admin-date">
                   {new Date(reg.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </td>
-                <td className="px-5 py-4">
+                <td>
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={() => confirmReview(reg, 'approve')}
                       disabled={actionId === reg.id}
-                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600/15 px-3 py-2 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-600/25 disabled:opacity-50"
+                      className="fluent-button fluent-success"
                     >
                       {actionId === reg.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
                       Approve
@@ -474,7 +523,7 @@ function PendingRegistrations({ onResolved, getAuthHeaders }: { onResolved: () =
                     <button
                       onClick={() => confirmReview(reg, 'reject')}
                       disabled={actionId === reg.id}
-                      className="flex items-center gap-1.5 rounded-lg bg-[#ff3d46]/15 px-3 py-2 text-xs font-semibold text-[#ff737b] transition hover:bg-[#ff3d46]/25 disabled:opacity-50"
+                      className="fluent-button fluent-danger"
                     >
                       {actionId === reg.id ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={14} />}
                       Reject
@@ -500,11 +549,11 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
   const isPromotion = newRole === 'admin';
 
   return (
-    <TaskModal aria-label="Change user role" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Change user role" className="admin-modal fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+      <div className="admin-dialog-panel relative w-full max-w-md shadow-2xl">
         <div className="px-6 pt-6">
-          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isPromotion ? 'bg-[#ff3d46]/15 text-[#ff737b]' : 'bg-amber-500/15 text-amber-400'}`}>
+          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${isPromotion ? 'admin-dialog-icon' : 'bg-amber-50 text-amber-800'}`}>
             {isPromotion ? <ShieldCheck size={24} /> : <AlertTriangle size={24} />}
           </div>
           <h2 className="text-lg font-semibold tracking-[-0.02em]">
@@ -512,26 +561,26 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
           </h2>
           <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
             {isPromotion ? (
-              <>Are you sure you want to promote <span className="font-semibold text-white">{user.email}</span> to admin? They will gain full access to the Admin Console, including user management and storage configuration.</>
+              <>Are you sure you want to promote <span className="font-semibold text-[var(--fluent-text)]">{user.email}</span> to admin? They will gain full access to the Admin Console, including user management and storage configuration.</>
             ) : (
-              <>Are you sure you want to demote <span className="font-semibold text-white">{user.email}</span> to a regular user? They will lose access to the Admin Console immediately.</>
+              <>Are you sure you want to demote <span className="font-semibold text-[var(--fluent-text)]">{user.email}</span> to a regular user? They will lose access to the Admin Console immediately.</>
             )}
           </p>
         </div>
         <div className="px-6 pb-7 pt-5">
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#272727] bg-[#121212] px-4 py-3">
-            <span className="text-xs text-[#888]">Current role:</span>
-            <span className={`text-xs font-semibold ${user.role === 'admin' ? 'text-[#ff737b]' : 'text-[#a5a5a5]'}`}>{user.role === 'admin' ? 'Admin' : 'User'}</span>
+          <div className="admin-role-summary">
+            <span className="text-xs text-[var(--fluent-muted)]">Current role:</span>
+            <span className={`text-xs font-semibold ${user.role === 'admin' ? 'text-blue-700' : 'text-[var(--fluent-muted)]'}`}>{user.role === 'admin' ? 'Admin' : 'User'}</span>
             <span className="mx-1 text-[#555]">→</span>
-            <span className="text-xs text-[#888]">New role:</span>
-            <span className={`text-xs font-semibold ${newRole === 'admin' ? 'text-[#ff737b]' : 'text-[#a5a5a5]'}`}>{newRole === 'admin' ? 'Admin' : 'User'}</span>
+            <span className="text-xs text-[var(--fluent-muted)]">New role:</span>
+            <span className={`text-xs font-semibold ${newRole === 'admin' ? 'text-blue-700' : 'text-[var(--fluent-muted)]'}`}>{newRole === 'admin' ? 'Admin' : 'User'}</span>
           </div>
           <div className="flex gap-3">
-            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
+            <button type="button" onClick={close} disabled={saving} className="fluent-button fluent-secondary flex-1">Cancel</button>
             <button
               onClick={onConfirm}
               disabled={saving}
-              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60 ${isPromotion ? 'fluent-primary hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-500'}`}
+              className={`fluent-button flex-1 ${isPromotion ? 'fluent-primary' : 'bg-amber-700 text-white hover:bg-amber-800'}`}
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : isPromotion ? <ShieldCheck size={16} /> : <Users size={16} />}
               {isPromotion ? 'Promote' : 'Demote'}
@@ -607,33 +656,34 @@ function StorageTab() {
   const hasUnsavedChanges = videosPath !== savedVideosPath || imagesPath !== savedImagesPath || fileServerUrl !== savedFileServerUrl;
 
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 size={26} className="animate-spin text-[#ff3d46]" /></div>;
+    return <div role="status" aria-label="Loading storage settings" className="admin-loading"><Loader2 size={26} className="animate-spin text-blue-600" /></div>;
   }
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold tracking-[-0.03em]">Storage Settings</h2>
-        <p className="mt-1 text-sm text-[#888]">Configure the physical disk and folder locations where user-uploaded videos and images are stored. These locations are used when saving new uploads and persist across restarts.</p>
+      <div className="admin-section-heading">
+        <h2>Storage Settings</h2>
+        <p>Configure the physical disk and folder locations where user-uploaded videos and images are stored. These locations are used when saving new uploads and persist across restarts.</p>
       </div>
 
       {/* Storage Settings Section */}
-      <div className="rounded-2xl border border-[#272727] bg-[#161616] p-6">
+      <div className="admin-panel">
         <div className="mb-5 flex items-center gap-2">
-          <HardDrive size={18} className="text-[#ff737b]" />
+          <HardDrive size={18} className="text-blue-600" />
           <h3 className="text-sm font-semibold tracking-[-0.01em]">Storage Locations</h3>
         </div>
 
         {/* Videos location */}
         <div className="mb-5">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">User Videos Storage Location</label>
-          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-videos-path" className="admin-form-label">User Videos Storage Location</label>
+          <div className="fluent-field">
             <FolderTree className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-videos-path"
               value={videosPath}
               onChange={(e) => { setVideosPath(e.target.value); setSettingsSaved(false); }}
               placeholder="/mnt/storage/videos"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
           <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded videos will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/videos</code>).</p>
@@ -641,14 +691,15 @@ function StorageTab() {
 
         {/* Images location */}
         <div className="mb-5">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">User Images Storage Location</label>
-          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-images-path" className="admin-form-label">User Images Storage Location</label>
+          <div className="fluent-field">
             <FolderTree className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-images-path"
               value={imagesPath}
               onChange={(e) => { setImagesPath(e.target.value); setSettingsSaved(false); }}
               placeholder="/mnt/storage/images"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
           <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded images will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/images</code>).</p>
@@ -656,21 +707,22 @@ function StorageTab() {
 
         {/* File Storage Server URL */}
         <div className="mb-5">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">File Storage Server URL</label>
-          <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-file-server-url" className="admin-form-label">File Storage Server URL</label>
+          <div className="fluent-field">
             <Server className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-file-server-url"
               value={fileServerUrl}
               onChange={(e) => { setFileServerUrl(e.target.value); setSettingsSaved(false); }}
               placeholder="https://fileserver.example.com or 192.168.1.100"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
           <p className="mt-1.5 text-xs leading-5 text-[#777]">The URL or IP address of the external file server. When users click "File Storage" in the sidebar, this address opens in a new tab. Leave empty to hide the link.</p>
         </div>
 
         {/* Validation info */}
-        <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#1a2a4a] bg-[#001338]/50 px-4 py-3">
+        <div className="admin-notice admin-notice-info">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[#4b86ff]" />
           <p className="text-xs leading-5 text-[#9ab3d4]">
             When you save, the server validates that each folder exists and is writable. If a folder does not exist or cannot be written to, an error message will appear and the setting will not be saved.
@@ -678,17 +730,17 @@ function StorageTab() {
         </div>
 
         {settingsError && (
-          <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{settingsError}</div>
+          <div role="alert" className="admin-notice admin-notice-error">{settingsError}</div>
         )}
         {settingsSaved && !settingsError && (
-          <div className="mb-4 rounded-lg border border-emerald-600/30 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-400">Storage locations saved successfully. New uploads will use these paths.</div>
+          <div role="status" className="admin-notice admin-notice-success">Storage locations saved successfully. New uploads will use these paths.</div>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="admin-form-actions">
           <button
             onClick={handleSaveSettings}
             disabled={savingSettings || !hasUnsavedChanges}
-            className="flex h-11 items-center gap-2 rounded-xl fluent-primary px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="fluent-button fluent-primary"
           >
             {savingSettings ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Storage Locations
@@ -696,21 +748,21 @@ function StorageTab() {
           {hasUnsavedChanges && (
             <button
               onClick={() => { setVideosPath(savedVideosPath); setImagesPath(savedImagesPath); setFileServerUrl(savedFileServerUrl); setSettingsError(null); setSettingsSaved(false); }}
-              className="h-11 rounded-xl border border-[#3a3a3a] px-4 text-sm font-medium text-[#ccc] transition hover:bg-[#272727]"
+              className="fluent-button fluent-secondary"
             >
               Revert
             </button>
           )}
           {updatedAt && !hasUnsavedChanges && (
-            <span className="text-xs text-[#6a6a6a]">Last updated {new Date(updatedAt).toLocaleString()}</span>
+            <span className="text-xs text-[var(--fluent-muted)]">Last updated {new Date(updatedAt).toLocaleString()}</span>
           )}
         </div>
       </div>
 
       {/* Bucket info */}
-      <div className="mt-4 rounded-2xl border border-[#272727] bg-[#161616] p-6">
+      <div className="admin-panel mt-5">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]">
+          <div className="admin-dialog-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
             <HardDrive size={20} />
           </div>
           <div>
@@ -720,9 +772,9 @@ function StorageTab() {
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-[#272727] bg-[#161616] p-6">
+      <div className="admin-panel mt-5">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]">
+          <div className="admin-dialog-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
             <FolderTree size={20} />
           </div>
           <div>
@@ -733,13 +785,13 @@ function StorageTab() {
       </div>
 
       {/* Folder structure preview */}
-      <div className="mt-6 rounded-2xl border border-[#272727] bg-[#161616] p-6">
+      <div className="admin-panel mt-5">
         <div className="mb-4 flex items-center gap-2">
-          <FolderTree size={18} className="text-[#ff737b]" />
+          <FolderTree size={18} className="text-blue-600" />
           <h3 className="text-sm font-semibold tracking-[-0.01em]">Folder Structure Preview</h3>
         </div>
-        <div className="overflow-x-auto rounded-xl border border-[#1a2a4a] bg-[#001338] p-4">
-          <pre className="font-mono text-[13px] leading-[1.7] text-[#bbb]">
+        <div className="admin-code-preview" tabIndex={0} role="region" aria-label="Storage folder structure">
+          <pre className="font-mono text-[13px] leading-[1.7]">
 user-videos/{'\n'}
     {'<user-id>'}/videos/{'<video-id>'}/{'<file-id>'}.mp4{'\n'}
 user-images/{'\n'}
@@ -751,7 +803,7 @@ user-images/{'\n'}
         ...{'\n'}
           </pre>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <StatCard label="Registered Users" value={userCount} icon={<Users size={16} />} />
           <StatCard label="Total Videos" value={videoCount} icon={<FolderTree size={16} />} />
           <StatCard label="Total Photos" value={photoCount} icon={<FolderTree size={16} />} />
@@ -764,12 +816,12 @@ user-images/{'\n'}
 
 function StatCard({ label, value, icon, active }: { label: string; value: string | number; icon: React.ReactNode; active?: boolean }) {
   return (
-    <div className="rounded-xl border border-[#222] bg-[#121212] p-4">
-      <div className="mb-2 flex items-center gap-2 text-[#888]">
+    <div className="admin-stat-card">
+      <div>
         {icon}
-        <span className="text-xs font-medium uppercase tracking-[0.08em]">{label}</span>
+        <span>{label}</span>
       </div>
-      <p className={`text-lg font-semibold tracking-[-0.02em] ${active === false ? 'text-[#888]' : 'text-white'}`}>{value}</p>
+      <p className={active === false ? 'text-[var(--fluent-muted)]' : 'text-[var(--fluent-text)]'}>{value}</p>
     </div>
   );
 }
@@ -817,53 +869,57 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
   };
 
   return (
-    <TaskModal aria-label="Add user" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Add user" className="admin-modal fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+      <div className="admin-dialog-panel relative w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><UserPlus size={20} /></div>
+            <div className="admin-dialog-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"><UserPlus size={20} /></div>
             <h2 className="text-lg font-semibold tracking-[-0.02em]">Add User</h2>
           </div>
-          <button onClick={close} disabled={saving} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button onClick={close} disabled={saving} className="fluent-button fluent-secondary admin-icon-button" aria-label="Close"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
           <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={saving} />
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Email</label>
-          <div className="mb-4 flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-add-email" className="admin-form-label">Email</label>
+          <div className="fluent-field mb-4">
             <Mail className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-add-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="user@example.com"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
 
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Password</label>
-          <div className="mb-4 flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-add-password" className="admin-form-label">Password</label>
+          <div className="fluent-field mb-4">
             <Lock className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-add-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 6 characters"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
 
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Role</label>
-          <div className="mb-5 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setRole('user')} className={`rounded-xl border py-3 text-sm font-medium transition ${role === 'user' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999] hover:border-[#4a4a4a]'}`}>User</button>
-            <button type="button" onClick={() => setRole('admin')} className={`flex items-center justify-center gap-1.5 rounded-xl border py-3 text-sm font-medium transition ${role === 'admin' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999] hover:border-[#4a4a4a]'}`}><ShieldCheck size={15} /> Admin</button>
-          </div>
+          <fieldset className="mb-5">
+            <legend className="admin-form-label">Role</legend>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setRole('user')} aria-pressed={role === 'user'} className="admin-role-option">User</button>
+              <button type="button" onClick={() => setRole('admin')} aria-pressed={role === 'admin'} className="admin-role-option flex items-center justify-center gap-1.5"><ShieldCheck size={15} /> Admin</button>
+            </div>
+          </fieldset>
 
-          {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
+          {error && <div role="alert" className="admin-notice admin-notice-error">{error}</div>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl fluent-primary text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
+            <button type="button" onClick={close} disabled={saving} className="fluent-button fluent-secondary flex-1">Cancel</button>
+            <button type="submit" disabled={saving} className="fluent-button fluent-primary flex-1">
               {saving && <Loader2 size={16} className="animate-spin" />}
               Create user
             </button>
@@ -914,51 +970,53 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
   };
 
   return (
-    <TaskModal aria-label="Edit user" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Edit user" className="admin-modal fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
+      <div className="admin-dialog-panel relative w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3d46]/15 text-[#ff737b]"><Pencil size={20} /></div>
+            <div className="admin-dialog-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"><Pencil size={20} /></div>
             <div>
               <h2 className="text-lg font-semibold tracking-[-0.02em]">Edit User</h2>
-              <p className="text-xs text-[#888]">{user.email}</p>
+              <p className="text-xs text-[var(--fluent-muted)]">{user.email}</p>
             </div>
           </div>
-          <button onClick={close} disabled={saving} className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
+          <button onClick={close} disabled={saving} className="fluent-button fluent-secondary admin-icon-button" aria-label="Close"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
           <ProfileNameFields firstName={firstName} lastName={lastName} onFirstNameChange={setFirstName} onLastNameChange={setLastName} disabled={saving} />
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Email</label>
-          <div className="mb-4 flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-edit-email" className="admin-form-label">Email</label>
+          <div className="fluent-field mb-4">
             <Mail className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-edit-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="user@example.com"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
 
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">New Password</label>
-          <div className="mb-2 flex h-11 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
+          <label htmlFor="admin-edit-password" className="admin-form-label">New Password</label>
+          <div className="fluent-field mb-2">
             <Lock className="ml-3.5 text-[#888]" size={17} />
             <input
+              id="admin-edit-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Leave blank to keep current"
-              className="h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-[#6a6a6a]"
+
             />
           </div>
-          <p className="mb-5 text-xs text-[#6a6a6a]">Leave password blank to keep it. Clear a name to remove it.</p>
+          <p className="mb-5 text-xs text-[var(--fluent-muted)]">Leave password blank to keep it. Clear a name to remove it.</p>
 
-          {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
+          {error && <div role="alert" className="admin-notice admin-notice-error">{error}</div>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
-            <button type="submit" disabled={saving} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl fluent-primary text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
+            <button type="button" onClick={close} disabled={saving} className="fluent-button fluent-secondary flex-1">Cancel</button>
+            <button type="submit" disabled={saving} className="fluent-button fluent-primary flex-1">
               {saving && <Loader2 size={16} className="animate-spin" />}
               Save changes
             </button>
