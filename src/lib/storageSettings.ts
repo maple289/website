@@ -4,6 +4,7 @@ export type StorageSettings = {
   videos_base_path: string;
   images_base_path: string;
   file_server_url: string;
+  target_video_bitrate_mbps: number;
   updated_at: string | null;
 };
 
@@ -28,6 +29,7 @@ export async function fetchStorageSettings(): Promise<StorageSettings | null> {
     videos_base_path: data.videos_base_path,
     images_base_path: data.images_base_path,
     file_server_url: typeof data.file_server_url === 'string' ? data.file_server_url : '',
+    target_video_bitrate_mbps: Number(data.target_video_bitrate_mbps ?? 3),
     updated_at: data.updated_at ?? null,
   };
 }
@@ -37,29 +39,38 @@ export async function saveStorageSettings(
   imagesPath: string,
   fileServerUrl: string,
 ): Promise<{ ok: true; settings: StorageSettings } | { ok: false; error: string }> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(storageFnUrl, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({
-      videos_base_path: videosPath,
-      images_base_path: imagesPath,
-      file_server_url: fileServerUrl,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    return { ok: false, error: data.error ?? 'Could not save storage settings.' };
+  return saveSettingsPatch({ videos_base_path: videosPath, images_base_path: imagesPath, file_server_url: fileServerUrl });
+}
+
+export async function saveVideoProcessingSettings(targetMbps: number) {
+  return saveSettingsPatch({ target_video_bitrate_mbps: targetMbps });
+}
+
+async function saveSettingsPatch(patch: Record<string, string | number>): Promise<{ ok: true; settings: StorageSettings } | { ok: false; error: string }> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(storageFnUrl, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data.error ?? 'Could not save storage settings.' };
+    }
+    return {
+      ok: true,
+      settings: {
+        videos_base_path: data.videos_base_path,
+        images_base_path: data.images_base_path,
+        file_server_url: data.file_server_url ?? '',
+        target_video_bitrate_mbps: Number(data.target_video_bitrate_mbps ?? 3),
+        updated_at: data.updated_at,
+      },
+    };
+  } catch {
+    return { ok: false, error: 'Could not save settings. Check your connection and try again.' };
   }
-  return {
-    ok: true,
-    settings: {
-      videos_base_path: data.videos_base_path,
-      images_base_path: data.images_base_path,
-      file_server_url: data.file_server_url ?? '',
-      updated_at: data.updated_at,
-    },
-  };
 }
 
 let cachedVideosBase: string | null = null;

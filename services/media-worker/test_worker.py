@@ -17,14 +17,14 @@ class PublicationTests(unittest.TestCase):
             kill.assert_called_once_with(321,worker.signal.SIGKILL)
             self.assertEqual(process.communicate.call_count,2)
 
-    def scenario(self,kind='photo',invalid=False,fail_insert=False,fail_status=False,rejected=False,cancelled=False,decoder_error=None):
+    def scenario(self,kind='photo',invalid=False,fail_insert=False,fail_status=False,rejected=False,cancelled=False,decoder_error=None,target=3):
         calls=[];removals=[];uploads=[]
         committed=False
         job=dict(id='55555555-5555-4555-8555-555555555555',owner_id=OWNER,kind=kind,file_name='fixture',visibility='private',has_preview=False,target_video_id='33333333-3333-4333-8333-333333333333')
         def api(method,path,**kwargs):
             nonlocal committed
             calls.append((method,path,kwargs))
-            if 'storage_settings' in path:return [{}]
+            if 'storage_settings' in path:return [{'target_video_bitrate_mbps':target}]
             if method=='GET' and 'media_upload_jobs' in path:return [{'status':'cancelling' if cancelled else 'complete' if committed else 'processing'}]
             if 'profiles' in path:return [{'email':'fixture@example.test'}]
             if method=='POST' and rejected:raise worker.RejectedRequest('A photo with this name already exists.')
@@ -32,7 +32,8 @@ class PublicationTests(unittest.TestCase):
             if method=='POST' and path.endswith('publish_media_upload'):
                 committed=True
                 if fail_status:raise ConnectionError('ambiguous status response')
-        def validate(kind,source,directory,job_id=None,claim_token=None):
+        def validate(kind,source,directory,job_id=None,claim_token=None,target_video_bitrate_mbps=None):
+            if kind == 'video': self.assertEqual(target_video_bitrate_mbps, target)
             if decoder_error: raise decoder_error
             if invalid:raise ValueError('Not a decodable image.')
             (directory/'stream.mp4').write_bytes(b'fixture')
@@ -65,6 +66,10 @@ class PublicationTests(unittest.TestCase):
         self.assertIsInstance(record['video_bitrate'],int)
         self.assertEqual(record['video_bitrate'],2500)
         self.assertEqual(record['processing_status'],'ready');self.assertTrue(record['processed_storage_path'].endswith('/stream.mp4'))
+    def test_each_video_job_uses_current_setting(self):
+        for target in [2.5,3,3.5,4,4.5,15]:
+            calls,_,_=self.scenario(kind='video',target=target)
+            self.assertTrue(any('select=target_video_bitrate_mbps' in path for _,path,_ in calls))
     def test_ambiguous_commit_never_deletes_final_media(self):
         for mode in ['fail_insert','fail_status']:
             _,removed,uploaded=self.scenario(**{mode:True})

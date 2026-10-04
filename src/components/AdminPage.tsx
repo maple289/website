@@ -12,12 +12,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchStorageSettings, saveStorageSettings } from '@/lib/storageSettings';
 import { Server } from 'lucide-react';
 import { BarChart3 } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
+import { VideoProcessingSettings } from './VideoProcessingSettings';
 const AdminStatistics = lazy(() => import('./AdminStatistics').then(module => ({ default: module.AdminStatistics })));
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
 const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
 
-type Tab = 'users' | 'storage' | 'statistics';
+type Tab = 'users' | 'storage' | 'statistics' | 'settings';
 
 type Profile = {
   first_name: string | null;
@@ -113,6 +115,7 @@ export function AdminPage() {
           <TabButton active={tab === 'users'} onClick={() => selectTab('users')} icon={<Users size={20} />}>Users</TabButton>
           <TabButton active={tab === 'storage'} onClick={() => selectTab('storage')} icon={<FolderTree size={20} />}>Storage</TabButton>
           <TabButton active={tab === 'statistics'} onClick={() => selectTab('statistics')} icon={<BarChart3 size={20} />}>Statistics</TabButton>
+          <TabButton active={tab === 'settings'} onClick={() => selectTab('settings')} icon={<Settings2 size={20} />}>Settings</TabButton>
         </nav>
         <div className="admin-sidebar-footer">
           <ShieldCheck size={18} />
@@ -121,8 +124,8 @@ export function AdminPage() {
       </aside>
       <main className="admin-main">
         <div className={`admin-content ${tab === 'statistics' ? 'admin-content-wide' : ''}`}>
-          <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : 'Statistics'}</span></p>
-          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : <StorageTab />}
+          <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : tab === 'settings' ? 'Settings' : 'Statistics'}</span></p>
+          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
         </div>
       </main>
     </div>

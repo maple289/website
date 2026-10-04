@@ -5,6 +5,8 @@ import warnings
 import tempfile
 import math
 import re
+import os
+import shutil
 from fractions import Fraction
 from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -29,6 +31,8 @@ FORMATS = {'mov': ('mov','video/quicktime'), 'mp4': ('mp4','video/mp4'),
            'mxf': ('mxf','application/mxf'), 'nut': ('nut','video/x-nut')}
 MEDIA_CONTEXT = {}
 MEDIA_DIAGNOSTICS = []
+DEFAULT_TARGET_VIDEO_BITRATE_MBPS = 3.0
+MP4_REENCODE_THRESHOLD = 4_500_000
 class InvalidMedia(Exception):
     def __init__(self, message, diagnostic=None):
         super().__init__(message)
@@ -118,7 +122,9 @@ def container(info):
 
 def measured_bitrate(source, stream, duration):
     known = number(stream.get('bit_rate'))
-    if known:
+    # FFprobe's stream rate is separate from audio/total container bitrate.
+    # Implausible metadata must be replaced by compressed video-packet sizing.
+    if known and (not duration or known <= source.stat().st_size * 8 / duration * 1.05):
         return known
     if not duration:
         return None
@@ -131,16 +137,46 @@ def measured_bitrate(source, stream, duration):
                 '-show_entries', 'packet=size', '-of', 'csv=p=0', str(source)],
                 stdout=packets, stderr=subprocess.DEVNULL, timeout=180, check=True)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            raise InvalidMedia('Could not measure the video bitrate safely.')
+            return None  # Unknown source rate forces conversion, never blind reuse.
         packets.seek(0)
         total = sum(int(value) for line in packets if (value := line.split(b',')[0].strip()).isdigit())
     return total * 8 / duration if total else None
 
 
-def video(source, destination):
+def mp4_faststart(source):
+    """Read bounded top-level box headers; never load an entire MP4 into memory."""
+    total = source.stat().st_size
+    with source.open('rb') as content:
+        offset = 0
+        for _ in range(10000):
+            header = content.read(8)
+            if len(header) != 8: return False
+            size, kind = int.from_bytes(header[:4], 'big'), header[4:]
+            minimum = 8
+            if size == 1:
+                extended = content.read(8)
+                if len(extended) != 8: return False
+                size, minimum = int.from_bytes(extended, 'big'), 16
+            if size == 0: size = total - offset
+            if size < minimum or offset + size > total: return False
+            if kind == b'moov': return True
+            if kind == b'mdat': return False
+            offset += size
+            content.seek(offset)
+    return False
+
+
+def video(source, destination, target_video_bitrate_mbps=DEFAULT_TARGET_VIDEO_BITRATE_MBPS):
     global MEDIA_CONTEXT, MEDIA_DIAGNOSTICS
     MEDIA_CONTEXT = {}
     MEDIA_DIAGNOSTICS = []
+    try:
+        target = float(target_video_bitrate_mbps)
+        if not math.isfinite(target) or not 1 <= target <= 15 or abs(target * 100 - round(target * 100)) > 1e-8:
+            raise ValueError()
+        target_bps = round(target * 1_000_000)
+    except (TypeError, ValueError):
+        raise InvalidMedia('Target video bitrate must be between 1 and 15 Mbps, with at most two decimal places.')
     try:
         with Image.open(source):
             raise InvalidMedia('The Videos section accepts video files only, not still or animated images.')
@@ -170,14 +206,16 @@ def video(source, destination):
                   and width <= 1920 and height <= 1080 and width % 2 == 0 and height % 2 == 0
                   and sar == 1 and not rotated)
     # All non-MP4 inputs are normalized; compliant MP4 video is stream-copied.
-    transcode = detected != 'mp4' or not compatible or bitrate is None or bitrate > 2_500_000
+    transcode = detected != 'mp4' or not compatible or bitrate is None or bitrate > MP4_REENCODE_THRESHOLD
     audio = next((s for s in info.get('streams', []) if s.get('codec_type') == 'audio'), None)
     audio_bitrate = number(audio.get('bit_rate')) if audio else None
-    copy_audio = audio and audio.get('codec_name') == 'aac' and audio.get('profile') == 'LC' and audio_bitrate and 120_000 <= audio_bitrate <= 136_000
+    copy_audio = audio is None or (audio.get('codec_name') == 'aac' and audio.get('profile') == 'LC')
+    keep_original = not transcode and copy_audio and mp4_faststart(source)
     source_metadata = dict(container=detected, video_codec=stream.get('codec_name'),
         video_bitrate=round(bitrate / 1000, 3) if bitrate else None, width=width, height=height,
         frame_rate=fps, duration_seconds=duration, audio_codec=audio.get('codec_name') if audio else None,
-        audio_bitrate=round(audio_bitrate / 1000, 3) if audio_bitrate else None)
+        audio_bitrate=round(audio_bitrate / 1000, 3) if audio_bitrate else None,
+        conversion_target_video_bitrate_mbps=target, mp4_reencode_threshold_mbps=MP4_REENCODE_THRESHOLD / 1_000_000)
     # Let the source decoder recover damaged frames/packets where possible.
     # The resulting MP4 still must pass a complete strict decode before release.
     command = ['ffmpeg', '-nostdin', '-v', 'error',
@@ -188,7 +226,7 @@ def video(source, destination):
         # enlarging its display dimensions. FFmpeg autorotates before filtering.
         scale = "scale=w='trunc(min(iw*sar,min(1920,1080*dar))/2)*2':h='trunc(min(ih,min(1080,1920/dar))/2)*2',setsar=1"
         command += ['-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast',
-            '-b:v', '2500k', '-minrate', '2500k', '-maxrate', '2500k', '-bufsize', '5000k',
+            '-b:v', str(target_bps), '-minrate', str(target_bps), '-maxrate', str(target_bps), '-bufsize', str(target_bps * 2),
             # MP4 does not support x264's nal-hrd=cbr signaling. Filler plus
             # matching VBV rates provides a tightly controlled constant target.
             '-x264-params', 'nal-hrd=vbr:filler=1', '-pix_fmt', 'yuv420p',
@@ -198,7 +236,13 @@ def video(source, destination):
     command += ['-c:a', 'copy'] if copy_audio and not transcode else ['-af', 'aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '128k']
     playable = destination / 'stream.mp4'
     command += ['-map_metadata', '-1', '-movflags', '+faststart', str(playable)]
-    run(command, 3600)
+    if keep_original:
+        # The source is immutable. Reuse bytes locally instead of remuxing or
+        # re-encoding; the existing final-path/publication rules remain intact.
+        try: os.link(source, playable)
+        except OSError: shutil.copyfile(source, playable)
+    else:
+        run(command, 3600)
     output = probe(playable)
     output_video = next((s for s in output.get('streams', []) if s.get('codec_type') == 'video'), {})
     output_audio = next((s for s in output.get('streams', []) if s.get('codec_type') == 'audio'), None)
@@ -220,14 +264,21 @@ def video(source, destination):
         duration_seconds=output_duration, format='mp4', video_codec='h264',
         video_bitrate=round(output_bitrate / 1000, 3) if output_bitrate else None,
         frame_rate=number(output_video.get('avg_frame_rate')) or fps,
-        source_metadata=source_metadata, processing_action='transcoded' if transcode else 'remuxed_without_video_reencoding',
+        source_metadata=source_metadata, processing_action='transcoded' if transcode else 'kept_original' if keep_original else 'remuxed_without_video_reencoding',
         audio_codec=output_audio.get('codec_name') if output_audio else None,
         audio_bitrate=number(output_audio.get('bit_rate')) / 1000 if output_audio and number(output_audio.get('bit_rate')) else None,
         diagnostics=MEDIA_DIAGNOSTICS)
 
 if __name__ == '__main__':
     try:
-        result = (video if sys.argv[1]=='video' else photo)(Path(sys.argv[2]), Path(sys.argv[3]))
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument('kind', choices=['video', 'photo', 'preview'])
+        parser.add_argument('source', type=Path)
+        parser.add_argument('destination', type=Path)
+        parser.add_argument('--target-video-bitrate-mbps', type=float, default=DEFAULT_TARGET_VIDEO_BITRATE_MBPS)
+        args = parser.parse_args()
+        result = video(args.source, args.destination, args.target_video_bitrate_mbps) if args.kind == 'video' else photo(args.source, args.destination)
         print(json.dumps(result))
     except InvalidMedia as error:
         print(json.dumps({'error': str(error), 'diagnostic': error.diagnostic}))

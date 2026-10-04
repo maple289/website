@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === "GET") {
       const { data: settings, error: settingsErr } = await adminClient
         .from("storage_settings")
-        .select("videos_base_path, images_base_path, file_server_url, updated_at")
+        .select("videos_base_path, images_base_path, file_server_url, target_video_bitrate_mbps, updated_at")
         .eq("id", 1)
         .maybeSingle();
 
@@ -90,30 +90,34 @@ Deno.serve(async (req: Request) => {
         videos_base_path: settings?.videos_base_path ?? "",
         images_base_path: settings?.images_base_path ?? "",
         file_server_url: settings?.file_server_url ?? "",
+        target_video_bitrate_mbps: Number(settings?.target_video_bitrate_mbps ?? 3),
         updated_at: settings?.updated_at ?? null,
       });
     }
 
     // PUT: update settings
     if (req.method === "PUT") {
-      const body = await req.json();
-      const { videos_base_path, images_base_path, file_server_url } = body as {
-        videos_base_path?: string;
-        images_base_path?: string;
-        file_server_url?: string;
-      };
-
-      const videosRaw = typeof videos_base_path === "string" ? videos_base_path : "";
-      const imagesRaw = typeof images_base_path === "string" ? images_base_path : "";
-      const fileServerUrlRaw = typeof file_server_url === "string" ? file_server_url.trim() : "";
-
-      const videosPath = sanitizePath(videosRaw);
-      const imagesPath = sanitizePath(imagesRaw);
-
-      const vErr = validatePath(videosPath);
-      const iErr = validatePath(imagesPath);
-      if (vErr) return json({ error: `Video storage location: ${vErr}` }, 400);
-      if (iErr) return json({ error: `Image storage location: ${iErr}` }, 400);
+      const body = await req.json().catch(() => null);
+      if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Invalid settings." }, 400);
+      const changes: Record<string, unknown> = {};
+      for (const [field, label] of [["videos_base_path", "Video storage location"], ["images_base_path", "Image storage location"]]) {
+        if (!(field in body)) continue;
+        if (typeof body[field] !== "string") return json({ error: `${label}: Enter a valid path.` }, 400);
+        const path = sanitizePath(body[field]);
+        const error = validatePath(path);
+        if (error) return json({ error: `${label}: ${error}` }, 400);
+        changes[field] = path;
+      }
+      if ("target_video_bitrate_mbps" in body) {
+        const value = body.target_video_bitrate_mbps;
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 1 || value > 15 ||
+          Math.abs(value * 100 - Math.round(value * 100)) > 1e-8) {
+          return json({ error: "Target Video Bitrate must be between 1 and 15 Mbps, with at most two decimal places." }, 400);
+        }
+        changes.target_video_bitrate_mbps = value;
+      }
+      if ("file_server_url" in body && typeof body.file_server_url !== "string") return json({ error: "Enter a valid File Storage Server URL." }, 400);
+      const fileServerUrlRaw = typeof body.file_server_url === "string" ? body.file_server_url.trim() : "";
 
       // Validate file server URL if provided
       if (fileServerUrlRaw) {
@@ -131,29 +135,26 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
+      if ("file_server_url" in body) changes.file_server_url = fileServerUrlRaw;
+      if (!Object.keys(changes).length) return json({ error: "No settings were provided." }, 400);
 
-      const { error: updateErr } = await adminClient
+      const { data: settings, error: updateErr } = await adminClient
         .from("storage_settings")
         .update({
-          videos_base_path: videosPath,
-          images_base_path: imagesPath,
-          file_server_url: fileServerUrlRaw,
+          ...changes,
           updated_at: new Date().toISOString(),
           updated_by: callerData.user.id,
         })
-        .eq("id", 1);
+        .eq("id", 1)
+        .select("videos_base_path, images_base_path, file_server_url, target_video_bitrate_mbps, updated_at")
+        .single();
 
       if (updateErr) {
         console.error("storage-settings PUT failed:", updateErr);
         return json({ error: "Could not save storage settings." }, 500);
       }
 
-      return json({
-        videos_base_path: videosPath,
-        images_base_path: imagesPath,
-        file_server_url: fileServerUrlRaw,
-        updated_at: new Date().toISOString(),
-      });
+      return json({ ...settings, target_video_bitrate_mbps: Number(settings.target_video_bitrate_mbps) });
     }
 
     return json({ error: "Method not allowed" }, 405);

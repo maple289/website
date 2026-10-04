@@ -115,8 +115,10 @@ def upload(bucket,path,source,mime,created):
 def remove(bucket,paths):
     if paths: api('DELETE','/storage/v1/object/'+bucket,json={'prefixes':paths})
 
-def validate(kind,source,directory,job_id=None,claim_token=None):
+def validate(kind,source,directory,job_id=None,claim_token=None,target_video_bitrate_mbps=None):
     command=[sys.executable,str(Path(__file__).with_name('validate.py')),kind,str(source),str(directory)]
+    if kind == 'video' and target_video_bitrate_mbps is not None:
+        command += ['--target-video-bitrate-mbps', str(target_video_bitrate_mbps)]
     process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,
                              env={'PATH':os.environ.get('PATH',''),'HOME':'/tmp','PYTHONUNBUFFERED':'1'})
     deadline=time.monotonic()+(7620 if kind=='video' else 120)
@@ -161,7 +163,13 @@ def process(job):
             source=directory/'source'
             size=download(prefix+'/source',source,10*1024**3 if kind=='video' else 25*1024**2)
             check()
-            metadata=validate(kind,source,directory,jid,claim)
+            if kind == 'video':
+                config=api('GET','/rest/v1/storage_settings?id=eq.1&select=target_video_bitrate_mbps')
+                if not config or config[0].get('target_video_bitrate_mbps') is None:
+                    raise ValueError('Video processing settings are unavailable. Contact the administrator and retry.')
+                metadata=validate(kind,source,directory,jid,claim,target_video_bitrate_mbps=config[0]['target_video_bitrate_mbps'])
+            else:
+                metadata=validate(kind,source,directory,jid,claim)
             check()
             rows=api('GET','/rest/v1/storage_settings?id=eq.1&select=videos_base_path,images_base_path') or [{}]
             settings=rows[0]
