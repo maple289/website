@@ -33,6 +33,9 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
   const [showCapture, setShowCapture] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [captureReady, setCaptureReady] = useState(false);
+  const [captureAttempt, setCaptureAttempt] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,34 +44,54 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
   useVideoVolume(videoRef, videoUrl);
 
   useEffect(() => {
-    if (!showCapture || videoUrl) return;
+    if (!showCapture) return;
     let active = true;
-    setVideoLoading(true);
+    setVideoLoading(true); setVideoUrl(null); setVideoError(null); setCaptureReady(false);
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      const url = await getPlayableUrl(video.id, token);
-      if (active) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const url = await getPlayableUrl(video.id, data.session?.access_token);
+        if (!active) return;
+        if (!url) throw new Error('Video unavailable');
         setVideoUrl(url);
-        setVideoLoading(false);
+      } catch {
+        if (active) setVideoError('Unable to load the video for capture. Check your connection and access, then try again.');
+      } finally {
+        if (active) setVideoLoading(false);
       }
     })();
     return () => { active = false; };
-  }, [showCapture, video.id, videoUrl]);
+  }, [showCapture, video.id, captureAttempt]);
+
+  const updateCaptureReady = () => {
+    const element = videoRef.current;
+    setCaptureReady(!!element && !element.seeking && element.readyState >= 2 && element.videoWidth > 0 && element.videoHeight > 0);
+  };
 
   const captureFrame = () => {
     const vid = videoRef.current;
-    if (!vid) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = vid.videoWidth || 320;
-    canvas.height = vid.videoHeight || 180;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    setPreviewUrl(dataUrl);
-    setPreviewChanged(true);
-    setShowCapture(false);
+    if (savingRef.current) return;
+    if (!vid || vid.seeking || vid.readyState < 2 || !vid.videoWidth || !vid.videoHeight) {
+      setError('Wait for the selected video frame to load before capturing.');
+      return;
+    }
+    try {
+      vid.pause();
+      const canvas = document.createElement('canvas');
+      canvas.width = vid.videoWidth;
+      canvas.height = vid.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas unavailable');
+      ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      if (!dataUrl.startsWith('data:image/jpeg')) throw new Error('Frame unavailable');
+      setPreviewUrl(dataUrl);
+      setPreviewChanged(true);
+      setError(null);
+      setShowCapture(false);
+    } catch {
+      setError('Unable to capture this frame. Reload the video and try again, or upload a preview image.');
+    }
   };
 
   const handlePreviewUpload = (f: File) => {
@@ -160,17 +183,17 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
                 fallback={<div className="flex h-full w-full items-center justify-center text-[#555]"><ImageIcon size={24} /></div>}
               />
               {(previewUrl || (!previewChanged && video.preview_path)) && (
-                <button type="button" aria-label="Remove preview image (applied when saved)" onClick={() => { setPreviewUrl(null); setPreviewChanged(true); }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={12} /></button>
+                <button type="button" disabled={saving} aria-label="Remove preview image (applied when saved)" onClick={() => { setPreviewUrl(null); setPreviewChanged(true); }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={12} /></button>
               )}
             </div>
             <div className="flex flex-1 flex-col gap-2">
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 rounded-lg border border-[#3a3a3a] px-3 py-2 text-xs font-medium text-[#ccc] transition hover:bg-[#272727]">
+              <button type="button" disabled={saving} onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 rounded-lg border border-[#3a3a3a] px-3 py-2 text-xs font-medium text-[#ccc] transition hover:bg-[#272727]">
                 <Upload size={14} /> Upload image
               </button>
-              <button type="button" onClick={() => setShowCapture(!showCapture)} className="flex items-center gap-2 rounded-lg border border-[#3a3a3a] px-3 py-2 text-xs font-medium text-[#ccc] transition hover:bg-[#272727]">
+              <button type="button" disabled={saving} onClick={() => setShowCapture(!showCapture)} className="flex items-center gap-2 rounded-lg border border-[#3a3a3a] px-3 py-2 text-xs font-medium text-[#ccc] transition hover:bg-[#272727]">
                 <Film size={14} /> Capture from video
               </button>
-              <input ref={fileInputRef} type="file" accept={PHOTO_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewUpload(e.target.files[0])} />
+              <input ref={fileInputRef} disabled={saving} type="file" accept={PHOTO_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewUpload(e.target.files[0])} />
             </div>
           </div>
 
@@ -178,27 +201,38 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
             <div className="mb-4 rounded-xl border border-[#3a3a3a] bg-[#121212] p-3">
               {videoLoading ? (
                 <div className="flex h-40 items-center justify-center"><Loader2 size={24} className="animate-spin text-blue-600" /></div>
-              ) : videoUrl ? (
+              ) : videoUrl && !videoError ? (
                 <>
                   <video
                     ref={videoRef}
+                    crossOrigin="anonymous"
                     src={videoUrl}
                     controls
+                    playsInline
                     className="mb-2 w-full rounded-lg"
                     preload="metadata"
+                    onLoadedData={updateCaptureReady}
+                    onCanPlay={updateCaptureReady}
+                    onSeeking={() => setCaptureReady(false)}
+                    onSeeked={updateCaptureReady}
+                    onEmptied={() => setCaptureReady(false)}
+                    onError={() => { setCaptureReady(false); setVideoError('Unable to play the video for capture. Reload it and try again.'); }}
                   />
                   <p className="mb-2 text-xs text-[#888]">Play the video and pause at the frame you want, then click capture.</p>
-                  <button type="button" onClick={captureFrame} className="rounded-lg fluent-primary px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">Capture current frame</button>
+                  <button type="button" disabled={!captureReady || saving} onClick={captureFrame} className="min-h-11 rounded-lg fluent-primary px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Capture current frame</button>
                 </>
               ) : (
-                <div className="flex h-40 items-center justify-center text-sm text-[#888]">Unable to load video for capture.</div>
+                <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-sm text-[#888]">
+                  <p role="alert">{videoError || 'Unable to load video for capture.'}</p>
+                  <button type="button" disabled={saving} onClick={() => setCaptureAttempt(value => value + 1)} className="min-h-11 rounded-lg border border-[#3a3a3a] px-4 py-2">Reload video</button>
+                </div>
               )}
             </div>
           )}
 
           <MediaEditFields kind="Video" name={fileName} onNameChange={setFileName} visibility={visibility} onVisibilityChange={setVisibility} disabled={saving} />
 
-          {error && <div className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
+          {error && <div role="alert" className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
 
           <div className="flex gap-3">
             <button type="button" onClick={close} disabled={saving} className="h-11 flex-1 rounded-xl border border-[#3a3a3a] text-sm font-medium text-[#ccc] transition hover:bg-[#272727]">Cancel</button>
