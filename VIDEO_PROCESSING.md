@@ -13,12 +13,40 @@ The **conversion target** is configurable; the **MP4 video-stream threshold** re
 ## Processing policy
 
 - Detect actual container, video codec, video bitrate, dimensions, frame rate, duration and audio properties. The MOV/MP4 shared demuxer is distinguished using its major brand, not the user filename. If stream bitrate is missing, count compressed video packet bytes over duration; do not substitute total audio+video bitrate.
-- Non-MP4 input, video above 4.5 Mbps, unknown video bitrate, incompatible codec/pixel format, excessive dimensions, rotation or non-square pixels: normalize with H.264, yuv420p, configured target/min/max, a VBV buffer twice that bitrate, filler, AAC at 128 kbps, fast-start MP4, and at most 1920 by 1080 display pixels. Preserve source timestamps/frame rate and aspect ratio (subject to even-pixel rounding). Smaller display dimensions are not enlarged. A failed packet-bitrate measurement safely falls back to conversion.
+- Non-MP4 input, video above 4.5 Mbps, unknown video bitrate, incompatible codec/pixel format, excessive dimensions, rotation or non-square pixels: normalize with H.264, yuv420p, the configured average bitrate, a peak limit one-third above that target, a VBV buffer twice the peak, AAC at 128 kbps, fast-start MP4, and at most 1920 by 1080 display pixels. Preserve source timestamps/frame rate and aspect ratio (subject to even-pixel rounding). Smaller display dimensions are not enlarged. A failed packet-bitrate measurement safely falls back to conversion.
 - Compatible MP4/H.264 at or below 4.5 Mbps with AAC-LC (or no audio) and fast-start layout: keep the original bytes without a conversion/remux command. Validation and thumbnail generation still run before Ready publication. AAC bitrate does not affect the video-stream threshold.
 - Compatible lower-bitrate MP4 missing fast-start layout or requiring compatible audio: remux with video stream copy; normalize audio only when necessary. Lower-bitrate video is never re-encoded merely to reach the configured target.
 - Audio-free videos remain audio-free. Converted/remuxed output selects the main video and first audio track. Files kept as-is retain their original tracks.
-- MP4 does not support x264's `nal-hrd=cbr` signaling. Use `nal-hrd=vbr:filler=1` with matching configured target/min/max rates for a tightly controlled video payload. Short intervals/short clips and container/audio overhead mean total file bitrate is not exactly the configured target; AAC 128 kbps is an encoder target.
+- Encoding is single-pass average bitrate (ABR), with `-preset veryfast`. At the default target, use `-b:v 3000000 -maxrate 4000000 -bufsize 8000000`. There is no minimum bitrate, filler padding or `-pass` option. Simple scenes can use fewer bits; complex scenes can approach the VBV peak. The peak applies to the video encoder over the buffer interval, not every packet or total audio/container bitrate. The target is not an exact average guarantee for short or unusually simple clips; AAC 128 kbps is an encoder target.
 - Fully decode the final MP4, even when video was copied, before publication. Store measured output metadata rather than reporting an encoder target as a measurement.
+
+## Worker performance and resources
+
+The worker uses automatic decoder/encoder threading (`-threads 0`) and has no Docker CPU quota. It can use the VM's eight logical CPUs when available. A relative CPU weight of 512 gives the website/database more scheduling priority under contention; it does not restrict the worker to two CPUs. The worker memory limit is 8 GiB and its process/thread limit is 512. Two existing job slots remain available, sharing these resources. Memory is a limit, not a reservation.
+
+Scale/aspect filters run only when dimensions, pixel shape, rotation or even-pixel alignment require normalization. Already compliant 1080p/720p sources avoid an unnecessary filter stage. The strict final decode remains enabled: it verifies playback integrity and is not a second encoding pass. Existing job claiming, cancellation, temporary cleanup and verified publication rules remain unchanged.
+
+The previous deployment had both a Docker two-CPU quota and an explicit two-thread encoder limit. Its encoder already used `veryfast` and a single encoding pass. Neither the preset nor two-pass encoding caused that CPU ceiling. The VM reports eight logical CPUs (four cores with two threads each); performance does not necessarily scale by four when moving from two to eight logical CPUs.
+
+### Controlled performance comparison, 2026-10-04
+
+On the live eight-CPU VM, network-disabled benchmark containers processed the same private 30-second, 1920×1080 segment from the Billy Ray upload. No production media record was changed; the original hash remained identical. Both outputs passed strict full decode, H.264/AAC, fast-start and thumbnail checks.
+
+| Measurement | Previous limits/policy | Automatic threading/new policy |
+| --- | ---: | ---: |
+| Complete validation/conversion | 57.187 s | 18.734 s |
+| Encoding | 47.443 s | 16.130 s |
+| Final full decode | 9.003 s | 1.975 s |
+| Average CPU cores used | 1.98 | 5.74 |
+| Measured video bitrate | 3.073 Mbps | 3.100 Mbps |
+
+This sample completed approximately 3.05 times faster (67% less elapsed time). Actual time depends on source codec, scene complexity, storage and other VM workloads. This measures the combined CPU/thread/filter/rate-control changes; it does not attribute the whole speed improvement to variable bitrate alone.
+
+The updated decoder passes seven bitrate-policy tests and 30 format/content checks, including MP4, AVI, WMV, MOV and MKV. Fourteen worker regressions also pass, including cancellation, claim expiry, failed publication and cleanup. Technical benchmark results and test logs are kept privately under `/srv/streamly/audits/video-performance-20261004/`; generated benchmark artifacts are outside gallery storage.
+
+Two simultaneous conversions of that segment passed the same checks in 33.273/33.324 seconds, averaging 3.50/3.49 CPU cores respectively (approximately seven cores combined). They shared the proposed 8 GiB memory and 512-thread/process limits without failures. This verifies the existing two-slot queue can use the VM rather than leaving most CPUs idle.
+
+Performance tuning was deployed on 2026-10-04 UTC. The healthy running worker matches the reviewed decoder hash, reports eight CPUs, has CPU quota 0 (`cpu.max = max 100000`), CPU weight 512, memory limit 8 GiB and PID limit 512. The HTTPS frontend serves the updated average/peak explanation, and the current database target remains 3.00 Mbps. Content counts and video storage references match the pre-deployment snapshot. No schema migration or existing-video reconversion was performed. The source snapshot, image tags and deployment log are retained in the private audit directory for rollback. Repository changes still need to be committed/pushed so future deployments retain the tuning.
 
 ## Records, visibility and recovery
 

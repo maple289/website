@@ -62,11 +62,13 @@ export function VideoProcessingSettings() {
           <span className="text-sm text-slate-500">Mbps</span>
         </div>
         <p id="video-bitrate-help" className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-          Videos requiring transcoding will be encoded using this bitrate. Compatible MP4 videos with a video bitrate
+          Videos requiring transcoding use single-pass encoding with this average bitrate and a peak limit
+          one-third higher. Compatible MP4 videos with a video bitrate
           of 4.5 Mbps or lower will normally be kept without re-encoding. Changes apply to future conversions;
           existing Ready videos stay unchanged.
         </p>
         <p className="mt-2 text-sm text-slate-600">Current target: <strong>{formatMbps(saved)} Mbps</strong> · Default: 3.0 Mbps</p>
+        <p className="mt-1 text-sm text-slate-500">Peak video bitrate limit: <strong>{formatMbps(saved * 4 / 3)} Mbps</strong> · Default: 4.0 Mbps</p>
         <p id="video-bitrate-validation" className={`mt-2 text-sm ${valid ? 'text-slate-400' : 'text-rose-600'}`}>
           {valid ? 'Allowed range: 1–15 Mbps, up to two decimal places.' : 'Enter a number between 1 and 15 Mbps, with at most two decimal places.'}
         </p>

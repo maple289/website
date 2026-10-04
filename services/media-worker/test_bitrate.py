@@ -45,15 +45,22 @@ class BitrateDecisions(unittest.TestCase):
                     self.assertEqual(result['processing_action'], 'kept_original')
                     self.assertIsNone(command)
 
-    def test_high_mp4_and_non_mp4_use_configured_rate_and_double_buffer(self):
+    def test_high_mp4_and_non_mp4_use_single_pass_average_and_peak_rate(self):
         for fmt, bitrate in [('mp4', 4_500_001), ('mp4', 5_000_000), ('mp4', 10_000_000), ('mov', 3_000_000)]:
             for target in [2.5, 3, 3.5, 4, 4.5, 15]:
                 with self.subTest(fmt=fmt, bitrate=bitrate, target=target):
                     result, command = self.scenario(bitrate=bitrate, target=target, fmt=fmt)
                     self.assertEqual(result['processing_action'], 'transcoded')
-                    for option in ['-b:v', '-minrate', '-maxrate']:
-                        self.assertEqual(command[command.index(option)+1], str(round(target*1_000_000)))
-                    self.assertEqual(command[command.index('-bufsize')+1], str(round(target*2_000_000)))
+                    self.assertEqual(command[command.index('-b:v')+1], str(round(target*1_000_000)))
+                    maximum=round(round(target*1_000_000)*4/3)
+                    self.assertEqual(command[command.index('-maxrate')+1], str(maximum))
+                    self.assertEqual(command[command.index('-bufsize')+1], str(maximum*2))
+                    self.assertEqual(command[command.index('-preset')+1], 'veryfast')
+                    self.assertNotIn('-minrate',command)
+                    self.assertNotIn('-pass',command)
+                    self.assertNotIn('-x264-params',command)
+                    self.assertNotIn('-vf',command) # Already within size/aspect limits.
+                    self.assertTrue(all(command[index+1]=='0' for index,value in enumerate(command) if value=='-threads'))
 
     def test_unknown_rate_and_incompatible_codec_convert(self):
         for changes in [dict(bitrate=None), dict(codec='hevc')]:
@@ -113,7 +120,10 @@ class RealBitrateConversions(unittest.TestCase):
                 if name=='audio-total':
                     self.assertGreater(float(validate.probe(source)['format']['bit_rate']),4_500_000)
                     self.assertLessEqual(result['source_metadata']['video_bitrate'],4500)
-                if expected=='transcoded':self.assertLess(abs(result['video_bitrate']/1000-target),target*.12)
+                if expected=='transcoded':
+                    self.assertGreater(result['video_bitrate'],0)
+                    self.assertLess(result['video_bitrate']/1000,target*4/3*1.1)
+                    self.assertEqual(result['source_metadata']['conversion_rate_control'],'single_pass_abr')
                 print('PASS real '+name+': '+expected,flush=True)
 
 

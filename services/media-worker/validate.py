@@ -175,6 +175,7 @@ def video(source, destination, target_video_bitrate_mbps=DEFAULT_TARGET_VIDEO_BI
         if not math.isfinite(target) or not 1 <= target <= 15 or abs(target * 100 - round(target * 100)) > 1e-8:
             raise ValueError()
         target_bps = round(target * 1_000_000)
+        maximum_bps = round(target_bps * 4 / 3)
     except (TypeError, ValueError):
         raise InvalidMedia('Target video bitrate must be between 1 and 15 Mbps, with at most two decimal places.')
     try:
@@ -215,22 +216,24 @@ def video(source, destination, target_video_bitrate_mbps=DEFAULT_TARGET_VIDEO_BI
         video_bitrate=round(bitrate / 1000, 3) if bitrate else None, width=width, height=height,
         frame_rate=fps, duration_seconds=duration, audio_codec=audio.get('codec_name') if audio else None,
         audio_bitrate=round(audio_bitrate / 1000, 3) if audio_bitrate else None,
-        conversion_target_video_bitrate_mbps=target, mp4_reencode_threshold_mbps=MP4_REENCODE_THRESHOLD / 1_000_000)
+        conversion_target_video_bitrate_mbps=target, conversion_max_video_bitrate_mbps=maximum_bps / 1_000_000,
+        conversion_rate_control='single_pass_abr', mp4_reencode_threshold_mbps=MP4_REENCODE_THRESHOLD / 1_000_000)
     # Let the source decoder recover damaged frames/packets where possible.
     # The resulting MP4 still must pass a complete strict decode before release.
     command = ['ffmpeg', '-nostdin', '-v', 'error',
-        '-fflags', '+genpts+discardcorrupt', '-protocol_whitelist', 'file', '-format_whitelist', CONTAINERS, '-i', str(source),
+        '-fflags', '+genpts+discardcorrupt', '-protocol_whitelist', 'file', '-format_whitelist', CONTAINERS, '-threads', '0', '-i', str(source),
         '-map', '0:' + str(stream['index']), '-map', '0:a:0?']
     if transcode:
         # Normalize display aspect ratio (including anamorphic sources) without
         # enlarging its display dimensions. FFmpeg autorotates before filtering.
         scale = "scale=w='trunc(min(iw*sar,min(1920,1080*dar))/2)*2':h='trunc(min(ih,min(1080,1920/dar))/2)*2',setsar=1"
-        command += ['-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast',
-            '-b:v', str(target_bps), '-minrate', str(target_bps), '-maxrate', str(target_bps), '-bufsize', str(target_bps * 2),
-            # MP4 does not support x264's nal-hrd=cbr signaling. Filler plus
-            # matching VBV rates provides a tightly controlled constant target.
-            '-x264-params', 'nal-hrd=vbr:filler=1', '-pix_fmt', 'yuv420p',
-            '-threads', '2', '-fps_mode', 'vfr', '-metadata:s:v:0', 'rotate=0']
+        if width > 1920 or height > 1080 or width % 2 or height % 2 or sar != 1 or rotated:
+            command += ['-vf', scale]
+        # Single-pass average bitrate with a VBV peak ceiling. No minimum,
+        # filler padding or pass statistics: simple scenes can use fewer bits.
+        command += ['-c:v', 'libx264', '-preset', 'veryfast',
+            '-b:v', str(target_bps), '-maxrate', str(maximum_bps), '-bufsize', str(maximum_bps * 2),
+            '-pix_fmt', 'yuv420p', '-threads', '0', '-fps_mode', 'vfr', '-metadata:s:v:0', 'rotate=0']
     else:
         command += ['-c:v', 'copy']
     command += ['-c:a', 'copy'] if copy_audio and not transcode else ['-af', 'aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '128k']
@@ -255,7 +258,7 @@ def video(source, destination, target_video_bitrate_mbps=DEFAULT_TARGET_VIDEO_BI
     # Stream copying does not decode packets. Fully decode the final artifact
     # before publishing, for both copied and re-encoded video/audio streams.
     run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-err_detect', 'explode',
-         '-protocol_whitelist', 'file', '-format_whitelist', CONTAINERS, '-i', str(playable),
+         '-protocol_whitelist', 'file', '-format_whitelist', CONTAINERS, '-threads', '0', '-i', str(playable),
          '-map', '0:v:0', '-map', '0:a:0?', '-f', 'null', '-'], 3600)
     run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(playable), '-frames:v', '1',
          '-vf', "scale='min(640,iw)':-2", str(destination / 'preview.webp')])
