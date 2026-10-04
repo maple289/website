@@ -1,8 +1,11 @@
 import concurrent.futures
+from contextlib import contextmanager
+import fcntl
 import json
 import logging
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,8 +26,13 @@ class RejectedRequest(ValueError):
 class CancelledUpload(ValueError):
     pass
 
-def check_cancelled(job_id):
-    rows=api('GET','/rest/v1/media_upload_jobs?id=eq.'+job_id+'&select=status')
+class LostClaim(ValueError):
+    pass
+
+def check_cancelled(job_id, claim_token=None):
+    rows=api('GET','/rest/v1/media_upload_jobs?id=eq.'+job_id+'&select=status,claim_token')
+    if claim_token and (not rows or rows[0].get('claim_token') != claim_token):
+        raise LostClaim('Processing was interrupted. Retry processing or delete this upload.')
     if not rows or rows[0]['status'] in ('cancelling','cancelled'):
         raise CancelledUpload('Video deletion requested.')
 
@@ -34,6 +42,9 @@ def api(method, path, **kwargs):
     if 400 <= response.status_code < 500:
         try: code=response.json().get('code')
         except Exception: code=None
+        LOG.error(json.dumps({'operation':'media_api_rejected','endpoint':path.split('?')[0],
+                              'status':response.status_code,'code':code}))
+        if code == '40001': raise LostClaim('Processing was interrupted. Retry processing or delete this upload.')
         message='The server rejected this upload. Please try again.'
         if path == '/rest/v1/photos' and code == '23505': message='A photo with this name already exists. Choose another name.'
         if path == '/rest/v1/photos' and code == '22023': message='The photo name contains invalid characters. Choose another name.'
@@ -41,8 +52,40 @@ def api(method, path, **kwargs):
     response.raise_for_status()
     return response.json() if response.content else None
 
-def job_update(job_id, **values):
-    return api('PATCH','/rest/v1/media_upload_jobs?id=eq.'+job_id,json=values)
+def job_update(job_id, claim_token=None, expected_status=None, **values):
+    suffix='&claim_token=eq.'+claim_token if claim_token else ''
+    if expected_status: suffix+='&status=eq.'+expected_status
+    return api('PATCH','/rest/v1/media_upload_jobs?id=eq.'+job_id+suffix,json=values)
+
+
+@contextmanager
+def work_directory():
+    with tempfile.TemporaryDirectory(prefix='media-',dir='/work') as folder:
+        with (Path(folder)/'.worker-lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            yield folder
+
+
+def cleanup_scratch(root=Path('/work')):
+    # Only directories tagged by this implementation are eligible. A second
+    # active worker holds the lock; old untagged audit findings remain untouched.
+    for folder in root.glob('media-*'):
+        marker=folder/'.worker-lock'
+        if folder.is_symlink() or not folder.is_dir() or not marker.is_file() or marker.is_symlink(): continue
+        try:
+            with marker.open('r') as lock:
+                fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                shutil.rmtree(folder)
+        except (BlockingIOError,FileNotFoundError): continue
+        except OSError:
+            LOG.error(json.dumps({'operation':'media_scratch_cleanup','result':'error'}))
+
+
+def cleanup_failed_uploads():
+    for item in api('POST','/rest/v1/rpc/media_upload_cleanup_candidates',json={}) or []:
+        try: remove(item['bucket_id'],[item['name']])
+        except Exception:
+            LOG.error(json.dumps({'operation':'unpublished_media_cleanup','bucket':item['bucket_id'],'result':'error'}))
 
 def download(path, destination, maximum):
     with requests.get(URL+'/storage/v1/object/authenticated/media-staging/'+quote(path,safe='/'),
@@ -58,22 +101,28 @@ def download(path, destination, maximum):
         return total
 
 def upload(bucket,path,source,mime,created):
-    with source.open('rb') as content:
-        api('POST','/storage/v1/object/'+bucket+'/'+quote(path,safe='/'),
-            headers={'Content-Type':mime,'x-upsert':'false'},data=content)
+    try:
+        with source.open('rb') as content:
+            api('POST','/storage/v1/object/'+bucket+'/'+quote(path,safe='/'),
+                headers={'Content-Type':mime,'x-upsert':'false'},data=content)
+    except RejectedRequest:
+        raise  # Never compensate a conflict by deleting a pre-existing object.
+    except Exception:
+        created.append((bucket,path))  # The put may have committed despite timeout.
+        raise
     created.append((bucket,path))
 
 def remove(bucket,paths):
     if paths: api('DELETE','/storage/v1/object/'+bucket,json={'prefixes':paths})
 
-def validate(kind,source,directory,job_id=None):
+def validate(kind,source,directory,job_id=None,claim_token=None):
     command=[sys.executable,str(Path(__file__).with_name('validate.py')),kind,str(source),str(directory)]
     process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,
                              env={'PATH':os.environ.get('PATH',''),'HOME':'/tmp','PYTHONUNBUFFERED':'1'})
     deadline=time.monotonic()+(7620 if kind=='video' else 120)
     try:
         while True:
-            if job_id: check_cancelled(job_id)
+            if job_id: check_cancelled(job_id,claim_token)
             if time.monotonic()>deadline: raise ValueError('Media processing timed out.')
             try:
                 stdout,_=process.communicate(timeout=2)
@@ -97,20 +146,23 @@ def validate(kind,source,directory,job_id=None):
 
 def process(job):
     jid,owner,kind=job['id'],job['owner_id'],job['kind']
+    claim=job.get('claim_token')
+    def check(): check_cancelled(jid,claim)
     prefix=owner+'/'+jid
     created=[]
     published=False
     publication_attempted=False
     error=None
     cancelled=False
+    lease_lost=False
     try:
-        with tempfile.TemporaryDirectory(prefix='media-',dir='/work') as temporary:
+        with work_directory() as temporary:
             directory=Path(temporary)
             source=directory/'source'
             size=download(prefix+'/source',source,10*1024**3 if kind=='video' else 25*1024**2)
-            check_cancelled(jid)
-            metadata=validate(kind,source,directory,jid)
-            check_cancelled(jid)
+            check()
+            metadata=validate(kind,source,directory,jid,claim)
+            check()
             rows=api('GET','/rest/v1/storage_settings?id=eq.1&select=videos_base_path,images_base_path') or [{}]
             settings=rows[0]
             def full(path,bucket):
@@ -130,9 +182,6 @@ def process(job):
                 for path,name,mime in [(original,'source',metadata['mime_type']),(base+'/preview.webp','preview.webp','image/webp'),(base+'/thumbnail.webp','thumbnail.webp','image/webp')]:
                     upload('user-images',full(path,'user-images'),directory/name,mime,created)
                 record.update(storage_path=original,preview_path=base+'/preview.webp',thumbnail_path=base+'/thumbnail.webp',width=metadata['width'],height=metadata['height'])
-                publication_attempted=True
-                api('POST','/rest/v1/photos',json=record)
-                published=True
                 result={'id':jid}
             else:
                 base=owner+'/videos/'+jid
@@ -143,7 +192,7 @@ def process(job):
                     custom=directory/'custom'
                     custom.mkdir()
                     download(prefix+'/preview',custom/'source',25*1024**2)
-                    validate('photo',custom/'source',custom,jid)
+                    validate('photo',custom/'source',custom,jid,claim)
                     preview_source=custom/'preview.webp'
                 else: preview_source=directory/'preview.webp'
                 upload('user-videos',full(original,'user-videos'),source,metadata['mime_type'],created)
@@ -155,17 +204,16 @@ def process(job):
                     processing_action=metadata['processing_action'],audio_codec=metadata['audio_codec'],audio_bitrate=metadata['audio_bitrate'],
                     processed_file_size=(directory/'stream.mp4').stat().st_size,
                     resolution_width=metadata['width'],resolution_height=metadata['height'],duration_seconds=metadata['duration_seconds'])
-                publication_attempted=True
-                api('POST','/rest/v1/videos',json=record)
-                published=True
                 result={'id':jid}
+            check()
             publication_attempted=True
-            job_update(jid,status='complete',result=result,finished_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
+            api('POST','/rest/v1/rpc/publish_media_upload',json={'p_id':jid,'p_claim':claim,
+                'p_record':result if kind=='preview' else record})
             published=True  # A preview now has a validated result usable by its owner.
             LOG.info(json.dumps({'operation':'media_validation','id':jid,'result':'complete','kind':kind}))
     except Exception as cause:
         try:
-            check_cancelled(jid)
+            check()
         except CancelledUpload:
             cancelled=True
         except Exception:
@@ -173,6 +221,15 @@ def process(job):
         # Never relay provider response bodies, paths, credentials, or decoder logs.
         error=str(cause) if isinstance(cause,ValueError) else 'Could not validate or save this file. It may be corrupted, unsupported, or exceed processing limits.'
         if isinstance(cause,RejectedRequest): publication_attempted=False
+        if isinstance(cause,LostClaim): publication_attempted=True; lease_lost=True
+        if publication_attempted:
+            try:
+                rows=api('GET','/rest/v1/media_upload_jobs?id=eq.'+jid+'&select=status,claim_token')
+                if rows and rows[0]['status']=='complete' and rows[0].get('claim_token')==claim:
+                    published=True
+                    LOG.info(json.dumps({'operation':'media_publication_recovered','id':jid}))
+                    return
+            except Exception: pass
         if publication_attempted:
             error='The upload may have completed, but its status could not be confirmed. Check your gallery before retrying.'
         LOG.error(json.dumps({'operation':'media_validation','id':jid,'result':'error','type':type(cause).__name__}))
@@ -182,20 +239,22 @@ def process(job):
             for bucket,path in created:
                 try: remove(bucket,[path])
                 except Exception: LOG.error(json.dumps({'operation':'temporary_media_cleanup','id':jid,'result':'error'}))
-        try: job_update(jid,status='error',error=error,finished_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
+        try: job_update(jid,claim,expected_status='processing',status='error',error=error,finished_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
         except Exception: LOG.error(json.dumps({'operation':'media_job_status','id':jid,'result':'error'}))
     finally:
         # Retain a failed video's original in private staging for recovery.
         # Successful videos also retain their original in final video storage.
-        if kind != 'video' or published or cancelled:
+        if not lease_lost and (kind != 'video' or published or cancelled):
             try: remove('media-staging',[prefix+'/source',prefix+'/preview'])
             except Exception: LOG.error(json.dumps({'operation':'staging_cleanup','id':jid,'result':'error'}))
         # All local processing/files are stopped now. The deletion endpoint owns
         # final storage cleanup (including ambiguous upload responses).
         try:
-            check_cancelled(jid)
+            check()
         except CancelledUpload:
-            job_update(jid,status='cancelled',result=None,error=None)
+            job_update(jid,claim,status='cancelled',result=None,error=None)
+        except LostClaim:
+            pass  # A former worker cannot modify the new attempt or its files.
         except Exception:
             LOG.error(json.dumps({'operation':'media_cancel_status','id':jid,'result':'error'}))
 
@@ -208,20 +267,18 @@ def main():
     if not features.check('webp') or not features.check('avif') or 'HEIF' not in Image.OPEN:
         raise RuntimeError('Required image codecs are unavailable')
     subprocess.run(['ffmpeg','-version'],check=True,stdout=subprocess.DEVNULL)
+    cleanup_scratch()
+    last_cleanup=0
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         active=set()
         while True:
             active={future for future in active if not future.done()}
             try:
-                stale=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime(time.time()-10800))
-                api('PATCH','/rest/v1/media_upload_jobs?status=eq.processing&started_at=lt.'+stale,
-                    json={'status':'error','error':'Processing was interrupted. Please upload the file again.'})
                 if len(active)<2:
-                    jobs=api('GET','/rest/v1/media_upload_jobs?status=eq.queued&order=created_at&limit='+str(2-len(active)))
-                    for job in jobs:
-                        claimed=api('PATCH','/rest/v1/media_upload_jobs?id=eq.'+job['id']+'&status=eq.queued',
-                            headers={'Prefer':'return=representation'},json={'status':'processing','started_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())})
-                        if claimed: active.add(pool.submit(process,claimed[0]))
+                    jobs=api('POST','/rest/v1/rpc/claim_media_uploads',json={'p_limit':2-len(active)})
+                    for job in jobs or []: active.add(pool.submit(process,job))
+                if time.monotonic()-last_cleanup>30:
+                    cleanup_failed_uploads(); last_cleanup=time.monotonic()
                 Path('/tmp/media-heartbeat').touch()
             except Exception as cause: LOG.error(json.dumps({'operation':'media_worker_poll','type':type(cause).__name__}))
             time.sleep(2)

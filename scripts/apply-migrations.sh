@@ -17,13 +17,19 @@ run_psql() {
 }
 
 run_psql <<'SQL'
+BEGIN;
+SELECT pg_advisory_xact_lock(hashtextextended('streamly-schema-migrations',0));
 CREATE SCHEMA IF NOT EXISTS streamly_internal;
 CREATE TABLE IF NOT EXISTS streamly_internal.schema_migrations (
   version text PRIMARY KEY,
   applied_at timestamptz NOT NULL DEFAULT now()
 );
 REVOKE ALL ON SCHEMA streamly_internal FROM PUBLIC, anon, authenticated;
+COMMIT;
 SQL
+
+prepared=$(mktemp)
+trap 'rm -f "$prepared"' EXIT HUP INT TERM
 
 for migration in "$project_root"/supabase/migrations/*.sql; do
   [ -f "$migration" ] || continue
@@ -42,10 +48,8 @@ for migration in "$project_root"/supabase/migrations/*.sql; do
   fi
 
   echo "Applying: $version"
-  {
-    printf 'BEGIN;\n'
-    cat "$migration"
-    printf "\nINSERT INTO streamly_internal.schema_migrations (version) VALUES ('%s');\n" "$version"
-    printf 'COMMIT;\n'
-  } | run_psql
+  # Normalize existing BEGIN/COMMIT wrappers before execution. Materialize first:
+  # a parser failure must never leave a pipeline able to commit a ledger entry.
+  python3 "$project_root/scripts/prepare-migration.py" --transaction "$migration" > "$prepared"
+  run_psql < "$prepared"
 done

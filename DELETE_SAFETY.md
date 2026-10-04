@@ -63,6 +63,13 @@ Set/Map cleanup does not delete stored application content. There is no separate
 pending-registration Delete button, storage-location Delete UI or viewer Delete
 action beyond the surfaces listed above.
 
+The database audit removes File Manager's browser rollback after a lost metadata
+response: file metadata now commits with the Storage catalog. Worker compensation
+is limited to new, unpublished uploads; the retry cleaner excludes older audited
+objects, ready media, active claims and retained failed-video sources. Preview
+cleanup first resolves a possibly committed Ready update. No new user-facing
+delete caller or repair action is added.
+
 File-preview jobs are derived data. Source deletion, replacement, move, Trash or
 account deletion invalidates their cache through database triggers/cascades.
 The preview worker removes cached PDFs through the Storage API and retries failed

@@ -17,18 +17,23 @@ class PublicationTests(unittest.TestCase):
             kill.assert_called_once_with(321,worker.signal.SIGKILL)
             self.assertEqual(process.communicate.call_count,2)
 
-    def scenario(self,kind='photo',invalid=False,fail_insert=False,fail_status=False,rejected=False,cancelled=False):
+    def scenario(self,kind='photo',invalid=False,fail_insert=False,fail_status=False,rejected=False,cancelled=False,decoder_error=None):
         calls=[];removals=[];uploads=[]
+        committed=False
         job=dict(id='55555555-5555-4555-8555-555555555555',owner_id=OWNER,kind=kind,file_name='fixture',visibility='private',has_preview=False,target_video_id='33333333-3333-4333-8333-333333333333')
         def api(method,path,**kwargs):
+            nonlocal committed
             calls.append((method,path,kwargs))
             if 'storage_settings' in path:return [{}]
-            if method=='GET' and 'media_upload_jobs' in path:return [{'status':'cancelling' if cancelled else 'processing'}]
+            if method=='GET' and 'media_upload_jobs' in path:return [{'status':'cancelling' if cancelled else 'complete' if committed else 'processing'}]
             if 'profiles' in path:return [{'email':'fixture@example.test'}]
             if method=='POST' and rejected:raise worker.RejectedRequest('A photo with this name already exists.')
             if method=='POST' and fail_insert:raise ConnectionError('ambiguous database response')
-            if method=='PATCH' and kwargs['json'].get('status')=='complete' and fail_status:raise ConnectionError('ambiguous status response')
-        def validate(kind,source,directory,job_id=None):
+            if method=='POST' and path.endswith('publish_media_upload'):
+                committed=True
+                if fail_status:raise ConnectionError('ambiguous status response')
+        def validate(kind,source,directory,job_id=None,claim_token=None):
+            if decoder_error: raise decoder_error
             if invalid:raise ValueError('Not a decodable image.')
             (directory/'stream.mp4').write_bytes(b'fixture')
             return dict(video_codec='h264',video_bitrate=2500.125,frame_rate=25,source_metadata={},processing_action='transcoded',audio_codec=None,audio_bitrate=None,extension='jpg',mime_type='image/jpeg',width=64,height=48,format='mov',duration_seconds=1)
@@ -52,11 +57,11 @@ class PublicationTests(unittest.TestCase):
     def test_photo_published_after_validation(self):
         calls,removed,uploaded=self.scenario()
         self.assertEqual(len(uploaded),3)
-        self.assertTrue(any(method=='POST' and path=='/rest/v1/photos' for method,path,_ in calls))
+        self.assertTrue(any(method=='POST' and path.endswith('publish_media_upload') for method,path,_ in calls))
         self.assertEqual([bucket for bucket,_ in removed],['media-staging'])
     def test_video_has_processed_path(self):
         calls,_,_=self.scenario(kind='video')
-        record=next(kw['json'] for method,path,kw in calls if method=='POST' and path=='/rest/v1/videos')
+        record=next(kw['json']['p_record'] for method,path,kw in calls if method=='POST' and path.endswith('publish_media_upload'))
         self.assertIsInstance(record['video_bitrate'],int)
         self.assertEqual(record['video_bitrate'],2500)
         self.assertEqual(record['processing_status'],'ready');self.assertTrue(record['processed_storage_path'].endswith('/stream.mp4'))
@@ -71,7 +76,50 @@ class PublicationTests(unittest.TestCase):
         self.assertTrue(any(kw['json'].get('error')=='A photo with this name already exists.' for method,_,kw in calls if method=='PATCH'))
     def test_preview_only_returns_validated_path(self):
         calls,_,uploaded=self.scenario(kind='preview')
-        self.assertEqual(len(uploaded),1);self.assertFalse(any(method=='POST' for method,_,_ in calls))
-        result=next(kw['json']['result'] for method,_,kw in calls if method=='PATCH' and kw['json'].get('status')=='complete')
+        self.assertEqual(len(uploaded),1)
+        result=next(kw['json']['p_record'] for method,path,kw in calls if path.endswith('publish_media_upload'))
         self.assertTrue(result['path'].endswith('.webp'))
+
+    def test_disk_full_and_missing_source_never_publish(self):
+        for cause in [OSError(28,'No space left on device'),FileNotFoundError('fixture source'),PermissionError('fixture output')]:
+            calls,removed,uploaded=self.scenario(kind='video',decoder_error=cause)
+            self.assertFalse(uploaded)
+            self.assertFalse(any(path.endswith('publish_media_upload') for _,path,_ in calls))
+            self.assertFalse(any(bucket=='media-staging' for bucket,_ in removed))
+            self.assertTrue(any(kw['json'].get('status')=='error' for method,_,kw in calls if method=='PATCH'))
+
+    def test_lost_claim_is_rejected_before_publication(self):
+        with patch.object(worker,'api',return_value=[{'status':'processing','claim_token':'new'}]):
+            with self.assertRaises(worker.LostClaim): worker.check_cancelled('fixture','old')
+
+    def test_ambiguous_storage_upload_tracked_but_conflict_not_deleted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/'new';source.write_bytes(b'fixture')
+            created=[]
+            with patch.object(worker,'api',side_effect=ConnectionError('lost response')):
+                with self.assertRaises(ConnectionError): worker.upload('bucket','unique-job-path',source,'video/mp4',created)
+            self.assertEqual(created,[('bucket','unique-job-path')])
+            created=[]
+            with patch.object(worker,'api',side_effect=worker.RejectedRequest('exists')):
+                with self.assertRaises(worker.RejectedRequest): worker.upload('bucket','existing-path',source,'video/mp4',created)
+            self.assertEqual(created,[])
+
+    def test_error_update_cannot_overwrite_committed_complete(self):
+        with patch.object(worker,'api') as api:
+            worker.job_update('fixture','claim',expected_status='processing',status='error')
+        self.assertIn('&status=eq.processing',api.call_args.args[1])
+        self.assertIn('&claim_token=eq.claim',api.call_args.args[1])
+
+    def test_startup_cleanup_skips_active_and_untagged_work(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            old=root/'media-old';old.mkdir();(old/'.worker-lock').touch()
+            untagged=root/'media-legacy';untagged.mkdir()
+            active=root/'media-active';active.mkdir()
+            with (active/'.worker-lock').open('w') as lock:
+                worker.fcntl.flock(lock,worker.fcntl.LOCK_EX)
+                worker.cleanup_scratch(root)
+                self.assertTrue(active.exists())
+                self.assertFalse(old.exists())
+                self.assertTrue(untagged.exists())
 if __name__=='__main__':unittest.main()

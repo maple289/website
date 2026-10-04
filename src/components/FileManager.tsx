@@ -52,6 +52,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   const [sharedCrumbs, setSharedCrumbs] = useState<string[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [metadata, setMetadata] = useState<Metadata[]>([]);
+  const [totalBytes, setTotalBytes] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<Entry[]>([]);
   const [searchOffset, setSearchOffset] = useState(0);
@@ -137,10 +138,18 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         setSharedHasMore(rows.length > 50);
         return;
       }
-      const { data: rows, error: metaError } = await supabase.from('user_file_metadata').select('object_path,is_folder,is_favorite,file_size,mime_type,trashed_at,created_at,updated_at').eq('owner_id', user.id);
+      const metaRows: Metadata[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data: rows, error: metaError } = await supabase.rpc('file_manager_metadata', { p_folder: folder, p_view: view, p_offset: offset });
+        if (version !== listingState.current.version) return;
+        if (metaError) throw metaError;
+        metaRows.push(...((rows ?? []) as Metadata[]));
+        if ((rows?.length ?? 0) < 1000) break;
+      }
+      const { data: bytes, error: bytesError } = await supabase.rpc('file_manager_storage_bytes');
       if (version !== listingState.current.version) return;
-      if (metaError) throw metaError;
-      const metaRows = (rows ?? []) as Metadata[];
+      if (bytesError) throw bytesError;
+      setTotalBytes(Number(bytes ?? 0));
       setMetadata(metaRows);
       if (view === 'trash') {
         const trashed = metaRows.filter((item) => item.trashed_at);
@@ -286,7 +295,6 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     void readIndicators();
     return () => { active = false; };
   }, [actionEntries, shareVersion, guest]);
-  const totalBytes = metadata.filter((item) => !item.is_folder && !item.trashed_at).reduce((sum, item) => sum + (item.file_size ?? 0), 0);
   const crumbs = folder ? folder.split('/') : [];
   const title = guest ? publicFolder?.name ?? 'Public Files Library' : view === 'files' ? folder ? 'My Files' : 'All files' : view === 'recent' ? 'Recent' : view === 'favorites' ? 'Favorites' : view === 'shared' ? 'Shared' : 'Trash';
 
@@ -334,7 +342,8 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     setBusy(true);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(`${path}/.folder`, new Blob([]), { contentType: 'application/x-directory', upsert: false });
     if (uploadError) { setError(uploadError.message); setBusy(false); return; }
-    try { await register(path, true); setDialog(null); await load(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save folder.'); }
+    // Storage's catalog trigger creates metadata in the same transaction.
+    setDialog(null); await load();
     setBusy(false);
   };
   const latestLoad = useRef(load); latestLoad.current = load;
@@ -354,23 +363,22 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         const update = (patch: Partial<UploadItem>) => setUploads((current) => current.map((item, i) => i === itemIndex ? { ...item, ...patch } : item));
         update({ state: 'uploading', progress: 0 });
         const path = destination + file.name;
-        let stored = false;
         try {
+          if (!file.name || /[\\/]/.test(file.name) || ['.', '..', '.folder', '.keep'].includes(file.name)) throw new Error('Choose a valid file name.');
           if (file.size > 10 * 1024 * 1024 * 1024) throw new Error('Files must be 10 GB or smaller.');
           if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, path, (progress) => update({ progress: Math.min(progress, 99) }));
           else {
             const { error: uploadError } = await uploadObject(BUCKET, path, file, file.type || 'application/octet-stream', (progress) => update({ progress: Math.min(progress, 99) }));
             if (uploadError) throw new Error(uploadError.message);
           }
-          stored = true;
-          await register(path, false, false, file.size, file.type || 'application/octet-stream');
-          stored = false;
+          // The server commits metadata with the Storage object. A lost browser
+          // response must never compensate by deleting a possibly saved file.
           recordFileEvent({ path }, 'upload');
           update({ state: 'done', progress: 100 });
           await latestLoad.current();
         } catch (cause) {
-          if (stored) { try { await supabase.storage.from(BUCKET).remove([path]); } catch { /* Preserve original error. */ } }
           update({ state: 'error', message: cause instanceof Error ? cause.message : 'Upload failed. Please try again.' });
+          await latestLoad.current();
         }
       }
     } finally { uploadingBatch.current = false; }
@@ -477,6 +485,9 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         const nextPath = dialog.kind === 'rename' ? `${oldParent}/${dialog.value.trim()}` : `${parentPath}/${entry.name}`;
         if (nextPath === entry.path || nextPath.startsWith(`${entry.path}/`)) throw new Error('Choose a different destination.');
         const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
+        // Move markers last, keeping the source folder/share record available
+        // if a child move fails. Successful child metadata moves are atomic.
+        paths.sort((a, b) => Number(/\/(\.folder|\.keep)$/.test(a)) - Number(/\/(\.folder|\.keep)$/.test(b)));
         for (const oldPath of paths) {
           const suffix = oldPath.slice(entry.path.length);
           const target = `${nextPath}${suffix}`;
@@ -492,7 +503,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
           for (const row of descendants) {
             if (row.object_path === entry.path) continue;
             const target = `${nextPath}${row.object_path.slice(entry.path.length)}`;
-            const { error: copyMetaError } = await supabase.from('user_file_metadata').insert({ owner_id: user.id, object_path: target, is_folder: row.is_folder, is_favorite: row.is_favorite, file_size: row.file_size, mime_type: row.mime_type, updated_at: new Date().toISOString() });
+            const { error: copyMetaError } = await supabase.from('user_file_metadata').upsert({ owner_id: user.id, object_path: target, is_folder: row.is_folder, is_favorite: row.is_favorite, file_size: row.file_size, mime_type: row.mime_type, updated_at: new Date().toISOString() }, { onConflict: 'owner_id,object_path' });
             if (copyMetaError) throw copyMetaError;
           }
         } else {
@@ -506,7 +517,10 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         }
       }
       setDialog(null); setSelected([]); await load();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Could not complete that action.'); }
+    } catch (err) {
+      await load();
+      setError(`${err instanceof Error ? err.message : 'Could not complete that action.'} Some items may already have moved or copied. The listing has been refreshed; retry the remaining items.`);
+    }
     setBusy(false);
   };
 

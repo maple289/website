@@ -91,19 +91,15 @@ Deno.serve(async (req: Request) => {
         password,
         email_confirm: true,
         user_metadata: names,
+        app_metadata: { streamly_role: assignedRole },
       });
       if (createErr) {
         return json({ error: createErr.message }, 400);
       }
 
-      // Upsert profile with the correct role
-      const { error: profileError } = await adminClient.from("profiles").upsert({
-        id: newUser.user.id,
-        email,
-        role: assignedRole,
-        ...names,
-      });
-      if (profileError) return json({ error: profileError.message }, 400);
+      // Auth insert/metadata triggers initialize names and the server-selected
+      // role in its database transaction. An HTTP failure cannot leave an account
+      // created successfully but reported failed by a second profile mutation.
 
       try {
         const { error } = await adminClient.rpc("analytics_admin_action", { p_actor: callerData.user.id, p_action: "account_created", p_account: newUser.user.id });
@@ -169,7 +165,8 @@ Deno.serve(async (req: Request) => {
         responseEmail = updated.user.email;
       }
 
-      const profileChanges = { ...names, ...(email ? { email } : {}) };
+      // The Auth email trigger synchronizes the profile atomically.
+      const profileChanges = { ...names };
       if (Object.keys(profileChanges).length > 0) {
         const { data: updatedProfile, error: profileErr } = await adminClient.from("profiles")
           .update(profileChanges).eq("id", id).select("id, email").single();

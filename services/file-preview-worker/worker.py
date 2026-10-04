@@ -41,6 +41,34 @@ def source_current(job):
     return source and source['id'] == job['source_id'] and source['version'] == job['source_version']
 
 
+def recover_uploaded_preview(job):
+    """An HTTP timeout is not evidence that the ready transaction rolled back.
+
+    Retain an acknowledged ready cache. When the database cannot be reached,
+    retain bytes for the existing cache reconciler instead of risking data loss.
+    """
+    try:
+        rows = api('GET', '/rest/v1/file_preview_jobs?id=eq.' + job['id']) or []
+        if rows and rows[0]['status'] == 'ready' and source_current(job):
+            LOG.info(json.dumps({'operation': 'preview_publication_recovered', 'id': job['id']}))
+            return True
+        if rows and rows[0]['status'] == 'generating':
+            # Serialize against a still-committing ready request. A plain GET
+            # can see the old MVCC snapshot while that request holds the row.
+            changed = api('PATCH', '/rest/v1/file_preview_jobs?id=eq.' + job['id'] + '&status=eq.generating',
+                headers={'Prefer': 'return=representation'}, json={'status': 'failed',
+                    'error': 'Preview could not be generated. You can still download the original file.',
+                    'finished_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+            if not changed:
+                rows = api('GET', '/rest/v1/file_preview_jobs?id=eq.' + job['id']) or []
+                if rows and rows[0]['status'] == 'ready' and source_current(job):
+                    return True
+        remove_cache(job['preview_path'])
+    except Exception:
+        LOG.error(json.dumps({'operation': 'preview_cleanup_deferred', 'id': job['id']}))
+    return False
+
+
 def process(job):
     uploaded = False
     try:
@@ -116,8 +144,8 @@ def process(job):
             LOG.info(json.dumps({'operation': 'file_preview_ready', 'id': job['id'], 'bytes': pdf.stat().st_size}))
     except Exception as cause:
         if uploaded:
-            try: remove_cache(job['preview_path'])
-            except Exception: LOG.error(json.dumps({'operation': 'preview_partial_cleanup', 'id': job['id'], 'result': 'failed'}))
+            if recover_uploaded_preview(job):
+                return
         # Detailed diagnostics stay on the server; deliberate ValueErrors are safe.
         LOG.error(json.dumps({'operation': 'file_preview_failed', 'id': job['id'], 'type': type(cause).__name__, 'detail': str(cause)}), exc_info=True)
         message = str(cause) if isinstance(cause, ValueError) else 'Preview could not be generated. You can still download the original file.'
