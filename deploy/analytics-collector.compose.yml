@@ -13,6 +13,19 @@ services:
     volumes:
       - ${STREAMLY_STORAGE_ROOT:-./volumes/storage}:/storage:ro
       - media_scratch:/scratch:ro
+      # Only host-wide CPU/RAM counters, not process files or Docker control.
+      - type: bind
+        source: /proc/stat
+        target: /host-proc/stat
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /proc/meminfo
+        target: /host-proc/meminfo
+        read_only: true
+        bind:
+          create_host_path: false
     read_only: true
     tmpfs: ["/tmp:size=8m,mode=1777"]
     mem_limit: 256m
@@ -21,7 +34,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/analytics-heartbeat') < 900"]
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/analytics-heartbeat') < 900; assert time.time()-os.path.getmtime('/tmp/system-load-heartbeat') < 60"]
       interval: 60s
       timeout: 5s
       retries: 3

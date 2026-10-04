@@ -14,12 +14,15 @@ import { Server } from 'lucide-react';
 import { BarChart3 } from 'lucide-react';
 import { Settings2 } from 'lucide-react';
 import { VideoProcessingSettings } from './VideoProcessingSettings';
+import { useSystemLoad } from '@/hooks/useSystemLoad';
+import { SystemLoadWidget } from './SystemLoadWidget';
+import { Activity } from 'lucide-react';
 const AdminStatistics = lazy(() => import('./AdminStatistics').then(module => ({ default: module.AdminStatistics })));
 
 const adminFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
 const approveFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`;
 
-type Tab = 'users' | 'storage' | 'statistics' | 'settings';
+type Tab = 'users' | 'storage' | 'statistics' | 'settings' | 'system';
 
 type Profile = {
   first_name: string | null;
@@ -44,7 +47,16 @@ export function AdminPage() {
   const { user: currentUser } = useAuth();
   const [tab, setTab] = useState<Tab>('users');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebar, setDesktopSidebar] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const systemLoad = useSystemLoad(Boolean(currentUser && isAdmin && !checking && (desktopSidebar || sidebarOpen || tab === 'system')), currentUser?.id);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const changed = () => setDesktopSidebar(media.matches);
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -115,8 +127,10 @@ export function AdminPage() {
           <TabButton active={tab === 'users'} onClick={() => selectTab('users')} icon={<Users size={20} />}>Users</TabButton>
           <TabButton active={tab === 'storage'} onClick={() => selectTab('storage')} icon={<FolderTree size={20} />}>Storage</TabButton>
           <TabButton active={tab === 'statistics'} onClick={() => selectTab('statistics')} icon={<BarChart3 size={20} />}>Statistics</TabButton>
+          <TabButton active={tab === 'system'} onClick={() => selectTab('system')} icon={<Activity size={20} />}>System Load</TabButton>
           <TabButton active={tab === 'settings'} onClick={() => selectTab('settings')} icon={<Settings2 size={20} />}>Settings</TabButton>
         </nav>
+        <SystemLoadWidget {...systemLoad} compact />
         <div className="admin-sidebar-footer">
           <ShieldCheck size={18} />
           <div><p className="font-medium">Administrator workspace</p><p className="mt-1 text-xs">Manage accounts, storage and site statistics.</p></div>
@@ -124,8 +138,8 @@ export function AdminPage() {
       </aside>
       <main className="admin-main">
         <div className={`admin-content ${tab === 'statistics' ? 'admin-content-wide' : ''}`}>
-          <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : tab === 'settings' ? 'Settings' : 'Statistics'}</span></p>
-          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
+          <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : tab === 'settings' ? 'Settings' : tab === 'system' ? 'System Load' : 'Statistics'}</span></p>
+          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : tab === 'system' ? <SystemLoadWidget {...systemLoad} /> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
         </div>
       </main>
     </div>

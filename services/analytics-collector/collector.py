@@ -7,7 +7,9 @@ import pathlib
 import shutil
 import stat
 import time
+import threading
 import requests
+from system_load import monitor
 
 URL = os.environ['SUPABASE_URL'].rstrip('/')
 KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
@@ -16,8 +18,8 @@ INTERVAL = max(300, int(os.environ.get('ANALYTICS_STORAGE_INTERVAL', '600')))
 CATEGORIES = ['Videos', 'Photos', 'Files', 'Preview cache', 'Temporary / processing', 'Other application data']
 
 
-def rpc(name, body):
-    response = requests.post(URL + '/rest/v1/rpc/' + name, headers=HEADERS, json=body, timeout=(10, 90))
+def rpc(name, body, timeout=(10, 90)):
+    response = requests.post(URL + '/rest/v1/rpc/' + name, headers=HEADERS, json=body, timeout=timeout)
     response.raise_for_status()
     return response.json() if response.content else None
 
@@ -99,6 +101,10 @@ def collect(storage_mount=pathlib.Path('/storage'), scratch=pathlib.Path('/scrat
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(message)s')
+    # Separate sampling from the slower periodic filesystem inventory.
+    stop = threading.Event()
+    threading.Thread(target=monitor, args=(lambda name, body: rpc(name, body, timeout=(3, 3)), stop),
+                     name='system-load', daemon=True).start()
     while True:
         pathlib.Path('/tmp/analytics-heartbeat').touch()
         try:
