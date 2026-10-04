@@ -1,6 +1,9 @@
 services:
   analytics-collector:
     image: ${ANALYTICS_COLLECTOR_IMAGE:-supabase-analytics-collector}
+    # Match the media worker's UID so its private 0700 scratch directories
+    # can be inventoried through the existing read-only volume mount.
+    user: "10001:10001"
     build:
       context: ${STREAMLY_PROJECT_ROOT:?Set the absolute project checkout path}/services/analytics-collector
     restart: unless-stopped

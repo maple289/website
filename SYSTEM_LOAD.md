@@ -15,6 +15,8 @@ References: [Linux proc counters](https://www.kernel.org/doc/html/latest/filesys
 
 The existing analytics collector has an independent sampling thread, so periodic storage inventory does not set the refresh interval. Only `/proc/stat` and `/proc/meminfo` are mounted read-only; no Docker socket, host process/environment files or broad host filesystem access is added.
 
+The collector runs as UID/GID `10001:10001`, matching the media worker. Python creates conversion scratch directories with mode `0700`; a different UID cannot traverse them when all permission-bypass capabilities are dropped, even if that different UID is root. Previously this caused intermittent **Conversion scratch contains unreadable entries** warnings during conversions. Matching the existing worker UID permits inventory without widening directory permissions or adding capabilities. Storage and scratch remain read-only, and genuine inventory errors are still reported.
+
 Migration `20261004160000_admin_system_load.sql` adds a private singleton `analytics_system_load` snapshot and two RPC functions. Only the backend service role can call `analytics_store_system_load`. The frontend calls `admin_system_load`, which verifies the authenticated administrator role, active account and completed password setup. Direct snapshot-table access is revoked, RLS is enabled, and normal user statistics stay unchanged. The RPC accepts no user ID or caller-selected scope.
 
 A partial index covers queued/processing video jobs for inexpensive counts. Only the latest system reading is stored; this feature creates no monitoring history. Monitoring does not traverse storage, change content, launch conversion jobs or alter video-processing settings.
