@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { deleteVideo } from '@/lib/deleteMedia';
+import { ContentContextMenu, type ContentAction } from './ContentContextMenu';
 
 type Job = { id: string; file_name: string; status: 'queued' | 'processing' | 'complete' | 'error' | 'cancelling' | 'cancelled'; error: string | null; visibility: 'public' | 'private' };
 
@@ -88,7 +89,15 @@ export function VideoProcessingJobs({ searchTerm, visibleIds }: { searchTerm: st
       <h2 className="mb-3 text-sm font-semibold">Your uploads</h2>
       <div className="mg-grid">{filtered.map(job => {
         const failed = job.status === 'error';
+        const actions: ContentAction[] = [];
+        if (failed) actions.push({ id: 'retry', label: 'Retry Processing', icon: <RotateCcw size={16} />, disabled: retryIds.includes(job.id), run: () => void retry(job) });
+        actions.push({ id: 'delete', label: failed ? 'Delete Failed Upload' : 'Delete upload', icon: <Trash2 size={16} />, danger: true, disabled: retryIds.includes(job.id), run: () => void requestDelete({
+          title: 'Delete video upload', message: `Are you sure you want to delete "${job.file_name}"?`,
+          details: 'Conversion will stop. The uploaded original, converted video and generated previews will be permanently deleted.',
+          onConfirm: () => deleteVideo(job.id),
+        }) });
         return <article key={job.id} data-upload-id={job.id} className="mg-card">
+          <ContentContextMenu name={job.file_name} actions={actions} className="content-menu-card" />
           <div className="mg-thumbnail mg-video-thumbnail">
             <div className="mg-placeholder mg-processing">
             {failed ? <AlertCircle size={28} /> : <LoaderCircle size={28} className="animate-spin" />}
@@ -99,14 +108,6 @@ export function VideoProcessingJobs({ searchTerm, visibleIds }: { searchTerm: st
             <h3 className="mg-title" title={job.file_name}>{job.file_name}</h3>
             <p className="mg-meta">{job.visibility === 'private' ? 'Private' : 'Public'}{job.status === 'queued' ? ' · Waiting for a processing slot' : ''}</p>
             {failed && <p className="mg-error">{job.error || 'Unable to process this video. Please upload a supported, undamaged source.'}</p>}
-            <div className="mg-actions mt-3 flex flex-wrap gap-2">
-            {failed && <button disabled={retryIds.includes(job.id)} onClick={() => void retry(job)}><RotateCcw size={14} />{retryIds.includes(job.id) ? 'Retrying…' : 'Retry Processing'}</button>}
-            <button className="mg-delete" disabled={retryIds.includes(job.id)} onClick={() => void requestDelete({
-              title: 'Delete video upload', message: `Are you sure you want to delete "${job.file_name}"?`,
-              details: 'Conversion will stop. The uploaded original, converted video and generated previews will be permanently deleted.',
-              onConfirm: () => deleteVideo(job.id),
-            })}><Trash2 size={14} />{failed ? 'Delete Failed Upload' : 'Delete upload'}</button>
-            </div>
           </div>
         </article>;
       })}</div>

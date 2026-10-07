@@ -1,6 +1,7 @@
 import { useGalleryView } from '@/hooks/useGalleryView';
 import { usePhotoViewerHistory } from '@/hooks/usePhotoViewerHistory';
 import { MediaReactions } from './MediaReactions';
+import { MediaContentMenu } from './MediaContentMenu';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,7 @@ export function PublicPhotoGallery({ searchTerm }: { searchTerm: string }) {
         <div className="mg-grid" data-density={view.density}>
           {filteredPhotos.map((photo, index) => (
             <article key={photo.id} className="mg-card text-left" onClick={() => openPhoto(index)}>
+              <MediaContentMenu kind="photo" item={photo} onPreview={() => openPhoto(index)} />
               <button onClick={event => { event.stopPropagation(); openPhoto(index); }} className="mg-thumbnail" aria-label={`Open ${photo.file_name}`}>
               <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /><span className="mg-badge mg-privacy public"><Globe size={11} />Public</span></button>
               <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{timeAgo(photo.created_at)}</p><MediaReactions mediaType="photo" mediaId={photo.id} mediaName={photo.file_name} /></div>

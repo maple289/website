@@ -3,9 +3,10 @@ import { usePhotoViewerHistory } from '@/hooks/usePhotoViewerHistory';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { deleteMedia } from '@/lib/deleteMedia';
 import { MediaReactions } from './MediaReactions';
+import { MediaContentMenu } from './MediaContentMenu';
 import { FileDropArea } from '@/components/FileDropArea';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Globe, Image as ImageIcon, Loader2, Lock, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { Globe, Image as ImageIcon, Loader2, Lock, Plus, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Photo } from '@/lib/types';
 import { formatBytes, timeAgo } from '@/lib/types';
@@ -54,13 +55,6 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const view = useGalleryView(photos, searchTerm);
   const filteredPhotos = view.visible;
 
-  const toggleVisibility = async (photo: Photo) => {
-    const visibility = photo.visibility === 'public' ? 'private' : 'public';
-    const { error: updateError } = await supabase.from('photos').update({ visibility }).eq('id', photo.id);
-    if (updateError) setError('Could not change photo visibility.');
-    else load();
-  };
-
   const remove = (photo: Photo) => {
     if (!user) return;
     void requestDelete({ title: 'Delete photo', message: `Are you sure you want to delete "${photo.file_name}"?`,
@@ -89,17 +83,13 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
         <div className="mg-grid" data-density={view.density}>
           {filteredPhotos.map((photo, index) => (
             <article key={photo.id} className="mg-card">
+              <MediaContentMenu kind="photo" item={photo} onPreview={() => openPhoto(index)} onEdit={() => { setSuccess(''); setError(null); setEditingPhoto(photo); }} onDelete={() => remove(photo)} onChanged={() => void load()} />
               <button onClick={() => openPhoto(index)} className="mg-thumbnail" aria-label={`Open ${photo.file_name}`}>
                 <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
                 <span className={`mg-badge mg-privacy ${photo.visibility}`}>{photo.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</span>
               </button>
               <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>
                 <MediaReactions mediaType="photo" mediaId={photo.id} mediaName={photo.file_name} />
-                <div className="mg-actions">
-                  <button onClick={() => toggleVisibility(photo)} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs text-[#aaa]">{photo.visibility === 'public' ? <Globe size={13} /> : <Lock size={13} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</button>
-                  {photo.owner_id === user?.id && <button onClick={() => { setSuccess(''); setError(null); setEditingPhoto(photo); }} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs font-medium text-[#aaa] transition hover:bg-[#2a2a2a] hover:text-white"><Pencil size={13} /> Edit</button>}
-                  <button onClick={() => remove(photo)} className="flex items-center gap-1.5 rounded-full bg-[#242424] px-3 py-1.5 text-xs text-[#aaa] hover:text-[#ff737b]"><Trash2 size={13} /> Delete</button>
-                </div>
               </div>
             </article>
           ))}

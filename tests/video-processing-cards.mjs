@@ -27,7 +27,7 @@ try{
     assert.equal(await page.locator('article[data-upload-id]').count(),6);
     const cards=await page.locator('article[data-upload-id]').evaluateAll(nodes=>nodes.map(card=>{
       const box=card.getBoundingClientRect(),thumbnail=card.querySelector('.mg-thumbnail').getBoundingClientRect();
-      const actions=card.querySelector('.mg-actions').getBoundingClientRect();
+      const actions=card.querySelector('.content-menu-trigger').getBoundingClientRect();
       return {height:thumbnail.height,width:thumbnail.width,actionsBottom:actions.bottom,
         bottom:box.bottom,scrollTop:card.scrollTop};
     }));
@@ -41,16 +41,20 @@ try{
     // Scroll the page as a person would. Do not scrollIntoView on the hidden
     // button: automation can scroll overflow:hidden and conceal this regression.
     await card.evaluate(node=>window.scrollTo(0,node.getBoundingClientRect().top+scrollY-20));
-    const hit=await card.locator('.mg-delete').evaluate(button=>{
+    const hit=await card.locator('.content-menu-trigger').evaluate(button=>{
       const r=button.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,
         visible:button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))};
     });
-    assert.ok(hit.visible,'Delete must be visible and receive a normal pointer/touch click');
-    await page.mouse.click(hit.x,hit.y);const dialog=page.getByRole('alertdialog');await dialog.waitFor();
+    assert.ok(hit.visible,'Card actions must be visible and receive a normal pointer/touch click');
+    await page.mouse.click(hit.x,hit.y);
+    await page.getByRole('menuitem',{name:/^Delete (Failed Upload|upload)$/}).click();
+    const dialog=page.getByRole('alertdialog');await dialog.waitFor();
     assert.equal(deletes,0,'opening confirmation must not delete');
     await page.mouse.click(2,2);await page.keyboard.press('Escape');assert.ok(await dialog.isVisible());
     await dialog.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(deletes,0);
-    await page.mouse.click(hit.x,hit.y);await dialog.getByRole('button',{name:'Delete',exact:true}).click();
+    await page.mouse.click(hit.x,hit.y);
+    await page.getByRole('menuitem',{name:/^Delete (Failed Upload|upload)$/}).click();
+    await dialog.getByRole('button',{name:'Delete',exact:true}).click();
     await dialog.waitFor({state:'detached'});assert.equal(deletes,1);
     assert.equal(await page.locator('article[data-upload-id]').count(),5);
     assert.deepEqual(errors,[]);console.log(`PASS ${width}px: Failed/Processing/Deletion pending controls visible, clickable and confirmed`);

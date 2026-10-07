@@ -6,6 +6,15 @@ The existing sharing Save RPC now preserves unchanged grants; actual saved remov
 still use the same owner check and confirmed UI operation.
 
 All destructive UI operations use the application-level confirmation provider.
+
+Content cards now share `ContentContextMenu`; their Delete actions still enter
+the same confirmations. Temporary-link revocation/replacement and removal of
+public access from the new media menus also use `useDeleteConfirmation`. File
+conflict Replace preserves the named existing file/folder tree under a unique
+name, then moves it to Trash, entirely inside `onConfirm`. The incoming transfer
+runs in that same callback. Partial replacement retries retain completed steps,
+refresh actual state and keep errors in the confirmation. No additional permanent
+delete helper or unguarded Trash caller is added. See `CONTENT_CONTEXT_ACTIONS.md`.
 It captures the target before displaying the warning, focuses Cancel, traps focus,
 makes the underlying application inert and prevents outside/Escape dismissal.
 Only the confirmation button runs the callback. A synchronous lock guards duplicate

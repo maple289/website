@@ -15,6 +15,14 @@ Busy forms cannot close. Completed saves bypass discard prompts.
 
 ## Inventory
 
+The common content context menu remains lightweight. New media Rename/Share,
+temporary-link and file name-conflict dialogs use TaskModal. Rename/Share drafts
+and Move destination selection use useGuardedClose; pending requests block
+explicit closing. Temporary-link replacement/revocation and file conflict Replace
+use nested shared confirmations, retaining the underlying task on Cancel/error.
+Copy itself only sets the account-bound clipboard; Paste's task displays its
+captured current destination and keeps partial-transfer errors for retry.
+
 | Area | Protected surfaces |
 | --- | --- |
 | Authentication | Sign in/registration; name/email/password draft; registration success stays until explicit close |

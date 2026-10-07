@@ -1,6 +1,7 @@
 import { MediaReactions } from './MediaReactions';
+import { MediaContentMenu } from './MediaContentMenu';
 import { useState } from 'react';
-import { AlertCircle, CheckCircle2, Film, Globe, LoaderCircle, Lock, Pencil, Play, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Film, Globe, LoaderCircle, Lock, Play } from 'lucide-react';
 import type { Video } from '@/lib/types';
 import { formatBytes, timeAgo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
@@ -21,6 +22,7 @@ export function MediaVideoCard({ video, onPlay, onEdit, onDelete, showOwner = fa
   const seconds = Math.max(0, Math.floor(video.duration_seconds ?? 0));
   const duration = seconds >= 3600 ? `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   return <article className="mg-card">
+    <MediaContentMenu kind="video" item={video} onPreview={onPlay} onEdit={onEdit} onDelete={onDelete} />
     <button className="mg-thumbnail mg-video-thumbnail" onClick={onPlay} disabled={!ready} aria-label={ready ? `Play ${video.file_name}` : `${video.file_name}: ${status}`}>
       {ready ? <VideoPoster key={`${video.id}:${video.preview_path}:${video.preview_url}`} video={video} /> : <div className="mg-placeholder mg-processing">
         {failed ? <AlertCircle size={28} /> : <LoaderCircle size={28} className="animate-spin" />}<span>{status}</span>
@@ -39,11 +41,6 @@ export function MediaVideoCard({ video, onPlay, onEdit, onDelete, showOwner = fa
       <p className="mg-meta">{!showOwner && `${formatBytes(video.file_size)} · `}{timeAgo(video.created_at)}</p>
       {failed && video.processing_error && !showOwner && <p className="mg-error">{video.processing_error}</p>}
       <MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} />
-      {(onEdit || onDelete) && <div className="mg-actions">
-        {onEdit && <button onClick={onEdit}><Pencil size={13} />Edit</button>}
-        <button onClick={onPlay} disabled={!ready}><Play size={13} />Play</button>
-        {onDelete && <button className="mg-delete" onClick={onDelete}><Trash2 size={13} />Delete</button>}
-      </div>}
     </div>
   </article>;
 }
