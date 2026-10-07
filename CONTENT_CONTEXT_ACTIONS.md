@@ -44,7 +44,7 @@ Web Crypto bytes; only SHA-256 hashes reach PostgreSQL. Server timestamps set
 expiration to precisely creation plus 24 hours. Neither operation changes normal
 visibility or sharing grants.
 
-`/share/<token>` renders a standalone visitor page outside the authenticated app
+`<frontend-base>/share/<token>` renders a standalone visitor page outside the authenticated app
 shell. The `temporary-share` function checks the capability, expiration, current
 content record and Trash/ancestor state on each metadata or byte/range request.
 It proxies content without exposing reusable signed Storage URLs or owner/profile
@@ -68,10 +68,16 @@ existing migration workflow before releasing this frontend. Deploy the new
 It requires the existing server-only Supabase URL, anonymous key and service-role
 key. For self-hosted deployments, synchronize functions, configure anonymous
 GET/HEAD access for this function and restart the functions service. The existing
-Caddy SPA fallback serves `/share/*`; the public function must remain reachable
+Caddy SPA fallback serves the share route; the public function must remain reachable
 for native image/video/range/download requests without a login session. No
 production migration, function deployment or frontend release was performed by
 this implementation task.
+
+Link creation and visitor routing both honor Vite's `VITE_BASE_PATH`. For the IIS
+deployment at `/video/`, generated URLs are `/video/share/<token>`; root hosting
+uses `/share/<token>`. The API remains at the configured Supabase URL. Existing
+tokens do not need regeneration: after deploying the corrected frontend, insert
+`/video` before `/share` in previously generated URLs for this deployment.
 
 Checks: TypeScript, changed-file ESLint, production build, isolated desktop/mobile
 browser fixtures (`tests/content-context.mjs`), in-memory PostgreSQL including
@@ -81,6 +87,10 @@ ZIP-reader verification (`tests/folder-downloads.mjs`). PostgreSQL fixtures mode
 the required existing tables; they are not a full self-hosted Supabase replay.
 The existing upload-card deletion regression also passes at 1440/768/375 px,
 and `tests/temporary-share-page.mjs` checks the standalone mobile visitor page.
+`tests/temporary-share-routing.mjs` checks root and subdirectory share routing.
+`tests/temporary-share-hosting.mjs` creates a link through the owner dialog and
+opens it through the real App entrypoint under both `/` and `/video/`, checking
+that visitors cannot reach the normal app shell or endpoints.
 
 Browser fixtures use local Vite plus mocked APIs; they never modify real users or
 payloads. Set `PLAYWRIGHT_MODULE`, `TEST_BASE_URL`, `PGLITE_MODULE` and `PYTHON_BIN`

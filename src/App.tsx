@@ -1,5 +1,6 @@
 import { ReactionProvider } from '@/components/ReactionProvider';
 import { TemporarySharePage } from '@/components/TemporarySharePage';
+import { temporaryShareRoute } from '@/lib/temporaryShareRouting';
 import { FileClipboardProvider } from '@/context/FileClipboardContext';
 import { DeleteConfirmationProvider } from '@/components/DeleteConfirmationProvider';
 import '@/components/MediaGallery.css';
@@ -25,8 +26,8 @@ import { FileManager } from '@/components/FileManager';
 const UserStatistics = lazy(() => import('@/components/UserStatistics').then(module => ({ default: module.UserStatistics })));
 
 function App() {
-  const shared = window.location.pathname.match(/^\/share\/([a-f0-9]{64})\/?$/);
-  if (window.location.pathname.startsWith('/share/')) return <TemporarySharePage token={shared?.[1] ?? ''} />;
+  const shared = temporaryShareRoute(window.location.pathname, import.meta.env.BASE_URL);
+  if (shared) return <TemporarySharePage token={shared.token} />;
   return (
     <div className="fluent-app"><AuthProvider>
       <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><AppContent /></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>

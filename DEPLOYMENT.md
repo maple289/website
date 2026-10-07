@@ -104,6 +104,11 @@ When IIS exposes the frontend below a path such as `/video/`, set
 the path because Supabase APIs remain under `/auth/v1`, `/rest/v1`, and the
 other root API routes.
 
+Temporary share URLs use the same frontend base: `/video/share/<token>` on IIS
+or `/share/<token>` for root hosting. The frontend must serve its SPA fallback
+at that path. Both link generation and the isolated visitor route use this base;
+Supabase function requests continue to use the root API URL.
+
 ## Updates and rollback
 
 Friend/Bolt updates continue in `main`. GitHub Actions validates every push and
