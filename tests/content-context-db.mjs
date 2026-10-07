@@ -28,6 +28,7 @@ try {
     INSERT INTO storage.objects(bucket_id,name) VALUES ('user-files','${owner}/Src/.folder'),('user-files','${owner}/Src/Sub/.folder'),('user-files','${owner}/Src/Sub/file.txt'),('user-files','${owner}/Dest/.folder');`);
   await db.exec(await fs.readFile(new URL('../supabase/migrations/20261003130000_file_catalog_integrity.sql', import.meta.url), 'utf8'));
   await db.exec(await fs.readFile(new URL('../supabase/migrations/20261007010000_content_context_actions.sql', import.meta.url), 'utf8'));
+  await db.exec(await fs.readFile(new URL('../supabase/migrations/20261007020000_reuse_trashed_file_names.sql', import.meta.url), 'utf8'));
   pass('migration applies to PostgreSQL with required existing tables');
   await actor(owner);
   const params = ['video', video, 'a'.repeat(64), null];

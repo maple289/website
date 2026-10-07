@@ -4,18 +4,18 @@ import { loadPublicFiles } from '@/lib/publicFiles';
 export type FileEntry = {
   id?: string; location?: string; ancestors?: FileEntry[];
   name: string; path: string; isFolder: boolean; size: number; updatedAt: string;
-  mimeType: string; favorite: boolean; trashedAt: string | null;
+  mimeType: string; favorite: boolean; trashedAt: string | null; trashOriginalPath?: string | null;
 };
 export type FileMetadata = {
   object_path: string; is_folder: boolean; is_favorite: boolean; file_size: number;
-  mime_type: string; trashed_at: string | null; created_at: string; updated_at: string;
+  mime_type: string; trashed_at: string | null; trash_original_path?: string | null; created_at: string; updated_at: string;
 };
 export type FilePage = { entries: FileEntry[]; nextOffset: number; hasMore: boolean };
-export const metadataColumns = 'object_path,is_folder,is_favorite,file_size,mime_type,trashed_at,created_at,updated_at';
+export const metadataColumns = 'object_path,is_folder,is_favorite,file_size,mime_type,trashed_at,trash_original_path,created_at,updated_at';
 export const fromMetadata = (row: FileMetadata): FileEntry => ({
-  path: row.object_path, name: row.object_path.split('/').pop() ?? '', isFolder: row.is_folder,
+  path: row.object_path, name: (row.trashed_at && row.trash_original_path || row.object_path).split('/').pop() ?? '', isFolder: row.is_folder,
   size: row.file_size, updatedAt: row.updated_at, mimeType: row.mime_type,
-  favorite: row.is_favorite, trashedAt: row.trashed_at,
+  favorite: row.is_favorite, trashedAt: row.trashed_at, trashOriginalPath: row.trash_original_path,
 });
 
 // Only one level at a time. Both APIs enforce the existing database/storage RLS.

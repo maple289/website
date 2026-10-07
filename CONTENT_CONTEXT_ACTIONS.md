@@ -15,6 +15,17 @@ missing destinations, Trash, invalid paths and self/descendant moves. Storage
 uses its existing owner-only RLS and collision errors. Copies retain their source;
 folder moves carry metadata/shares after the payload has moved.
 
+Delete moves items to Trash by marking their existing catalog paths. If a later
+transfer needs one of those names, the server plans preservation of that fully
+trashed tree under a unique path first. Storage moves preserve its bytes and
+identity; all Trash flags remain set and original names/locations are recorded.
+The incoming item then occupies the freed path without an unnecessary conflict
+prompt. Unknown or live destination contents still require an explicit choice.
+Restore returns archived items to their original location and offers the normal
+conflict choices when a current item occupies it. Completed preservation and
+transfer steps stay in the task for retry. This also handles legacy Trash items;
+it performs no bulk cleanup or permanent deletion.
+
 Conflicts offer Replace, Keep both and Cancel. Keep both finds an available copy
 name. Replace runs entirely within the existing deletion confirmation, preserves
 the destination under a unique name and moves that previous file/folder tree to
@@ -73,6 +84,11 @@ for native image/video/range/download requests without a login session. No
 production migration, function deployment or frontend release was performed by
 this implementation task.
 
+Also apply `supabase/migrations/20261007020000_reuse_trashed_file_names.sql` before
+the updated frontend. It adds original Trash paths and owner-authorized transfer
+and restore planning. Existing Trash payloads are preserved lazily when their
+names are reused; no existing user files are mutated by the migration.
+
 Link creation and visitor routing both honor Vite's `VITE_BASE_PATH`. For the IIS
 deployment at `/video/`, generated URLs are `/video/share/<token>`; root hosting
 uses `/share/<token>`. The API remains at the configured Supabase URL. Existing
@@ -91,6 +107,9 @@ and `tests/temporary-share-page.mjs` checks the standalone mobile visitor page.
 `tests/temporary-share-hosting.mjs` creates a link through the owner dialog and
 opens it through the real App entrypoint under both `/` and `/video/`, checking
 that visitors cannot reach the normal app shell or endpoints.
+`tests/file-trash.mjs` exercises real PostgreSQL plans/catalog triggers with the
+desktop/mobile File Manager: copy/paste/delete/paste, preservation retries,
+restore conflicts and confirmed permanent deletion of complete folder trees.
 
 Browser fixtures use local Vite plus mocked APIs; they never modify real users or
 payloads. Set `PLAYWRIGHT_MODULE`, `TEST_BASE_URL`, `PGLITE_MODULE` and `PYTHON_BIN`

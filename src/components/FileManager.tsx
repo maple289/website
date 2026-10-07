@@ -28,11 +28,11 @@ import './FileManager.css';
 import { downloadFile, loadPublicFiles } from '@/lib/publicFiles';
 import { FileTree } from '@/components/FileTree';
 import { FileVideoThumbnail } from '@/components/FileVideoThumbnail';
-import { ancestorPaths, metadataColumns, getFileMetadataTree, loadFileChildren, type FileEntry } from '@/lib/fileTree';
+import { ancestorPaths, metadataColumns, getFileMetadataTree, loadFileChildren, fromMetadata, type FileEntry, type FileMetadata } from '@/lib/fileTree';
 
 import { useFileNavigation } from '@/hooks/useFileNavigation';
 type Entry = FileEntry;
-type Metadata = { object_path: string; is_folder: boolean; is_favorite: boolean; file_size: number; mime_type: string; trashed_at: string | null; created_at: string; updated_at: string };
+type Metadata = FileMetadata;
 type UploadItem = { file: File; state: 'waiting' | 'uploading' | 'done' | 'error'; message?: string; progress?: number };
 type SearchRow = { object_path: string; name: string; location: string; is_folder: boolean; file_size: number; mime_type: string; updated_at: string; is_favorite: boolean };
 
@@ -88,7 +88,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
-  const [dialog, setDialogState] = useState<{ kind: 'folder' | 'rename' | 'move' | 'copy'; entry?: Entry; entries?: Entry[]; value: string; initialValue?: string } | null>(null);
+  const [dialog, setDialogState] = useState<{ kind: 'folder' | 'rename' | 'move' | 'copy' | 'restore'; entry?: Entry; entries?: Entry[]; value: string; initialValue?: string } | null>(null);
   const setDialog = (next: typeof dialog) => {
     if (!next || next.initialValue === undefined) { pendingPlans.current.clear(); pendingReplacements.current.clear(); completedTargets.current.clear(); setActionError(''); }
     setDialogState(next ? { ...next, initialValue: next.initialValue ?? next.value } : null);
@@ -254,8 +254,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   }, [searchTerm, user]);
 
   function entryFromMetadata(item: Metadata): Entry {
-    const name = item.object_path.split('/').pop() ?? item.object_path;
-    return { name, path: item.object_path, isFolder: item.is_folder, size: item.file_size ?? 0, updatedAt: item.updated_at, mimeType: item.mime_type ?? '', favorite: item.is_favorite, trashedAt: item.trashed_at };
+    return fromMetadata(item);
   }
 
   useEffect(() => { const state = listingState.current; void load(); return () => { state.version++; }; }, [load]);
@@ -444,13 +443,13 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     if (!affectedPaths.includes(item.path)) { await register(item.path, item.isFolder, item.favorite, item.size, item.mimeType); affectedPaths.push(item.path); }
     await changeMetadata(affectedPaths, new Date().toISOString());
   };
-  const restoreEntry = async (entry: Entry) => {
-    if (!user) return;
-    try {
-      const affectedPaths = (await getFileMetadataTree(entry, user.id)).map((row) => row.object_path);
-      await changeMetadata(affectedPaths, null);
-      await load();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Could not restore this item.'); }
+  const restoreEntry = (entry: Entry) => {
+    if (!user || busy || !owns(entry)) return;
+    const destination = entry.trashOriginalPath ?? entry.path;
+    const value = destination.split('/').slice(1, -1).join('/');
+    const operation = { kind: 'restore' as const, entry, value, initialValue: value };
+    setDialog(operation);
+    void performPathAction(operation);
   };
   const permanentDelete = async (entry: Entry) => {
     if (!user || !owns(entry)) throw new Error('You do not have permission to delete this item.');
@@ -522,7 +521,8 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         const oldParent = entry.path.split('/').slice(0, -1).join('/');
         let nextPath = operation.kind === 'rename' ? `${oldParent}/${operation.value.trim()}` : `${parentPath}/${entry.name}`;
         const copying = operation.kind === 'copy';
-        let plan = pendingPlans.current.get(entry.path) ?? await planFileOperation(entry, nextPath, copying);
+        const restoring = operation.kind === 'restore';
+        let plan = pendingPlans.current.get(entry.path) ?? await planFileOperation(entry, nextPath, copying, restoring);
         if (!plan) {
           const choice = await new Promise<'keep' | 'replace' | 'cancel'>(resolve => setConflict({ entry, destination: nextPath, resolve }));
           setConflict(null);
@@ -532,7 +532,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
             const name = nextPath.split('/').pop()!;
             for (let i = 1; i <= 10000; i++) {
               nextPath = `${parent}/${copyName(name, i, entry.isFolder)}`;
-              plan = await planFileOperation(entry, nextPath, copying);
+              plan = await planFileOperation(entry, nextPath, copying, restoring);
               if (plan) break;
             }
             if (!plan) throw new Error('Could not find an available name.');
@@ -553,7 +553,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
                 try {
                   await executeFileOperation(backupPlan, user.id);
                   if (!archived) { await trashEntry(backupEntry); archived = true; }
-                  replacementPlan ??= await planFileOperation(entry, nextPath, copying);
+                  replacementPlan ??= await planFileOperation(entry, nextPath, copying, restoring);
                   if (!replacementPlan) throw new Error('The destination changed. Cancel and choose Keep both.');
                   await executeFileOperation(replacementPlan, user.id);
                   completedTargets.current.add(entry.path);
@@ -697,13 +697,13 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
 
       {dialog && <TaskModal aria-label="File or folder action" className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/40 p-4">
         <form onSubmit={event => { event.preventDefault(); if (dialog.kind === 'folder') void createFolder(); else void performPathAction(); }} className="fm-dialog w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-          <h2 className="mb-5 text-lg font-semibold text-slate-900">{dialog.kind === 'folder' ? 'Create a folder' : dialog.kind === 'rename' ? 'Rename item' : dialog.kind === 'copy' ? 'Paste item' : 'Move item'}</h2>
+          <h2 className="mb-5 text-lg font-semibold text-slate-900">{dialog.kind === 'folder' ? 'Create a folder' : dialog.kind === 'rename' ? 'Rename item' : dialog.kind === 'copy' ? 'Paste item' : dialog.kind === 'restore' ? 'Restore item' : 'Move item'}</h2>
           {dialog.entry && <p className="mb-3 break-words text-sm text-slate-600">{dialog.entries?.length ? dialog.entries.length + ' selected items' : dialog.entry.name}{dialog.entry.isFolder ? ' (including all contents)' : ''}</p>}
           {(dialog.kind === 'folder' || dialog.kind === 'rename') && <>
             <label htmlFor="file-action-name" className="mb-2 block text-sm font-medium text-slate-700">Name</label>
             <input id="file-action-name" autoFocus disabled={busy || pendingPlans.current.size > 0 || pendingReplacements.current.size > 0 || completedTargets.current.size > 0} value={dialog.value} onChange={event => setDialog({ ...dialog, value: event.target.value })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" />
           </>}
-          {dialog.kind === 'copy' && <p className="text-sm text-slate-600">Destination: My Files{dialog.value ? ' / ' + dialog.value : ''}</p>}
+          {(dialog.kind === 'copy' || dialog.kind === 'restore') && <p className="text-sm text-slate-600">Destination: My Files{dialog.value ? ' / ' + dialog.value : ''}</p>}
           {dialog.kind === 'move' && user && <FolderDestinationPicker owner={user.id} value={dialog.value} onChange={value => setDialog({ ...dialog, value })} sources={dialog.entries ?? (dialog.entry ? [dialog.entry] : [])} disabled={busy || pendingPlans.current.size > 0 || pendingReplacements.current.size > 0 || completedTargets.current.size > 0} />}
           {actionError && <p role="alert" className="mt-3 text-sm text-rose-700">{actionError}</p>}
           <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={closeDialog} disabled={busy} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={busy} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Working…' : 'Continue'}</button></div>

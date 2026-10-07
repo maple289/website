@@ -22,6 +22,8 @@ explicit closing. Temporary-link replacement/revocation and file conflict Replac
 use nested shared confirmations, retaining the underlying task on Cancel/error.
 Copy itself only sets the account-bound clipboard; Paste's task displays its
 captured current destination and keeps partial-transfer errors for retry.
+Restore also uses the shared file action task and conflict dialog. Requests block
+closing, errors remain in the task, and cancelled conflicts leave Trash intact.
 
 | Area | Protected surfaces |
 | --- | --- |

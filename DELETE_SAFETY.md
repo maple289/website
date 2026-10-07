@@ -7,6 +7,15 @@ still use the same owner check and confirmed UI operation.
 
 All destructive UI operations use the application-level confirmation provider.
 
+Files/Folders Delete still marks the owned tree as Trash inside `onConfirm`.
+When Paste/Move/Rename needs that deleted name, its server plan first preserves
+the fully trashed payload under a unique path; it never removes bytes or clears
+Trash flags. Original names/locations remain available for Restore. Restore uses
+the same conflict choices as transfers; replacing a live destination remains
+inside the existing deletion confirmation. Permanent deletion still runs only
+from Trash's confirmed helper, including the complete archived folder tree.
+The archive plan retains completed steps for retries after partial failure.
+
 Content cards now share `ContentContextMenu`; their Delete actions still enter
 the same confirmations. Temporary-link revocation/replacement and removal of
 public access from the new media menus also use `useDeleteConfirmation`. File
