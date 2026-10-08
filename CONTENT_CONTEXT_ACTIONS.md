@@ -15,6 +15,12 @@ missing destinations, Trash, invalid paths and self/descendant moves. Storage
 uses its existing owner-only RLS and collision errors. Copies retain their source;
 folder moves carry metadata/shares after the payload has moved.
 
+Paste is a labelled clipboard button beside New folder and Upload, with a visible
+copied-item/destination indicator below the header. It stays discoverable when
+disabled (copy first, clear search or wait for the current operation). Responsive
+header actions wrap on narrow screens. Trash replaces creation/upload actions with
+the shared-confirmation Delete All action for all owned Trash content.
+
 Delete moves items to Trash by marking their existing catalog paths. If a later
 transfer needs one of those names, the server plans preservation of that fully
 trashed tree under a unique path first. Storage moves preserve its bytes and

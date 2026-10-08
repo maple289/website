@@ -35,7 +35,7 @@ requests; errors leave the dialog open for Cancel or retry.
 | Video processing cards | Cancel/delete queued, running or failed uploads | Same confirmed `delete-video` operation; waits for worker acknowledgement before cleanup |
 | Photo gallery cards | Permanent photo, preview and thumbnail deletion | Media/storage ownership policies |
 | File Manager menus and right-click menus | Move files/folders to Trash | Owner-only metadata policy |
-| Trash rows and menus | Permanently delete files/folders and contents | Owner-only storage and metadata policies |
+| Trash rows, menus and Delete All | Permanently delete files/folders and contents; Delete All captures every owned Trash metadata page, including unexpanded descendants | Owner-only storage and metadata policies; saved Trash state is rechecked before each target |
 | File Manager bulk actions, including Tree View selections | Counted selection with recursive-folder warning | Same ownership policies for each target |
 | Shared-content listings | Owner actions use the same guards; recipients remain read-only | Sharing grants allow reads, not deletes |
 | Admin user management | Delete named account; explain database cascades and storage limitations | `admin-users` authenticates and checks administrator role; self-deletion remains blocked |
@@ -54,6 +54,13 @@ Media records are retained until storage cleanup succeeds. Storage and database
 operations are not one distributed transaction: partial storage failures are
 reported explicitly and retries can finish the cleanup. Folder/bulk failures reload
 actual state, retain remaining selections, and skip fully completed targets on retry.
+
+Trash's Delete All uses the same confirmed deletion callback as individual and
+selected-item deletion. Its warning counts all files/folders, including nested
+metadata, and explains permanent removal. Search results never supply its targets.
+Restored/live descendants stop cleanup; folder metadata is removed after deeper
+rows so partial failures remain retryable. Empty/loading Trash and pending requests
+disable the action. Outside clicks and Escape retain the shared confirmation.
 
 Analytics cache invalidation uses an explicit non-null cache primary-key predicate.
 PostgREST preloads `safeupdate`; a cache DELETE without WHERE would roll back the

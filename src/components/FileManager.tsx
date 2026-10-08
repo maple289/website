@@ -290,6 +290,10 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
 
   const isSearching = Boolean(searchTerm.trim());
   const filtered = useMemo(() => isSearching ? searchResults : entries, [entries, isSearching, searchResults]);
+  // Trash metadata is loaded across every page; search/tree selections must not
+  // narrow an explicitly confirmed Delete All operation.
+  const allTrashEntries = useMemo(() => view === 'trash'
+    ? metadata.filter((item) => item.trashed_at).map(fromMetadata) : [], [metadata, view]);
   const actionEntries = layout === 'tree' ? treeEntries : filtered;
   const owns = (entry: Entry) => entry.path.startsWith(`${user?.id}/`);
   const canPaste = !!user && !!clipboard && clipboard.owner === user.id && view === 'files' && !isSearching && !busy;
@@ -453,32 +457,50 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   };
   const permanentDelete = async (entry: Entry) => {
     if (!user || !owns(entry)) throw new Error('You do not have permission to delete this item.');
+    const rows = await getFileMetadataTree(entry, user.id);
+    const current = rows.find((row) => row.object_path === entry.path);
+    // Recheck saved Trash state after confirmation, including on a partial retry.
+    // A restored/replaced item at the same path must never be deleted as Trash.
+    if (!current) {
+      if (rows.length) throw new Error('The folder has changed. Refresh Trash before deleting it.');
+      return;
+    }
+    if (!current.trashed_at || current.trashed_at !== entry.trashedAt || current.is_folder !== entry.isFolder || rows.some((row) => !row.trashed_at)) {
+      throw new Error('This item or part of its contents is no longer in Trash. Refresh Trash before deleting it.');
+    }
     const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
     for (let offset = 0; offset < paths.length; offset += 1000) {
       const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths.slice(offset, offset + 1000));
       if (removeError) throw removeError;
     }
-    const affectedPaths = (await getFileMetadataTree(entry, user.id)).map((row) => row.object_path);
-    if (!affectedPaths.includes(entry.path)) affectedPaths.push(entry.path);
+    // Keep the folder's row until descendant cleanup succeeds, so a retry can
+    // still validate and finish the remaining tree after a metadata failure.
+    const affectedPaths = rows.map((row) => row.object_path).sort((a, b) => b.length - a.length);
     await changeMetadata(affectedPaths);
   };
-  const confirmDeleteEntries = (selectedItems: Entry[]) => {
+  const confirmDeleteEntries = (selectedItems: Entry[], emptyTrash = false) => {
     if (!user || busy || !selectedItems.length) return;
     if (selectedItems.some((entry) => !owns(entry))) { setError('You do not have permission to delete these items.'); return; }
-    const items = selectedItems.filter((entry) => !selectedItems.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`)));
+    if (emptyTrash && (view !== 'trash' || loading || selectedItems.some((entry) => !entry.trashedAt))) return;
+    const unique = [...new Map(selectedItems.map((entry) => [entry.path, entry])).values()];
+    const folderPaths = new Set(unique.filter((entry) => entry.isFolder).map((entry) => entry.path));
+    const items = unique.filter((entry) => !ancestorPaths(entry.path).some((path) => folderPaths.has(path)));
     const permanent = items.some((entry) => !!entry.trashedAt);
     const folders = items.some((entry) => entry.isFolder);
     const completed = new Set<string>();
     setMenu(null);
     void requestDelete({
-      title: permanent ? 'Permanently delete items' : 'Move to Trash',
-      message: selectedItems.length === 1
+      title: emptyTrash ? 'Delete all Trash contents' : permanent ? 'Permanently delete items' : 'Move to Trash',
+      message: emptyTrash
+        ? `Are you sure you want to permanently delete all ${unique.length} ${unique.length === 1 ? 'file or folder' : 'files and folders'} in your Trash?`
+        : selectedItems.length === 1
         ? `Are you sure you want to delete ${items[0].isFolder ? 'the folder ' : ''}"${items[0].name}"?`
         : `Are you sure you want to delete these ${selectedItems.length} selected items?`,
       details: [folders ? 'Folders may contain files and subfolders. All of their contents are included in this action.' : '',
-        permanent ? 'Items already in Trash will be permanently deleted, including their sharing records. This cannot be undone. Any other selected items will be moved to Trash.'
+        emptyTrash ? 'All listed Trash items and their folder contents will be permanently deleted, including their sharing records and temporary share links. This cannot be undone. The count includes nested files and folders.'
+          : permanent ? 'Items already in Trash will be permanently deleted, including their sharing records. This cannot be undone. Any other selected items will be moved to Trash.'
           : 'These items will be moved to Trash and will no longer be available to shared users. You can restore them from Trash.'].filter(Boolean).join(' '),
-      confirmLabel: permanent ? folders && selectedItems.length === 1 ? 'Delete Folder' : 'Delete forever' : 'Move to Trash',
+      confirmLabel: emptyTrash ? 'Delete All Forever' : permanent ? folders && selectedItems.length === 1 ? 'Delete Folder' : 'Delete forever' : 'Move to Trash',
       processingLabel: permanent ? 'Deleting…' : 'Moving to Trash…',
       onConfirm: async () => {
         setBusy(true);
@@ -664,10 +686,27 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         <main className="fm-main min-w-0 flex-1 px-4 py-5 sm:px-7 lg:px-9">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0">{!guest && view !== 'shared' && <div aria-label="Folder path" className="fm-breadcrumbs"><button onClick={() => { goTo(''); }} className="hover:text-blue-600">File Storage</button>{crumbs.map((part, index) => <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-2"><ChevronRight size={13} /><button className="max-w-32 truncate hover:text-blue-600" aria-current={index === crumbs.length - 1 ? 'page' : undefined} onClick={() => goTo(crumbs.slice(0, index + 1).join('/'))}>{part}</button></span>)}</div>}<h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">{view === 'files' && crumbs.length ? crumbs[crumbs.length - 1] : title}</h1></div>
-            {!guest && view !== 'shared' && <div className="flex items-center gap-2"><button onClick={back} title="Back" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ArrowLeft size={17} /></button><button onClick={forward} title="Forward" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ChevronRight size={17} /></button><button onClick={() => void load()} title="Refresh" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 sm:flex"><RotateCcw size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:hidden" title="New folder"><FolderPlus size={17} /></button><button onClick={() => setDialog({ kind: 'folder', value: '' })} className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 sm:flex"><FolderPlus size={17} />New folder</button><button onClick={() => { setUploads([]); setUploadOpen(true); }} className="flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700"><Upload size={17} />Upload</button></div>}
+            {!guest && view !== 'shared' && <div className="fm-header-actions flex min-w-0 flex-wrap items-center gap-2">
+              <button onClick={back} title="Back" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ArrowLeft size={17} /></button>
+              <button onClick={forward} title="Forward" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-40 sm:flex"><ChevronRight size={17} /></button>
+              <button onClick={() => void load()} title="Refresh" className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:text-blue-700 sm:flex"><RotateCcw size={17} /></button>
+              {view === 'trash' ? <button type="button" disabled={busy || loading || !!error || allTrashEntries.length === 0}
+                onClick={() => confirmDeleteEntries(allTrashEntries, true)} title="Permanently delete all files and folders in your Trash"
+                className="fluent-button fm-delete-all"><Trash2 size={19} aria-hidden="true" />Delete All</button> : <>
+                {view === 'files' && <button type="button" disabled={!canPaste} onClick={paste}
+                  title={isSearching ? 'Clear search to paste into the current folder' : clipboard ? `Paste "${clipboard.entry.name}" into ${folder || 'My Files'}` : 'Copy a file or folder first, then paste it here'}
+                  className="fluent-button fluent-primary fm-paste-button"><ClipboardPaste size={20} aria-hidden="true" /><span>Paste</span></button>}
+                <button onClick={() => setDialog({ kind: 'folder', value: '' })} disabled={busy} className="fluent-button fluent-secondary" title="New folder"><FolderPlus size={18} aria-hidden="true" /><span>New folder</span></button>
+                <button onClick={() => { setUploads([]); setUploadOpen(true); }} disabled={busy} className="fluent-button fluent-primary"><Upload size={18} aria-hidden="true" />Upload</button>
+              </>}
+            </div>}
           </div>
           {!guest && <nav className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:hidden">{([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { navigate({ view: key }); }} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${view === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500'}`}><Icon size={14} />{label}</button>)}</nav>}
-          {!guest && view === 'files' && !isSearching && <div className="mb-3 flex items-center gap-3"><button disabled={!canPaste} onClick={paste} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-blue-700 disabled:opacity-40"><ClipboardPaste size={16} className="mr-2 inline" />Paste</button>{clipboard && <span role="status" className="truncate text-xs text-slate-500">Copied: {clipboard.entry.name}</span>}</div>}
+          {!guest && view === 'files' && <div role="status" className={`fm-clipboard-status mb-3 ${clipboard ? 'is-ready' : ''}`}>
+            <Copy size={17} aria-hidden="true" className="shrink-0" />
+            {clipboard ? <div className="min-w-0"><p className="text-sm"><strong>Ready to paste:</strong> <span className="break-words" title={clipboard.entry.name}>{clipboard.entry.name}</span></p><p className="mt-0.5 text-xs">{isSearching ? 'Clear search to paste into the current folder.' : `Use Paste above to copy into ${folder || 'My Files'}.`}</p></div>
+              : <p className="text-sm">Use <strong>Copy</strong> in a file or folder menu, then choose <strong>Paste</strong> above.</p>}
+          </div>}
           <div className="fm-toolbar mb-5"><label className="fm-search flex h-11 min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={17} className="shrink-0 text-slate-400" /><input ref={searchInput} value={searchTerm} onChange={(event) => onSearchTermChange(event.target.value)} aria-label="Search files and folders" placeholder="Search files and folders" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" /><kbd className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 sm:block">⌘ K</kbd></label><div className="fm-view-switch flex rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => changeLayout('grid')} title="Grid view" aria-label="Grid view" aria-pressed={layout === 'grid'} className={`rounded-lg p-2 ${layout === 'grid' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><Grid2X2 size={17} /></button><button onClick={() => changeLayout('list')} title="List view" aria-label="List view" aria-pressed={layout === 'list'} className={`rounded-lg p-2 ${layout === 'list' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><List size={17} /></button><button onClick={() => changeLayout('tree')} aria-label="Tree View" title="Tree View" aria-pressed={layout === 'tree'} className={`rounded-lg p-2 ${layout === 'tree' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><GitBranch size={17} /></button></div></div>
           {selected.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"><span className="mr-auto text-sm font-medium text-blue-800">{selected.length} selected</span>{view !== 'trash' && selectionOwned && <button onClick={() => { const selectedEntries = actionEntries.filter((item) => selected.includes(item.path) && owns(item)); const targets = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`))); setDialog({ kind: 'move', entry: targets[0], entries: targets, value: folder }); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Move size={14} className="mr-1 inline" />Move</button>}{view !== 'trash' && <button onClick={() => void bulkDownload()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Download size={14} className="mr-1 inline" />Download</button>}{selectionOwned && <button onClick={() => void bulkDelete()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"><Trash2 size={14} className="mr-1 inline" />{view === 'trash' ? 'Delete forever' : 'Delete'}</button>}<button onClick={() => setSelected([])} aria-label="Clear selection" className="rounded-lg p-1.5 text-blue-700 hover:bg-blue-100"><X size={16} /></button></div>}
           {guest && <div aria-label="Public folder path" className="fm-breadcrumbs mb-4"><Globe size={16} /><span>Publicly shared content · Read-only</span><button className="underline" onClick={() => { navigate({}); }}>Public files</button>{publicFolder?.ancestors?.map((ancestor) => <button key={ancestor.id} className="underline" onClick={() => { navigate({ publicFolder: ancestor }); }}>{ancestor.name}</button>)}{publicFolder && <span>/ {publicFolder.name}</span>}<button title="Refresh" onClick={() => void load()}><RotateCcw size={16} /></button></div>}
