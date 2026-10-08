@@ -10,15 +10,18 @@ import { analyticsRequestId, recordFileEvent } from '@/lib/analytics';
 type State = { status: 'loading' | 'generating' | 'ready' | 'failed' | 'unsupported'; kind?: PreviewKind; url?: string; text?: string; csv?: ReturnType<typeof parsePreviewCsv>; message?: string };
 const PdfFilePreview = lazy(() => import('./PdfFilePreview').then(module => ({ default: module.PdfFilePreview })));
 
-export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; onClose: () => void; onDownload: () => void }) {
+export function FilePreview({ entry, onClose, onDownload, requestPreview = requestFilePreview, loadVideo, trackViews = true }: {
+  entry: FileEntry; onClose: () => void; onDownload: () => void;
+  requestPreview?: typeof requestFilePreview; loadVideo?: (entry: FileEntry, signal: AbortSignal) => Promise<Blob>; trackViews?: boolean;
+}) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const previewEvent = useRef({ path: entry.path, requestId: analyticsRequestId(), sent: false });
   const readySource = useRef('');
   useEffect(() => {
-    if (state.status !== 'ready' || readySource.current !== entry.path) return;
+    if (!trackViews || state.status !== 'ready' || readySource.current !== entry.path) return;
     if (previewEvent.current.path !== entry.path) previewEvent.current = { path: entry.path, requestId: analyticsRequestId(), sent: false };
     if (!previewEvent.current.sent) { previewEvent.current.sent = true; recordFileEvent(entry, 'preview', previewEvent.current.requestId); }
-  }, [state.status, entry]);
+  }, [state.status, entry, trackViews]);
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -37,7 +40,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
       try {
         // Preserve the existing video player/download authorization path.
         if (kind === 'video') {
-          const { data, error } = await downloadFile(entry);
+          const { data, error } = loadVideo ? { data: await loadVideo(entry, signal), error: null } : await downloadFile(entry);
           signal.throwIfAborted();
           if (error || !data) throw new Error(error?.message || 'Video preview could not be loaded.');
           objectUrl = URL.createObjectURL(data);
@@ -49,12 +52,12 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
         while (!signal.aborted) {
           if (Date.now() - start > 5 * 60 * 1000) throw new Error('The preview is still queued. Please reopen it shortly. You can still download the original file.');
           if (document.hidden) { await wait(); continue; }
-          const response = await requestFilePreview(entry, false, signal);
+          const response = await requestPreview(entry, false, signal);
           const status = await response.json() as PreviewStatus;
           if (!response.ok && response.status !== 202) throw new Error(status.message || 'Preview could not be loaded.');
           if (status.status === 'generating') { setState({ status: 'generating', kind, message: status.queued ? 'Waiting for a preview worker…' : undefined }); await wait(); continue; }
           if (status.status !== 'available') { setState({ status: status.status, message: status.message }); return; }
-          const content = await requestFilePreview(entry, true, signal);
+          const content = await requestPreview(entry, true, signal);
           if (content.headers.get('content-type')?.includes('application/json')) {
             const changed = await content.json() as PreviewStatus;
             if (changed.status === 'generating') { setState({ status: 'generating', kind }); await wait(); continue; }
@@ -87,7 +90,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
     };
     void load();
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [entry]);
+  }, [entry, requestPreview, loadVideo]);
   const loading = state.status === 'loading' || state.status === 'generating';
   return <TaskModal aria-label="File preview" className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-2 sm:p-6">
     <section className="flex h-[90dvh] max-h-full w-full max-w-6xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -102,7 +105,7 @@ export function FilePreview({ entry, onClose, onDownload }: { entry: FileEntry; 
           : state.status !== 'ready' ? <div role="status" className="m-auto max-w-md px-4 text-center"><FileText size={44} className="mx-auto mb-3 text-slate-400" /><h3 className="font-semibold text-slate-800">{state.status === 'unsupported' ? 'Preview is not available for this file type' : 'Preview could not be generated'}</h3><p className="mt-2 break-words text-sm text-slate-600">{state.message || `You can still download the original file (${(entry.size / 1048576).toFixed(2)} MB).`}</p><button onClick={onDownload} className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700">Download original file</button></div>
           : state.kind === 'pdf' && state.url ? <Suspense fallback={<p role="status" className="m-auto text-sm text-slate-500">Loading PDF viewer…</p>}><PdfFilePreview url={state.url} name={entry.name} /></Suspense>
           : state.kind === 'image' ? <img src={state.url} alt={entry.name} onError={() => setState({ status: 'failed', message: 'This image could not be decoded. You can still download the original file.' })} className="m-auto max-h-full max-w-full object-contain" />
-          : state.kind === 'video' ? <video src={state.url} controls className="m-auto max-h-full max-w-full" />
+          : state.kind === 'video' ? <video src={state.url} controls onError={() => setState({ status: 'failed', message: 'This video cannot be played by your browser. You can still download the original file.' })} className="m-auto max-h-full max-w-full" />
           : state.kind === 'csv' && state.csv ? <><p className="mb-2 shrink-0 text-xs text-slate-500">{state.csv.truncated ? 'Showing up to 200 rows, 50 columns and 2,000 characters per cell. Download the original for all data.' : `${state.csv.rows.length} rows · Read-only table`}</p><div className="min-h-0 overflow-auto rounded-lg border border-slate-200 bg-white"><table className="w-full border-collapse text-left text-sm text-slate-800"><tbody>{state.csv.rows.map((row, index) => <tr key={index} className={index % 2 ? 'bg-slate-50' : ''}>{row.map((cell, column) => <td key={column} className="min-w-[100px] max-w-xs whitespace-pre-wrap break-words border border-slate-100 px-3 py-2 align-top">{cell}</td>)}</tr>)}</tbody></table></div></>
           : <pre className="min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white p-4 font-mono text-sm text-slate-800">{state.text || '(Empty file)'}</pre>}
       </div>

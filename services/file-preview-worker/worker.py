@@ -37,8 +37,9 @@ def remove_cache(path):
 
 
 def source_current(job):
-    source = api('POST', '/rest/v1/rpc/get_file_preview_source', json={'p_path': job['object_path']})
-    return source and source['id'] == job['source_id'] and source['version'] == job['source_version']
+    source = api('POST', '/rest/v1/rpc/get_preview_source_by_id', json={'p_id': job['source_id']})
+    return (source and source['id'] == job['source_id'] and source['version'] == job['source_version']
+            and source['path'] == job['object_path'] and source['bucket'] == job.get('source_bucket', 'user-files'))
 
 
 def recover_uploaded_preview(job):
@@ -80,7 +81,10 @@ def process(job):
             if not source_current(job) or not current(job):
                 return
             # Streaming, bounded download. The converter has read-only source access.
-            with requests.get(URL + '/storage/v1/object/authenticated/user-files/' + quote(job['object_path'], safe='/'),
+            bucket = job.get('source_bucket', 'user-files')
+            if bucket not in ('user-files', 'messenger-attachments'):
+                raise ValueError('Preview source unavailable.')
+            with requests.get(URL + '/storage/v1/object/authenticated/' + bucket + '/' + quote(job['object_path'], safe='/'),
                               headers=HEADERS, stream=True, timeout=(10, 30)) as response:
                 response.raise_for_status()
                 total = 0
@@ -161,6 +165,15 @@ def cleanup():
             api('DELETE', '/rest/v1/file_preview_cleanup?path=eq.' + quote(item['path'], safe=''))
         except Exception as cause:
             LOG.error(json.dumps({'operation': 'preview_cache_cleanup', 'type': type(cause).__name__}))
+    # Reservations expire after 24 hours. This queue contains only paths whose
+    # attachment record was removed, never arbitrary existing library content.
+    api('POST', '/rest/v1/rpc/messenger_reconcile_uploads', json={})
+    for item in api('GET', '/rest/v1/messenger_storage_cleanup?order=created_at&limit=50') or []:
+        try:
+            api('DELETE', '/storage/v1/object/messenger-attachments', json={'prefixes': [item['object_path']]})
+            api('DELETE', '/rest/v1/messenger_storage_cleanup?object_path=eq.' + quote(item['object_path'], safe=''))
+        except Exception as cause:
+            LOG.error(json.dumps({'operation': 'messenger_attachment_cleanup', 'type': type(cause).__name__}))
 
 
 def main():

@@ -7,7 +7,8 @@ import '@/components/MediaGallery.css';
 import '@/components/FluentTheme.css';
 import { FileDropArea } from '@/components/FileDropArea';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { BarChart3, Clapperboard, FolderOpen, Home, Images, Menu, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
+import { BarChart3, Clapperboard, FolderOpen, Home, Images, Menu, MessageCircle, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
+import { MessengerProvider } from '@/context/MessengerContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -24,18 +25,19 @@ import { InitialPasswordPage } from '@/components/InitialPasswordPage';
 import { FileManager } from '@/components/FileManager';
 
 const UserStatistics = lazy(() => import('@/components/UserStatistics').then(module => ({ default: module.UserStatistics })));
+const Messenger = lazy(() => import('@/components/Messenger').then(module => ({ default: module.Messenger })));
 
 function App() {
   const shared = temporaryShareRoute(window.location.pathname, import.meta.env.BASE_URL);
   if (shared) return <TemporarySharePage token={shared.token} />;
   return (
     <div className="fluent-app"><AuthProvider>
-      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><AppContent /></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
+      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><AppContent /></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
     </AuthProvider></div>
   );
 }
 
-type Route = 'home' | 'public-videos' | 'public-photos' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings' | 'statistics';
+type Route = 'home' | 'public-videos' | 'public-photos' | 'library' | 'photos' | 'files' | 'public-files' | 'admin' | 'settings' | 'statistics' | 'messages';
 
 function getRoute(): Route {
   const hash = window.location.hash;
@@ -48,6 +50,7 @@ function getRoute(): Route {
   if (hash.split('?')[0] === '#/files') return 'files';
   if (hash === '#/settings') return 'settings';
   if (hash === '#/statistics') return 'statistics';
+  if (hash.split('?')[0] === '#/messages') return 'messages';
   return 'home';
 }
 
@@ -82,7 +85,7 @@ function AppContent() {
       window.location.hash = '';
       setRoute('home');
     }
-    if (!loading && !user && (route === 'admin' || route === 'settings' || route === 'statistics')) {
+    if (!loading && !user && (route === 'admin' || route === 'settings' || route === 'statistics' || route === 'messages')) {
       window.location.hash = '';
       setRoute('home');
     }
@@ -99,6 +102,7 @@ function AppContent() {
     else if (r === 'admin') window.location.hash = '#/admin';
     else if (r === 'settings') window.location.hash = '#/settings';
     else if (r === 'statistics') window.location.hash = '#/statistics';
+    else if (r === 'messages') window.location.hash = '#/messages';
     setRoute(r);
     setSidebarOpen(false);
     setSearch('');
@@ -114,7 +118,7 @@ function AppContent() {
   const isAuthed = !!user;
   const isFilesRoute = route === 'files' || route === 'public-files';
   const isStatisticsRoute = route === 'statistics';
-  const hasMediaControls = !isFilesRoute && !isStatisticsRoute;
+  const hasMediaControls = !isFilesRoute && !isStatisticsRoute && route !== 'messages';
   const uploadsPhoto = route === 'photos' || route === 'public-photos';
   const searchLabel = uploadsPhoto ? 'Search photos' : 'Search videos';
   const publicTab = route === 'public-files' ? 'files' : route === 'public-photos' ? 'photos' : route === 'home' || route === 'public-videos' ? 'videos' : undefined;
@@ -193,6 +197,7 @@ function AppContent() {
             <NavItem icon={<Video size={20} />} label="My Videos" active={route === 'library'} onClick={() => navigate('library')} />
             <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
             <NavItem icon={<FolderOpen size={20} />} label="File Storage" active={route === 'files'} onClick={() => navigate('files')} />
+            <NavItem icon={<MessageCircle size={20} />} label="Messages" active={route === 'messages'} onClick={() => navigate('messages')} />
             <div className="my-4 h-px bg-slate-200" />
             {isAdmin && (
               <NavItem icon={<ShieldCheck size={20} />} label="Admin Console" onClick={() => navigate('admin')} />
@@ -212,7 +217,7 @@ function AppContent() {
       {/* Main content */}
       <main className={`fluent-main ${mobileSearchOpen && hasMediaControls ? 'fluent-search-open' : ''} ${hasMediaControls ? 'media-page' : ''} pt-[72px] ${isAuthed ? 'lg:pl-64' : ''}`}>
         <div className="fluent-section-nav"><MediaTabs active={publicTab} onSelect={openPublicSection} /></div>
-        {isStatisticsRoute ? isAuthed ? <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading your statistics…</p>}><UserStatistics key={user.id} /></Suspense> : <p role="status" className="p-8 text-center text-slate-600">Please sign in to view your statistics.</p>
+        {route === 'messages' ? isAuthed && <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading Messages…</p>}><Messenger key={user.id} /></Suspense> : isStatisticsRoute ? isAuthed ? <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading your statistics…</p>}><UserStatistics key={user.id} /></Suspense> : <p role="status" className="p-8 text-center text-slate-600">Please sign in to view your statistics.</p>
           : isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} /></FileDropArea>}
       </main>
 

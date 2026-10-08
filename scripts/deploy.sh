@@ -27,7 +27,8 @@ runtime_stack() {
     -f "$project_root/deploy/supabase-auth.compose.yml" \
     -f "$project_root/deploy/media-worker.compose.yml" \
     -f "$project_root/deploy/file-preview-worker.compose.yml" \
-    -f "$project_root/deploy/analytics-collector.compose.yml" "$@"
+    -f "$project_root/deploy/analytics-collector.compose.yml" \
+    -f "$project_root/deploy/messenger.compose.yml" "$@"
 }
 # Build the decoder before changing upload policies. A failed build must not
 # switch the database to a queue that has no worker image.
@@ -44,10 +45,25 @@ until runtime_stack exec -T db pg_isready -U postgres -d postgres >/dev/null 2>&
   sleep 2
 done
 
+# Private Broadcast's database functions are installed by Realtime's tenant
+# migration. Seed a missing tenant once, before the application migrations.
+# Never reseed an existing tenant: the stock seed resets private_only=false.
+tenant_table=$(runtime_stack exec -T db psql -U postgres -d postgres -tAc "SELECT to_regclass('_realtime.tenants')" | tr -d '[:space:]')
+export STREAMLY_REALTIME_SEED=false
+if [ -z "$tenant_table" ]; then
+  export STREAMLY_REALTIME_SEED=true
+elif [ "$(runtime_stack exec -T db psql -U postgres -d postgres -tAc 'SELECT count(*) FROM _realtime.tenants' | tr -d '[:space:]')" = '0' ]; then
+  export STREAMLY_REALTIME_SEED=true
+fi
+runtime_stack up -d --wait --wait-timeout 180 realtime
+
 STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/apply-migrations.sh"
 STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/sync-functions.sh"
+export STREAMLY_REALTIME_SEED=false
+# Enforce again on deploy, including recovery from an external tenant reseed.
+runtime_stack exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'UPDATE _realtime.tenants SET private_only=true WHERE private_only IS DISTINCT FROM true'
 runtime_stack up -d
-runtime_stack restart functions
+runtime_stack restart functions realtime
 runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" up -d --build
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" ps

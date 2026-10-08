@@ -1,0 +1,7 @@
+services:
+  realtime:
+    environment:
+      # The stock seed recreates the tenant and resets private_only. Seed only
+      # the first installation; subsequent restarts must preserve authorization.
+      SEED_SELF_HOST: ${STREAMLY_REALTIME_SEED:-false}
+    cpu_shares: 1024

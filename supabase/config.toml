@@ -33,3 +33,6 @@ verify_jwt = false
 
 [functions.temporary-share]
 verify_jwt = false
+
+[functions.messenger-media]
+verify_jwt = true

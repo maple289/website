@@ -55,3 +55,14 @@ the current folder, selection and browser-history entry. It has no editable draf
 
 TypeScript and production compilation checked. No automated UI or physical-device
 interaction tests were run. Backend permissions and delete mutations are unchanged.
+
+## Messenger dialogs
+
+New Conversation/Create Group, Edit Message, Group Information/Members,
+conversation search, shared files, blocked users and profile information use
+TaskModal. Editable creation/edit/group-name drafts use useGuardedClose for X /
+Cancel; Keep Editing preserves the underlying form. Pending form requests block
+closing. Message deletion and group membership/blocking confirmations use the
+shared provider. Attachment previews reuse FilePreview's TaskModal and current
+membership authorization. Menus, reaction bars/details and the notification panel
+remain lightweight. No automated interaction checks were run for Messenger.

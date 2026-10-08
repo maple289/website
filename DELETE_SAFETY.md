@@ -100,3 +100,17 @@ account deletion invalidates their cache through database triggers/cascades.
 The preview worker removes cached PDFs through the Storage API and retries failed
 cleanup. Cancellation terminates the decoder before temporary files are removed.
 This internal cleanup never deletes or modifies original uploaded documents.
+
+## Messenger
+
+Message Delete/Retry Deletion, Discard Pending Draft, Remove Group Member, Leave Group and Block User
+are routed through `useDeleteConfirmation`; the mutation occurs only in
+`onConfirm`. Message warnings name the text/attachment and accurately describe
+message/reaction/attachment removal while preserving replies without the quote.
+Membership removal/leave revoke access and retain history; blocking retains
+history and leaves groups unaffected. Failures keep the confirmation available.
+The server checks the authenticated author/membership or group role independently.
+Unsent attachment cancellation targets only newly reserved uncommitted objects;
+derived-cache/reservation cleanup is internal and cannot delete library content.
+Message reaction removal uses the existing immediate reversible-toggle exception,
+with a pending guard and one database reaction per user/message.

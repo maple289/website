@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ArrowLeft, KeyRound, Loader as Loader2, ShieldCheck, Eye, EyeOff, Lock, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { MessageBell } from '@/components/MessageBell';
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -113,6 +114,7 @@ export function SettingsPage() {
             <ShieldCheck size={20} className="text-white" />
           </div>
           <span className="text-[19px] font-semibold tracking-[-0.04em]">Settings</span>
+          <div className="ml-auto"><MessageBell /></div>
         </div>
       </header>
 

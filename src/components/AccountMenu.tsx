@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BarChart3, LogOut, UserRound, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
+import { MessageBell } from '@/components/MessageBell';
 
 type AccountMenuProps = {
   onSignIn: () => void;
@@ -40,7 +41,7 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
   const initial = email.charAt(0).toUpperCase() || 'U';
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="flex items-center gap-2"><MessageBell /><div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
         aria-label="Account menu"
@@ -74,6 +75,6 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
           </button>
         </div>
       )}
-    </div>
+    </div></div>
   );
 }
