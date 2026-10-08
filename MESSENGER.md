@@ -134,7 +134,11 @@ data or services were changed during this implementation.
    an older existing installation may need a Realtime upgrade first.
 4. Include `deploy/messenger.compose.yml` in the runtime stack. The deploy script
    seeds only a missing Realtime tenant, then disables `SEED_SELF_HOST` and sets
-   `private_only=true`. The stock seed otherwise **recreates** the tenant on
+   `private_only=true` through the deployment-only `supabase_admin` connection
+   before application migrations. The migration verifies this setting without
+   trying to update the internal tenant table as the restricted `postgres` role.
+   No new tenant-table permissions are granted to application/API roles.
+   The stock seed otherwise **recreates** the tenant on
    restart and resets this security setting. The script restarts Realtime to
    clear its cached tenant settings. Use the same override for later service
    operations; do not reseed an existing tenant.

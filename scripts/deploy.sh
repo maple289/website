@@ -30,6 +30,24 @@ runtime_stack() {
     -f "$project_root/deploy/analytics-collector.compose.yml" \
     -f "$project_root/deploy/messenger.compose.yml" "$@"
 }
+# Realtime owns its internal tenant table. Keep this deployment-only change on
+# its administrative connection; postgres migrations and API roles need no
+# additional UPDATE permission on _realtime.tenants.
+enforce_private_realtime() {
+  runtime_stack exec -T db psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+DO $$ BEGIN
+  IF to_regclass('_realtime.tenants') IS NULL OR NOT EXISTS(
+    SELECT 1 FROM information_schema.columns WHERE table_schema='_realtime'
+      AND table_name='tenants' AND column_name='private_only') THEN
+    RAISE EXCEPTION 'Upgrade Realtime to support private_only before enabling Messenger';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM _realtime.tenants) THEN
+    RAISE EXCEPTION 'Initialize the Realtime tenant before enabling Messenger';
+  END IF;
+  UPDATE _realtime.tenants SET private_only=true WHERE private_only IS DISTINCT FROM true;
+END $$;
+SQL
+}
 # Build the decoder before changing upload policies. A failed build must not
 # switch the database to a queue that has no worker image.
 runtime_stack build media-worker file-preview-worker analytics-collector
@@ -56,12 +74,13 @@ elif [ "$(runtime_stack exec -T db psql -U postgres -d postgres -tAc 'SELECT cou
   export STREAMLY_REALTIME_SEED=true
 fi
 runtime_stack up -d --wait --wait-timeout 180 realtime
+enforce_private_realtime
 
 STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/apply-migrations.sh"
 STREAMLY_RUNTIME_DIR="$runtime_dir" "$project_root/scripts/sync-functions.sh"
 export STREAMLY_REALTIME_SEED=false
 # Enforce again on deploy, including recovery from an external tenant reseed.
-runtime_stack exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'UPDATE _realtime.tenants SET private_only=true WHERE private_only IS DISTINCT FROM true'
+enforce_private_realtime
 runtime_stack up -d
 runtime_stack restart functions realtime
 runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector

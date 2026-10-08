@@ -34,7 +34,7 @@ jobs:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       - name: Check out validated commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ env.DEPLOY_SHA }}
           fetch-depth: 1

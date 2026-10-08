@@ -502,7 +502,14 @@ DO $$ BEGIN
     IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='_realtime' AND table_name='tenants' AND column_name='private_only') THEN
       RAISE EXCEPTION 'Upgrade Realtime to support private_only before enabling Messenger';
     END IF;
-    EXECUTE 'UPDATE _realtime.tenants SET private_only=true WHERE private_only IS DISTINCT FROM true';
+    -- Runtime configuration is installed by deploy.sh using supabase_admin.
+    -- Application migrations run as postgres, which cannot update this table.
+    -- This initial migration failed transactionally before being applied; keep
+    -- its safety check while separating tenant administration from app DDL.
+    IF NOT EXISTS(SELECT 1 FROM _realtime.tenants) OR
+      EXISTS(SELECT 1 FROM _realtime.tenants WHERE private_only IS DISTINCT FROM true) THEN
+      RAISE EXCEPTION 'Enable private Realtime access using scripts/deploy.sh before enabling Messenger';
+    END IF;
   END IF;
 END $$;
 

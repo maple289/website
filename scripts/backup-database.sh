@@ -28,6 +28,8 @@ trap 'rm -f "$sql_file" "$sql_file.gz"' EXIT INT TERM
 docker compose --env-file "$runtime_env" -f "$compose_file" exec -T db \
   pg_dumpall -U postgres > "$sql_file"
 gzip -9 "$sql_file"
+# Verify the recoverable dump before a deployment starts schema changes.
+gzip -t "$sql_file.gz"
 mv "$sql_file.gz" "$backup_file"
 trap - EXIT INT TERM
 
