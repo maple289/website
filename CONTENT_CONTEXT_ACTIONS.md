@@ -7,6 +7,11 @@ outside dismissal and closing after selection. Task dialogs retain the shared
 modal safety rules. Menu capabilities come from ownership and the current scope;
 the existing database and Storage authorization still decide every mutation.
 
+The shared three-dot button uses a 75%-transparent fill with fully visible dots,
+a contrasting circular border and a light outer edge so it remains recognizable
+on thumbnails and plain file cards. Hover/open states retain the transparent fill;
+the action list remains opaque. Coarse pointers use a 44px target.
+
 Files/Folders alone have Move, Copy and Paste. Copy stores one owned item in a
 memory-only, account-bound clipboard. Paste immediately starts copying to the
 current folder; Move uses a paginated destination folder picker. The server plans

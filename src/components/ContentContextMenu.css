@@ -1,5 +1,29 @@
-.content-menu-trigger { display: inline-flex; flex-shrink: 0; width: 32px; height: 32px; align-items: center; justify-content: center; border: 1px solid #dce5ef; border-radius: 50%; background: #fffffff2; color: #52657a; box-shadow: 0 1px 5px #233e6012; cursor: pointer; }
-.content-menu-trigger:hover, .content-menu-trigger[aria-expanded='true'] { background: #edf3fb; color: #245f9f; }
+.content-menu-trigger {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgb(73 93 117 / 75%);
+  border-radius: 50%;
+  /* Only the fill is 75% transparent; the circle and dots stay recognizable. */
+  background: rgb(255 255 255 / 25%);
+  color: #223348;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 65%), 0 2px 6px rgb(15 35 68 / 20%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background-color 160ms, border-color 160ms, color 160ms, box-shadow 160ms;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.content-menu-trigger:hover, .content-menu-trigger[aria-expanded='true'] {
+  background: rgb(237 243 251 / 25%);
+  border-color: #245f9f;
+  color: #245f9f;
+}
+.content-menu-trigger > svg { flex-shrink: 0; filter: drop-shadow(0 1px 1px rgb(255 255 255 / 75%)); }
 .content-menu-trigger:focus-visible, .content-menu button:focus-visible { outline: 2px solid #3579ca; outline-offset: 2px; }
 .mg-card { position: relative; }
 .content-menu-card { position: absolute; right: 8px; top: 8px; z-index: 12; }
@@ -17,4 +41,6 @@
 .content-task-panel button { min-height: 44px; border: 1px solid #dce5ef; border-radius: 8px; padding: 8px 14px; margin: 4px; }
 .content-task-panel button:disabled { opacity: .5; }
 .content-task-panel [role='alert'] { color: #b83b4b; }
-@media (pointer: coarse) { .content-menu-trigger { width: 40px; height: 40px; }.content-menu button { min-height: 44px; } }
+@media (pointer: coarse) { .content-menu-trigger { width: 44px; height: 44px; }.content-menu button { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .content-menu-trigger { transition: none; } }
+@media (forced-colors: active) { .content-menu-trigger { border-color: ButtonText; background: ButtonFace; color: ButtonText; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }.content-menu-trigger > svg { filter: none; } }
