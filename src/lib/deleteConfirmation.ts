@@ -8,7 +8,8 @@ export type DeleteConfirmation = {
   cancelLabel?: string;
   processingLabel?: string;
   tone?: 'destructive' | 'primary';
-  onConfirm: () => Promise<void>;
+  choices?: { id: string; label: string; details: string }[];
+  onConfirm: (choice?: string) => Promise<void>;
 };
 export const DeleteConfirmationContext = createContext<{
   requestDelete: (options: DeleteConfirmation) => Promise<boolean>;

@@ -12,6 +12,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
   const running = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [choice, setChoice] = useState('');
   const panel = useRef<HTMLDivElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const heading = useId();
@@ -23,7 +24,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
     return new Promise<boolean>((resolve) => {
       const next = { ...options, resolve };
       active.current = next;
-      setError(''); setPending(next);
+      setError(''); setChoice(options.choices?.[0]?.id ?? ''); setPending(next);
     });
   }, []);
   const finish = (confirmed: boolean) => {
@@ -39,7 +40,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
     if (!operation || running.current) return;
     running.current = true; setBusy(true); setError('');
     panel.current?.focus();
-    try { await operation.onConfirm(); finish(true); }
+    try { await operation.onConfirm(operation.choices ? choice : undefined); finish(true); }
     catch (cause) {
       const message = cause && typeof cause === 'object' && 'message' in cause ? String(cause.message) : '';
       setError(message || 'Unable to delete this item. Please try again.');
@@ -58,6 +59,13 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
         <div id={description} className="mt-3 space-y-3 break-words text-sm leading-6 text-slate-600">
           <p>{pending.message}</p>{pending.details && <p className="whitespace-pre-line">{pending.details}</p>}
         </div>
+        {pending.choices && <fieldset className="mt-4 space-y-2">
+          <legend className="mb-2 text-sm font-semibold">Who should this affect?</legend>
+          {pending.choices.map(option => <label key={option.id} className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${choice === option.id ? 'border-blue-400 bg-blue-50' : 'border-slate-200'}`}>
+            <input type="radio" name={`${heading}-scope`} value={option.id} checked={choice === option.id} disabled={busy} onChange={() => setChoice(option.id)} className="mt-1 h-4 w-4 shrink-0" />
+            <span><strong className="block">{option.label}</strong><span className="mt-1 block text-slate-600">{option.details}</span></span>
+          </label>)}
+        </fieldset>}
         {error && <p role="alert" className="mt-4 break-words rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button ref={cancel} type="button" disabled={busy} onClick={() => { if (!running.current) finish(false); }}
@@ -65,7 +73,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
           <button type="button" disabled={busy} onClick={() => void confirm()}
             className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white disabled:opacity-60 ${pending.tone === 'primary' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
             {busy ? <Loader2 aria-hidden="true" size={17} className="animate-spin" /> : pending.tone === 'primary' ? <Check aria-hidden="true" size={17} /> : <Trash2 aria-hidden="true" size={17} />}
-            {busy ? pending.processingLabel ?? 'Deleting…' : pending.confirmLabel ?? 'Delete'}
+            {busy ? pending.processingLabel ?? 'Deleting…' : pending.choices?.find(option => option.id === choice)?.label ?? pending.confirmLabel ?? 'Delete'}
           </button>
         </div>
       </div>

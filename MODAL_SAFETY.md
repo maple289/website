@@ -66,3 +66,8 @@ closing. Message deletion and group membership/blocking confirmations use the
 shared provider. Attachment previews reuse FilePreview's TaskModal and current
 membership authorization. Menus, reaction bars/details and the notification panel
 remain lightweight. No automated interaction checks were run for Messenger.
+
+Scoped message deletion, Clear Messages and Delete Chat use the same confirmation
+provider with explicit radio choices and a scope-labelled confirmation button.
+Choosing a scope alone does not mutate data. Cancel/outside/Escape/pending behavior,
+focus containment and scroll locking remain in the existing shared modal layer.

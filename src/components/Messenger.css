@@ -28,3 +28,4 @@
 @media(prefers-reduced-motion:reduce){.chat-reaction-menu button{transition:none}}
 
 .chat-reaction-details{max-height:min(200px,45dvh);overflow-y:auto}.chat-reaction-menu button{flex-shrink:0}
+.chat-deleted-message{font-style:italic;color:var(--fluent-muted,#52657a)}

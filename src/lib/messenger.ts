@@ -7,8 +7,8 @@ export type ChatUser = { id: string; name: string };
 export type ChatMember = ChatUser & { role: 'owner' | 'admin' | 'member'; joined_sequence: number; delivered_sequence: number; read_sequence: number; online: boolean; last_seen: string | null; blocked: boolean };
 export type ChatAttachment = { id: string; name: string; mime_type: string; file_size: number; available?: boolean };
 export type ChatReaction = { user_id: string; name: string; reaction: string };
-export type ChatMessage = { id: string; conversation_id: string; sender_id: string | null; sender_name: string; sequence: number; body: string; created_at: string; edited_at: string | null; deleting: boolean; reply: { id: string; sender_name: string; body: string } | null; attachments: ChatAttachment[]; reactions: ChatReaction[] };
-export type Conversation = { id: string; kind: 'direct' | 'group'; name: string; updated_at: string; last_sequence: number; muted: boolean; role: ChatMember['role']; can_send: boolean; unread: number; latest: ChatMessage | null; members: ChatMember[] };
+export type ChatMessage = { id: string; conversation_id: string; sender_id: string | null; sender_name: string; sequence: number; body: string; created_at: string; edited_at: string | null; deleting: boolean; deleted: boolean; reply: { id: string; sender_name: string; body: string } | null; attachments: ChatAttachment[]; reactions: ChatReaction[] };
+export type Conversation = { id: string; kind: 'direct' | 'group'; name: string; updated_at: string; last_sequence: number; cleared_sequence: number; hidden: boolean; muted: boolean; role: ChatMember['role']; can_send: boolean; unread: number; latest: ChatMessage | null; members: ChatMember[] };
 export type ChatEvent = { conversation_id: string; message_id?: string | null; kind?: string };
 export const chatReactions = [
   { id: 'like', emoji: '👍', name: 'Like' }, { id: 'love', emoji: '❤️', name: 'Love' },

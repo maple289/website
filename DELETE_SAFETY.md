@@ -103,13 +103,24 @@ This internal cleanup never deletes or modifies original uploaded documents.
 
 ## Messenger
 
-Message Delete/Retry Deletion, Discard Pending Draft, Remove Group Member, Leave Group and Block User
+Message Delete/Retry Deletion, Clear Messages, Delete Chat, Discard Pending Draft, Remove Group Member, Leave Group and Block User
 are routed through `useDeleteConfirmation`; the mutation occurs only in
 `onConfirm`. Message warnings name the text/attachment and accurately describe
-message/reaction/attachment removal while preserving replies without the quote.
+the selected per-user/everyone scope. Single-message deletion for everyone retains
+a “This message was deleted.” placeholder and reply IDs. Clear Messages counts
+the affected history and captures its last sequence before confirmation; later
+messages survive. Direct-chat deletion for oneself hides only that inbox entry,
+preserves history and permits a new message to restore the chat. Group deletion
+for oneself leaves the group; group deletion for everyone requires Owner/Admin.
+All scope choices use the shared confirmation and mutate only inside `onConfirm`.
+Saved hide state, history cutoffs and text-free request receipts make retries safe.
+Everyone deletion atomically revokes attachment/preview access, removes reactions
+and queues permanent source/cache cleanup in the existing retryable worker queues.
 Membership removal/leave revoke access and retain history; blocking retains
 history and leaves groups unaffected. Failures keep the confirmation available.
 The server checks the authenticated author/membership or group role independently.
+Search, history, snapshots, shared files, attachment downloads/previews and unread
+counts use the same per-user visibility rules; hides never delete others' data.
 Unsent attachment cancellation targets only newly reserved uncommitted objects;
 derived-cache/reservation cleanup is internal and cannot delete library content.
 Message reaction removal uses the existing immediate reversible-toggle exception,

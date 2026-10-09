@@ -44,29 +44,13 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true });
       }
       if (body.action !== "delete" || !uuid(body.id)) return json({ message: "Invalid operation" }, 400);
-      const { data: plan, error: planError } = await client.rpc("messenger_rpc", { p_action: "delete-plan", p_conversation: body.conversation_id, p_data: { id: body.id } });
-      if (planError) return json({ message: "Message unavailable or you cannot delete it." }, 403);
-      // A deletion can be retried after partial cleanup or a lost HTTP response.
-      // Database rows remain until Storage confirms removal. The RPC checks the
-      // current membership and message author again before finalizing.
-      for (const item of plan ?? []) {
-        const { error } = await service.storage.from("messenger-attachments").remove([item.path]);
-        if (error) {
-          console.error(JSON.stringify({ operation: "messenger_delete_attachment", id: body.id, type: error.name }));
-          return json({ message: "Deletion is incomplete. Some attachments may already be removed. Retry to finish deleting this message." }, 503);
-        }
-        if (item.previews?.length) {
-          const { error: previewError } = await service.storage.from("file-previews").remove(item.previews);
-          if (previewError) {
-            console.error(JSON.stringify({ operation: "messenger_delete_preview", id: body.id, type: previewError.name }));
-            return json({ message: "Attachment cleanup is incomplete. Retry to finish deleting this message." }, 503);
-          }
-        }
-      }
-      const { error } = await client.rpc("messenger_rpc", { p_action: "delete-message", p_conversation: body.conversation_id, p_data: { id: body.id } });
+      // Compatibility for older cards: use the same session-bound atomic
+      // deletion as the new menu. Private bytes become inaccessible immediately;
+      // the existing durable cleanup queues remove source/cache files with retry.
+      const { error } = await client.rpc("messenger_rpc", { p_action: "delete-for-everyone", p_conversation: body.conversation_id, p_data: { id: body.id } });
       if (error) {
         console.error(JSON.stringify({ operation: "messenger_delete_record", id: body.id, code: error.code }));
-        return json({ message: "Deletion is incomplete. Retry to finish deleting this message." }, 503);
+        return json({ message: error.code === "42501" ? "Message unavailable or you cannot delete it." : "Unable to delete this message. Please try again." }, error.code === "42501" ? 403 : 503);
       }
       return json({ ok: true });
     }

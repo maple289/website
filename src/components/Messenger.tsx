@@ -7,7 +7,7 @@ import { ContentContextMenu, type ContentAction } from '@/components/ContentCont
 import { FileTypeIcon } from '@/components/FileTypeIcon';
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { filePreviewKind } from '@/lib/filePreviews';
-import { attachmentEntry, ChatRequestError, chatError, chatOperation, chatPreview, chatReactions, chatRequest, chatRequestId, chatSize, chatVideo, downloadChatAttachment, openConversation, uploadChatAttachment, type ChatAttachment, type ChatMessage, type Conversation, type PendingAttachment } from '@/lib/messenger';
+import { attachmentEntry, ChatRequestError, chatError, chatPreview, chatReactions, chatRequest, chatRequestId, chatSize, chatVideo, downloadChatAttachment, openConversation, uploadChatAttachment, type ChatAttachment, type ChatMessage, type Conversation, type PendingAttachment } from '@/lib/messenger';
 import { BlockedUsers, ChatDialog, ConversationSearch, EditMessage, GroupInformation, NewConversation, SharedChatFiles } from './MessengerDialogs';
 import './Messenger.css';
 
@@ -30,12 +30,12 @@ export function Messenger() {
   }, [query, conversations]);
   const loadMore = async () => { if (listLoading) return; setListLoading(true); try { const data = await chatRequest<{ conversations: Conversation[] }>('inbox', null, { query, offset: list.length }); setList(current => [...new Map([...current, ...data.conversations].map(item => [item.id, item])).values()]); setMore(data.conversations.length === 50); } catch (cause) { setListError(chatError(cause)); } finally { setListLoading(false); } };
   if (!user) return null;
-  return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations · <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
+  return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations В· <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
     {error && <p className="chat-error chat-service-error" role="alert">{error} <button onClick={() => void refresh()}>Retry</button></p>}
     <div className="chat-workspace"><aside className="chat-conversation-list" aria-label="Conversations"><label className="chat-search"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} /></label><div className="chat-inbox-items">
       {list.map(item => <button key={item.id} className={`chat-inbox-item ${selected === item.id ? 'is-active' : ''}`} aria-current={selected === item.id ? 'page' : undefined} onClick={() => openConversation(item.id)}><span className="chat-avatar">{item.kind === 'group' ? <Users size={19} /> : item.name[0]?.toUpperCase()}<i data-online={item.members.some(member => member.id !== user.id && member.online)} /></span><span className="chat-inbox-text"><strong>{item.name}{item.muted && <BellOff size={13} />}</strong><span>{item.latest?.body || (item.latest?.attachments.length ? 'Sent an attachment' : 'No messages yet')}</span></span>{item.unread > 0 && <span className="chat-count">{item.unread > 99 ? '99+' : item.unread}</span>}</button>)}
       {!list.length && !listLoading && <p className="chat-empty">{query ? 'No matching conversations.' : 'Start a conversation with a registered user.'}</p>}
-      {listLoading && <p role="status" className="chat-empty">Loading…</p>}{more && !listLoading && <button className="chat-load-more" onClick={() => void loadMore()}>More conversations</button>}{listError && <p className="chat-error" role="alert">{listError}</p>}
+      {listLoading && <p role="status" className="chat-empty">LoadingвЂ¦</p>}{more && !listLoading && <button className="chat-load-more" onClick={() => void loadMore()}>More conversations</button>}{listError && <p className="chat-error" role="alert">{listError}</p>}
     </div></aside>
       {selected ? <ConversationPane key={selected} id={selected} revision={revision} drafts={drafts.current} /> : <div className="chat-welcome"><MessageCircle size={48} /><h2>Your conversations</h2><p>Select a conversation or start a new message.</p><button className="chat-primary" onClick={() => setNewChat(true)}>New conversation</button></div>}
     </div>
@@ -50,6 +50,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
   const [draft, setDraft] = useState<Draft>(() => drafts.get(id) ?? newDraft()), [sending, setSending] = useState(false), [preview, setPreview] = useState<ChatAttachment | null>(null), [edit, setEdit] = useState<ChatMessage | null>(null), [dialog, setDialog] = useState<'info' | 'search' | 'files' | null>(null);
   const viewport = useRef<HTMLDivElement>(null), filePicker = useRef<HTMLInputElement>(null), input = useRef<HTMLTextAreaElement>(null), loaded = useRef<ChatMessage[]>([]), alive = useRef(true), fetching = useRef(false), refreshAgain = useRef(false), atBottom = useRef(true), readSequence = useRef(0), pending = useRef(false), uploads = useRef(new Map<string, AbortController>()), downloadPending = useRef(new Set<string>());
   const draftRef = useRef(draft);
+  const preparingDelete = useRef(false);
   const updateDraft = (update: (current: Draft) => Draft) => { const next = update(draftRef.current); draftRef.current = next; drafts.set(id, next); setDraft(next); };
   const replaceMessages = (rows: ChatMessage[]) => { loaded.current = rows; setMessages(rows); };
   const sync = useCallback(async () => {
@@ -75,12 +76,18 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
         }
       }
       if (!alive.current) return;
+      if (info.hidden) { setConversation(null); replaceMessages([]); setPreview(null); setDialog(null); openConversation(); return; }
       const combined = [...new Map([...(resetWindow ? [] : snapshot), ...added, ...latest].map(item => [item.id, item])).values()].sort((a, b) => a.sequence - b.sequence);
       const rows = bottom ? combined.slice(-500) : combined.slice(0, 500);
+      const replied = draftRef.current.reply;
+      if (replied && !draftRef.current.uncertain && !pending.current && (replied.sequence <= info.cleared_sequence || (previous.some(item => item.id === replied.id) && !rows.some(item => item.id === replied.id && !item.deleted && !item.deleting)))) {
+        updateDraft(current => ({ ...current, reply: null }));
+      }
+      setPreview(current => current && previous.some(item => item.attachments.some(attachment => attachment.id === current.id)) && !rows.some(item => item.attachments.some(attachment => attachment.id === current.id)) ? null : current);
       setConversation(info); replaceMessages(rows); setError(''); setInitial(false);
       if (!previous.length || resetWindow) setHasOlder(latest.length === 50);
       if (bottom) requestAnimationFrame(() => { viewport.current?.scrollTo({ top: viewport.current.scrollHeight }); markRead(); });
-    } catch (cause) { if (alive.current) { setError(chatError(cause)); setInitial(false); if (cause instanceof ChatRequestError && cause.code === '42501') { setConversation(null); replaceMessages([]); setPreview(null); setDialog(null); setEdit(null); } } }
+    } catch (cause) { if (alive.current) { setError(chatError(cause)); setInitial(false); if (cause instanceof ChatRequestError && cause.code === '42501') { setConversation(null); replaceMessages([]); setPreview(null); setDialog(null); setEdit(null); openConversation(); } } }
     finally { fetching.current = false; if (refreshAgain.current && alive.current) { refreshAgain.current = false; void sync(); } }
     // Mutable refs deliberately preserve the loaded window and scroll position.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +165,48 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
       updateDraft(current => ({ ...current, uncertain })); setError(`${chatError(cause)}${uncertain ? ' Use Retry Send to resolve this message without sending it twice.' : ''}`);
     } finally { pending.current = false; setSending(false); }
   };
-  const deleteMessage = (message: ChatMessage) => { void requestDelete({ title: 'Delete message', message: `Permanently delete your message "${message.body.slice(0, 80) || message.attachments[0]?.name || 'Attachment'}"?`, details: 'This removes the message, its reactions and attached files for all conversation members. Replies remain, without the deleted quote.', onConfirm: async () => { await chatOperation('delete', { conversation_id: id, id: message.id }); replaceMessages(loaded.current.filter(item => item.id !== message.id)); await changed(); } }); };
+  const deleteMessage = (message: ChatMessage) => {
+    void requestDelete({ title: 'Delete message', message: `Delete "${message.body.slice(0, 80) || message.attachments[0]?.name || 'Attachment'}"?`,
+      choices: [{ id: 'self', label: 'Delete for myself', details: 'Hide this message and its attachments only for you. Other participants keep their messages.' },
+        ...(message.sender_id === user?.id && !message.deleted ? [{ id: 'everyone', label: 'Delete for everyone', details: 'Replace this message with вЂњThis message was deleted.вЂќ for everyone. Its reactions are removed and attachments become inaccessible immediately, with permanent storage cleanup queued. This cannot be undone.' }] : [])],
+      onConfirm: async scope => {
+        await chatRequest(scope === 'everyone' ? 'delete-for-everyone' : 'delete-for-self', id, { id: message.id });
+        if (draftRef.current.reply?.id === message.id && !draftRef.current.uncertain && !pending.current) updateDraft(current => ({ ...current, reply: null }));
+        setPreview(current => message.attachments.some(attachment => attachment.id === current?.id) ? null : current);
+        await changed();
+      },
+    });
+  };
+  const deleteHistory = async (action: 'clear-messages' | 'delete-chat') => {
+    if (!conversation || preparingDelete.current) return;
+    preparingDelete.current = true;
+    try {
+      const counts = await chatRequest<{ sequence: number; own_count: number; everyone_count: number }>('deletion-info', id);
+      if (!alive.current) return;
+      const group = conversation.kind === 'group', clear = action === 'clear-messages';
+      // Capture the retry identity outside onConfirm. A lost response/retry cannot
+      // clear new messages or delete a subsequently reopened chat.
+      const clientId = chatRequestId();
+      const canEveryone = clear ? !group || conversation.role !== 'member' : group && conversation.role !== 'member';
+      void requestDelete({ title: clear ? 'Clear messages' : 'Delete chat', message: `${clear ? 'Clear the message history in' : 'Delete the chat'} "${conversation.name}"?`,
+        choices: [{ id: 'self', label: clear ? 'Clear for myself' : 'Delete for myself', details: clear
+          ? `Hide ${counts.own_count} existing messages and their attachments only for you. Other participants keep their messages. New messages remain visible.`
+          : group ? `Leave this group and remove it from your conversation list. Other members keep their messages.${conversation.role === 'owner' ? ' Ownership passes to the oldest administrator or member.' : ''}`
+            : 'Remove this chat from your conversation list only. Other participants keep their messages. A new message will make the chat reappear, with its history preserved.' },
+          ...(canEveryone ? [{ id: 'everyone', label: clear ? 'Clear for everyone' : 'Delete for everyone', details: clear
+            ? `Permanently clear ${counts.everyone_count} existing messages for all participants. Attachments become inaccessible immediately and are queued for permanent storage cleanup. New messages sent afterward remain. This cannot be undone.`
+            : `Permanently delete this group, its ${counts.everyone_count} messages and reactions for all members. Attachments become inaccessible immediately and are queued for permanent storage cleanup. This cannot be undone.` }] : [])],
+        processingLabel: clear ? 'ClearingвЂ¦' : 'DeletingвЂ¦',
+        onConfirm: async scope => {
+          await chatRequest(action, id, { scope: scope === 'everyone' ? 'everyone' : 'self', client_id: clientId, through_sequence: counts.sequence });
+          setPreview(null); setDialog(null);
+          if (clear) { if (!draftRef.current.uncertain && !pending.current) updateDraft(current => ({ ...current, reply: null })); await changed(); }
+          else { openConversation(); await refresh(); }
+        },
+      });
+    } catch (cause) { if (alive.current) setError(chatError(cause)); }
+    finally { preparingDelete.current = false; }
+  };
   const discardPending = () => { void requestDelete({ title: 'Discard pending draft?', message: 'Discard this message draft and its unsent attachments?', details: 'If this message was already delivered, it stays in the conversation. A late retry of this draft will be cancelled.', confirmLabel: 'Discard Draft', onConfirm: async () => { const outgoing = draftRef.current; await chatRequest('cancel-send', id, { client_id: outgoing.nonce, attachments: outgoing.attachments.filter(item => item.state === 'ready').map(item => item.id) }); updateDraft(() => newDraft()); await changed(); } }); };
   const leave = () => { if (!conversation) return; void requestDelete({ title: 'Leave group', message: `Leave "${conversation.name}"?`, details: `You will lose access to the conversation and its attachments. Your messages remain.${conversation.role === 'owner' ? ' Ownership will pass to the oldest administrator or member.' : ''}`, confirmLabel: 'Leave Group', onConfirm: async () => { await chatRequest('leave', id); drafts.delete(id); openConversation(); await refresh(); } }); };
   const toggleBlock = () => { const other = conversation?.members.find(item => item.id !== user?.id); if (!other) return;
@@ -169,6 +217,8 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
     { id: 'search', label: 'Search conversation', icon: <Search size={17} />, run: () => setDialog('search') },
     { id: 'files', label: 'Shared media & files', icon: <FileSearch size={17} />, run: () => setDialog('files') },
     { id: 'mute', label: conversation.muted ? 'Unmute notifications' : 'Mute notifications', icon: <BellOff size={17} />, run: () => { void chatRequest('mute', id, { muted: !conversation.muted }).then(changed).catch(cause => setError(chatError(cause))); } },
+    { id: 'clear', label: 'Clear messages', icon: <Trash2 size={17} />, danger: true, run: () => { void deleteHistory('clear-messages'); } },
+    { id: 'delete-chat', label: 'Delete chat', icon: <Trash2 size={17} />, danger: true, run: () => { void deleteHistory('delete-chat'); } },
     ...(conversation.kind === 'group' ? [{ id: 'leave', label: 'Leave group', danger: true, run: leave }] : [{ id: 'block', label: conversation.members.some(item => item.id !== user?.id && item.blocked) ? 'Unblock user' : 'Block user', icon: <ShieldOff size={17} />, run: toggleBlock }]),
   ] : [];
   const typingNames = conversation?.members.filter(member => member.id !== user?.id && typing.some(item => item.conversation_id === id && item.user_id === member.id)).map(item => item.name) ?? [];
@@ -176,41 +226,43 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
   const entry = useMemo(() => preview ? attachmentEntry(preview) : null, [preview]);
   return <div className="chat-pane"><header className="chat-thread-header"><button className="chat-mobile-back" aria-label="Back to conversations" onClick={() => openConversation()}><ArrowLeft size={20} /></button><span className="chat-avatar">{conversation?.kind === 'group' ? <Users size={19} /> : conversation?.name[0]?.toUpperCase() || <MessageCircle size={19} />}</span><div><h2>{conversation?.name || 'Conversation'}</h2><p>{conversation?.kind === 'group' ? `${conversation.members.length} members` : other?.online ? 'Online' : other?.last_seen ? `Last seen ${new Date(other.last_seen).toLocaleString()}` : 'Offline'}</p></div>{conversation && <ContentContextMenu name={conversation.name} actions={actions} />}</header>
     {error && <p className="chat-error" role="alert">{error}<button onClick={() => void sync()}>Refresh conversation</button></p>}
-    {away && <button className="chat-load-more" onClick={() => { if (fetching.current) return; atBottom.current = true; setAway(false); loaded.current = []; void sync(); }}>Go to latest messages{conversation && conversation.last_sequence > (messages[messages.length - 1]?.sequence ?? 0) ? ' · New messages' : ''}</button>}
+    {away && <button className="chat-load-more" onClick={() => { if (fetching.current) return; atBottom.current = true; setAway(false); loaded.current = []; void sync(); }}>Go to latest messages{conversation && conversation.last_sequence > (messages[messages.length - 1]?.sequence ?? 0) ? ' В· New messages' : ''}</button>}
     <div className="chat-message-list" ref={viewport} onScroll={() => { const node = viewport.current; if (!node) return; atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80 && (loaded.current[loaded.current.length - 1]?.sequence ?? 0) >= (conversation?.latest?.sequence ?? 0); setAway(!atBottom.current); markRead(); if (!atBottom.current && node.scrollTop < 30) void loadOlder(); }}>
-      {initial ? <p role="status" className="chat-empty"><LoaderCircle size={22} className="animate-spin" />Loading messages…</p> : <>
-        {hasOlder && messages.length > 0 && <button className="chat-load-more" disabled={olderBusy} onClick={() => void loadOlder()}>{olderBusy ? 'Loading…' : 'Load older messages'}</button>}
+      {initial ? <p role="status" className="chat-empty"><LoaderCircle size={22} className="animate-spin" />Loading messagesвЂ¦</p> : <>
+        {hasOlder && messages.length > 0 && <button className="chat-load-more" disabled={olderBusy} onClick={() => void loadOlder()}>{olderBusy ? 'LoadingвЂ¦' : 'Load older messages'}</button>}
         {!messages.length && conversation && <p className="chat-empty">No messages yet. Say hello.</p>}
         {messages.map(message => <MessageItem key={message.id} message={message} conversation={conversation} own={message.sender_id === user?.id} reply={() => { if (!draftRef.current.uncertain) { updateDraft(current => ({ ...current, reply: message })); input.current?.focus(); } }} edit={() => setEdit(message)} remove={() => deleteMessage(message)} preview={setPreview} download={attachment => void download(attachment)} changed={changed} />)}
       </>}
     </div>
-    <div className="chat-typing" role="status">{typingNames.length ? `${typingNames.slice(0, 3).join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing…` : ''}</div>
+    <div className="chat-typing" role="status">{typingNames.length ? `${typingNames.slice(0, 3).join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typingвЂ¦` : ''}</div>
     {conversation && <form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
       {!conversation.can_send && <p className="chat-help">Messaging is unavailable. A member may be blocked or inactive.</p>}
       {draft.uncertain && <button type="button" disabled={sending} className="chat-danger chat-load-more" onClick={discardPending}>Discard pending draft</button>}
       {draft.reply && <div className="chat-reply-draft"><span><strong>Reply to {draft.reply.sender_name}</strong><span>{draft.reply.body.slice(0, 120) || 'Attachment'}</span></span><button type="button" disabled={sending || draft.uncertain} aria-label="Cancel reply" onClick={() => updateDraft(current => ({ ...current, reply: null }))}><X size={17} /></button></div>}
       {!!draft.attachments.length && <div className="chat-pending-files">{draft.attachments.map(item => <div key={item.id}><FileTypeIcon entry={attachmentEntry(item)} size={21} /><span><strong>{item.name}</strong><small>{item.state === 'uploading' ? `Uploading ${item.progress}%` : item.state === 'ready' ? 'Ready to send' : item.error || 'Upload failed'}</small>{item.state === 'uploading' && <progress value={item.progress} max={100} />}</span><button type="button" disabled={sending || draft.uncertain} aria-label={`Remove unsent attachment ${item.name}`} onClick={() => void removeDraftAttachment(item)}><X size={16} /></button></div>)}</div>}
-      <div className="chat-composer-row"><input ref={filePicker} type="file" multiple hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(files); }} /><button type="button" aria-label="Attach files" title="Attach files (100 MB each)" disabled={!conversation.can_send || sending || draft.uncertain} onClick={() => filePicker.current?.click()}><Paperclip size={21} /></button><textarea ref={input} aria-label="Message" placeholder="Type a message…" rows={1} maxLength={10000} value={draft.text} disabled={!conversation.can_send || sending || draft.uncertain} onChange={event => { updateDraft(current => ({ ...current, text: event.target.value })); setTyping(id, !!event.target.value); }} onBlur={() => setTyping(id, false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); void send(); } }} /><button type="submit" className="chat-send" disabled={!conversation.can_send || sending || draft.attachments.some(item => item.state === 'uploading') || (!draft.text.trim() && !draft.attachments.some(item => item.state === 'ready'))} aria-label={draft.uncertain ? 'Retry Send' : 'Send message'} title={draft.uncertain ? 'Retry Send' : 'Send message'}>{sending ? <LoaderCircle size={21} className="animate-spin" /> : <Send size={21} />}{draft.uncertain && <span>Retry Send</span>}</button></div>
+      <div className="chat-composer-row"><input ref={filePicker} type="file" multiple hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(files); }} /><button type="button" aria-label="Attach files" title="Attach files (100 MB each)" disabled={!conversation.can_send || sending || draft.uncertain} onClick={() => filePicker.current?.click()}><Paperclip size={21} /></button><textarea ref={input} aria-label="Message" placeholder="Type a messageвЂ¦" rows={1} maxLength={10000} value={draft.text} disabled={!conversation.can_send || sending || draft.uncertain} onChange={event => { updateDraft(current => ({ ...current, text: event.target.value })); setTyping(id, !!event.target.value); }} onBlur={() => setTyping(id, false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); void send(); } }} /><button type="submit" className="chat-send" disabled={!conversation.can_send || sending || draft.attachments.some(item => item.state === 'uploading') || (!draft.text.trim() && !draft.attachments.some(item => item.state === 'ready'))} aria-label={draft.uncertain ? 'Retry Send' : 'Send message'} title={draft.uncertain ? 'Retry Send' : 'Send message'}>{sending ? <LoaderCircle size={21} className="animate-spin" /> : <Send size={21} />}{draft.uncertain && <span>Retry Send</span>}</button></div>
     </form>}
     {edit && <EditMessage message={edit} close={() => setEdit(null)} saved={() => void changed()} />}
     {dialog === 'info' && conversation && (conversation.kind === 'group' ? <GroupInformation conversation={conversation} close={() => setDialog(null)} changed={changed} /> : <ChatDialog title="Profile" close={() => setDialog(null)}><div className="chat-dialog-body"><h3>{other?.name || 'Deleted user'}</h3><p>{other?.online ? 'Online' : 'Offline'}</p>{other?.last_seen && <p>Last seen {new Date(other.last_seen).toLocaleString()}</p>}</div><footer><button onClick={() => setDialog(null)}>Close</button></footer></ChatDialog>)}
-    {dialog === 'search' && conversation && <ConversationSearch conversation={conversation} close={() => setDialog(null)} reply={message => updateDraft(current => ({ ...current, reply: message }))} />}
-    {dialog === 'files' && conversation && <SharedChatFiles conversation={conversation} close={() => setDialog(null)} preview={setPreview} download={attachment => void download(attachment)} />}
-    {preview && entry && <Suspense fallback={<p role="status">Loading preview…</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}
+    {dialog === 'search' && conversation && <ConversationSearch conversation={conversation} revision={revision} close={() => setDialog(null)} reply={message => updateDraft(current => ({ ...current, reply: message }))} />}
+    {dialog === 'files' && conversation && <SharedChatFiles conversation={conversation} revision={revision} close={() => setDialog(null)} preview={setPreview} download={attachment => void download(attachment)} />}
+    {preview && entry && <Suspense fallback={<p role="status">Loading previewвЂ¦</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}
   </div>;
 }
 
 function MessageItem({ message, conversation, own, reply, edit, remove, preview, download, changed }: { message: ChatMessage; conversation: Conversation | null; own: boolean; reply: () => void; edit: () => void; remove: () => void; preview: (attachment: ChatAttachment) => void; download: (attachment: ChatAttachment) => void; changed: () => Promise<void> }) {
   const others = conversation?.members.filter(member => member.id !== message.sender_id && member.joined_sequence < message.sequence) ?? [];
   const read = others.length > 0 && others.every(member => member.read_sequence >= message.sequence), delivered = others.length > 0 && others.every(member => member.delivered_sequence >= message.sequence);
-  const actions: ContentAction[] = [{ id: 'reply', label: 'Reply', icon: <Reply size={17} />, disabled: message.deleting, run: reply }, ...(own ? [{ id: 'edit', label: 'Edit message', icon: <Pencil size={17} />, disabled: message.deleting, run: edit }, { id: 'delete', label: message.deleting ? 'Retry deletion' : 'Delete message', icon: <Trash2 size={17} />, danger: true, run: remove }] : [])];
+  const actions: ContentAction[] = [{ id: 'reply', label: 'Reply', icon: <Reply size={17} />, disabled: message.deleting || message.deleted, run: reply },
+    ...(own ? [{ id: 'edit', label: 'Edit message', icon: <Pencil size={17} />, disabled: message.deleting || message.deleted, run: edit }] : []),
+    { id: 'delete', label: message.deleting && own ? 'Retry deletion' : 'Delete message', icon: <Trash2 size={17} />, danger: true, run: remove }];
   return <article data-message-id={message.id} className={`chat-message ${own ? 'chat-message-own' : ''}`}><div className="chat-message-bubble"><div className="chat-message-heading"><strong>{own ? 'You' : message.sender_name}</strong><ContentContextMenu name="message" actions={actions} /></div>
     {message.reply && <blockquote><strong>{message.reply.sender_name}</strong><span>{message.reply.body || 'Attachment'}</span></blockquote>}
-    {message.body && <p className="chat-body-text">{message.body}</p>}
-    {message.attachments.map(attachment => <div className="chat-attachment" key={attachment.id}><FileTypeIcon entry={attachmentEntry(attachment)} size={28} /><span><strong>{attachment.name}</strong><small>{chatSize(attachment.file_size)}{!attachment.available || message.deleting ? ' · Unavailable' : ''}</small></span>{filePreviewKind(attachmentEntry(attachment)) && <button aria-label={`Preview ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => preview(attachment)}><Eye size={18} /></button>}<button aria-label={`Download ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => download(attachment)}><Download size={18} /></button></div>)}
+    {message.body && <p className={`chat-body-text ${message.deleted || message.deleting ? 'chat-deleted-message' : ''}`}>{message.body}</p>}
+    {message.attachments.map(attachment => <div className="chat-attachment" key={attachment.id}><FileTypeIcon entry={attachmentEntry(attachment)} size={28} /><span><strong>{attachment.name}</strong><small>{chatSize(attachment.file_size)}{!attachment.available || message.deleting ? ' В· Unavailable' : ''}</small></span>{filePreviewKind(attachmentEntry(attachment)) && <button aria-label={`Preview ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => preview(attachment)}><Eye size={18} /></button>}<button aria-label={`Download ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => download(attachment)}><Download size={18} /></button></div>)}
     {message.deleting && <p className="chat-help">Deletion is incomplete. The author can retry deletion.</p>}
     <footer><time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>{new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{message.edited_at && <span>edited</span>}{own && <span className={read ? 'chat-read' : ''} title={read ? 'Read by all recipients' : delivered ? 'Delivered to all recipients' : 'Sent'} aria-label={read ? 'Read' : delivered ? 'Delivered' : 'Sent'}>{read || delivered ? <CheckCheck size={15} /> : <Check size={15} />}</span>}</footer>
-    {!message.deleting && <MessageReactions message={message} changed={changed} />}
+    {!message.deleting && !message.deleted && <MessageReactions message={message} changed={changed} />}
   </div></article>;
 }
 function MessageReactions({ message, changed }: { message: ChatMessage; changed: () => Promise<void> }) {
