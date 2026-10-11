@@ -52,9 +52,19 @@ recreating the peer connection. Hide self-view sends no media-state update.
 
 ## Validation
 
+Short landscape screens use a compact control row with 44px touch targets and
+a self-view sized to the remaining height. The video stage can shrink instead
+of forcing the footer beyond the phone screen. Device settings scroll while
+the call controls remain pinned. Normal and CSS fullscreen surfaces follow
+visualViewport resize/scroll bounds so browser chrome and keyboard space are
+respected; pinch zoom is preserved. Native fullscreen retains its own viewport.
+
 - `tests/messenger-call-layout.mjs`: actual CallPanel, CallProvider and CallEngine
   with fixture signaling/peers and synthetic media. Desktop, tablet, mobile
-  portrait/landscape; native API and CSS fallback; real browser fullscreen on
+  portrait/landscape, including 568×250, 667×280 and 932×300 short landscape
+  viewports; all controls stay inside the panel, including during device-settings
+  scrolling; reduced visual viewport bounds and pinch zoom; native API and CSS
+  fallback; real browser fullscreen on
   desktop; drag/corner controls and orientation changes; mirrored local view;
   hide/show without changing capture/tracks/peers; camera off retains audio;
   voice and incoming video capture constraints; black video for explicit camera

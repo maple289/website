@@ -8,6 +8,7 @@ import { useModalLayer } from '@/hooks/useModalLayer';
 import { useCallFullscreen } from '@/hooks/useCallFullscreen';
 import { useCallRingtone } from '@/hooks/useCallRingtone';
 import { useVideoTrackState } from '@/hooks/useVideoTrackState';
+import { useVisualViewportBounds } from '@/hooks/useVisualViewportBounds';
 import { openConversation } from '@/lib/messenger';
 import type { CallEngine, CallState } from '@/lib/callEngine';
 import type { CallInfo } from '@/lib/calls';
@@ -104,6 +105,7 @@ function SelfView({ state }: { state: CallState }) {
 function ActiveCall({ call, state, engine }: { call: CallInfo; state: CallState; engine: CallEngine }) {
   const { user } = useAuth();
   const ref = useRef<HTMLElement>(null);
+  useVisualViewportBounds(ref);
   const { fullscreen, enter, exit } = useCallFullscreen(ref);
   useModalLayer(ref, fullscreen);
   const [now, setNow] = useState(Date.now()), [selfVisible, setSelfVisible] = useState(true);
@@ -144,12 +146,12 @@ function ActiveCall({ call, state, engine }: { call: CallInfo; state: CallState;
     <footer className="call-footer">
       {state.error && <p className="call-error" role="alert">{state.error}</p>}
       <div className="call-controls">
-        <button disabled={state.busy} aria-pressed={state.muted} onClick={() => engine.mute()}>{state.muted ? <MicOff size={18} /> : <Mic size={18} />}<span>{state.muted ? 'Unmute' : 'Mute'}</span></button>
-        {video && <><button disabled={state.busy} aria-pressed={!state.camera} onClick={() => void engine.camera()}>{state.camera ? <Video size={18} /> : <VideoOff size={18} />}<span>{state.camera ? 'Camera off' : 'Camera on'}</span></button>
-          <button aria-pressed={!selfVisible} onClick={() => setSelfVisible(v => !v)}>{selfVisible ? <EyeOff size={18} /> : <Eye size={18} />}<span>{selfVisible ? 'Hide self-view' : 'Show self-view'}</span></button>
-          {typeof navigator.mediaDevices?.getDisplayMedia === 'function' && <button disabled={state.busy} aria-pressed={state.sharing} onClick={() => void engine.share()}><MonitorUp size={18} /><span>{state.sharing ? 'Stop sharing' : 'Share screen'}</span></button>}</>}
-        <button aria-expanded={devicesVisible} onClick={() => setDevicesVisible(v => !v)}><Settings2 size={18} /><span>Devices</span></button>
-        <button className="call-end" disabled={state.busy} onClick={() => void engine.end()}><PhoneOff size={18} /><span>End call</span></button>
+        <button disabled={state.busy} title={state.muted ? 'Unmute' : 'Mute'} aria-pressed={state.muted} onClick={() => engine.mute()}>{state.muted ? <MicOff size={18} /> : <Mic size={18} />}<span>{state.muted ? 'Unmute' : 'Mute'}</span></button>
+        {video && <><button disabled={state.busy} title={state.camera ? 'Camera off' : 'Camera on'} aria-pressed={!state.camera} onClick={() => void engine.camera()}>{state.camera ? <Video size={18} /> : <VideoOff size={18} />}<span>{state.camera ? 'Camera off' : 'Camera on'}</span></button>
+          <button title={selfVisible ? 'Hide self-view' : 'Show self-view'} aria-pressed={!selfVisible} onClick={() => setSelfVisible(v => !v)}>{selfVisible ? <EyeOff size={18} /> : <Eye size={18} />}<span>{selfVisible ? 'Hide self-view' : 'Show self-view'}</span></button>
+          {typeof navigator.mediaDevices?.getDisplayMedia === 'function' && <button disabled={state.busy} title={state.sharing ? 'Stop sharing' : 'Share screen'} aria-pressed={state.sharing} onClick={() => void engine.share()}><MonitorUp size={18} /><span>{state.sharing ? 'Stop sharing' : 'Share screen'}</span></button>}</>}
+        <button title="Devices" aria-expanded={devicesVisible} onClick={() => setDevicesVisible(v => !v)}><Settings2 size={18} /><span>Devices</span></button>
+        <button className="call-end" title="End call" disabled={state.busy} onClick={() => void engine.end()}><PhoneOff size={18} /><span>End call</span></button>
       </div>
       {devicesVisible && <div className="call-devices"><label>Microphone<select disabled={state.busy} value="" onChange={e => void engine.microphone(e.target.value)}><option value="" disabled>Select microphone</option>{state.devices.filter(d => d.kind === 'audioinput').map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}</select></label>
         {video && <label>Camera<select disabled={state.busy} value="" onChange={e => void engine.camera(e.target.value)}><option value="" disabled>Select camera</option>{state.devices.filter(d => d.kind === 'videoinput').map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>)}</select></label>}

@@ -1,15 +1,15 @@
 .call-overlay{position:fixed;inset:0;z-index:1200;background:#0b142c99;display:flex;align-items:center;justify-content:center;padding:16px}
 .call-panel,.call-incoming{background:var(--fluent-surface,#fff);color:var(--fluent-text,#18243a);border:1px solid #cdd7e7;border-radius:16px;box-shadow:0 12px 48px #10234940;padding:16px;box-sizing:border-box}
 .call-incoming{width:min(420px,100%);max-height:calc(100dvh - 32px);overflow:auto;text-align:center}.call-incoming h2{font-size:22px;margin:12px 0}.call-incoming p{margin:10px 0}
-.call-floating{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:80;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
+.call-floating{--call-edge:16px;--call-left-gap:max(var(--call-edge),env(safe-area-inset-left));--call-right-gap:max(var(--call-edge),env(safe-area-inset-right));--call-top-gap:max(var(--call-edge),env(safe-area-inset-top));--call-bottom-gap:max(var(--call-edge),env(safe-area-inset-bottom));position:fixed;right:calc(var(--call-viewport-right,0px) + var(--call-right-gap));bottom:calc(var(--call-viewport-bottom,0px) + var(--call-bottom-gap));z-index:80;width:min(560px,calc(var(--call-viewport-width,100vw) - var(--call-left-gap) - var(--call-right-gap)));max-height:calc(var(--call-viewport-height,100dvh) - var(--call-top-gap) - var(--call-bottom-gap));overflow:auto}
 .call-active{display:flex;flex-direction:column;padding:0;isolation:isolate;min-height:0;min-width:0}
-.call-panel.call-video-panel{background:#101b2c;color:#f7faff}.call-video-panel{height:min(490px,calc(100dvh - 32px));overflow:hidden}
+.call-panel.call-video-panel{background:#101b2c;color:#f7faff}.call-video-panel{height:min(490px,calc(var(--call-viewport-height,100dvh) - var(--call-top-gap,16px) - var(--call-bottom-gap,16px)));overflow:hidden}
 .call-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;flex:none;z-index:2}
 .call-header>div{min-width:0}.call-header strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.call-header p{font-size:13px;margin:4px 0 0;color:#65748b}
 .call-panel button,.call-incoming button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;padding:10px;border:1px solid #cad5e5;background:#f2f6fc;font:inherit;cursor:pointer;min-height:44px;touch-action:manipulation;flex-shrink:0}
 .call-panel button:disabled,.call-incoming button:disabled{opacity:.5;cursor:wait}
 .call-controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.call-controls button{flex:1;font-size:13px}.call-controls .call-end{background:#b42335;color:white;border-color:#b42335}.call-controls .call-accept{background:#176744;color:white;border-color:#176744}
-.call-stage{position:relative;flex:1;min-height:100px;min-width:0;margin:0 8px;overflow:hidden;border-radius:10px}
+.call-stage{position:relative;flex:1;min-height:0;min-width:0;margin:0 8px;overflow:hidden;border-radius:10px}
 .call-remote-grid{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr);height:100%;width:100%}
 .call-group-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .call-remote{position:relative;min-width:0;min-height:0;overflow:hidden;background:#000}
@@ -32,9 +32,11 @@
 .call-audio{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .call-voice-stage .call-play-audio,.call-voice-stage .call-output-error{position:static;max-width:100%;width:100%;color:#a31f35;background:transparent}
 .call-play-audio{position:absolute;bottom:36px;left:8px;z-index:2}.call-output-error{position:absolute;bottom:40px;left:8px;right:8px;color:#ffc4ca;background:#15243a;padding:8px;font-size:12px;z-index:2}
-.call-voice-panel{width:min(390px,calc(100vw - 32px))}.call-voice-stage{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:16px;padding:20px 16px;flex:1;min-height:0;overflow:auto}.call-voice-person{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:100%;overflow-wrap:anywhere;text-align:center}.call-voice-stage>p{width:100%;font-size:13px;text-align:center;color:#65748b;margin:0}
+.call-voice-panel{width:min(390px,calc(var(--call-viewport-width,100vw) - var(--call-left-gap,16px) - var(--call-right-gap,16px)))}.call-voice-stage{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:16px;padding:20px 16px;flex:1;min-height:0;overflow:auto}.call-voice-person{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:100%;overflow-wrap:anywhere;text-align:center}.call-voice-stage>p{width:100%;font-size:13px;text-align:center;color:#65748b;margin:0}
 .call-video-panel .call-header{background:#101b2c}.call-video-panel .call-header p{color:#bdcce2}.call-video-panel button{background:#25354d;color:#f7faff;border-color:#4a5d79}.call-video-panel .call-end{background:#b42335;border-color:#b42335}
-.call-active.call-fullscreen,.call-active:fullscreen{position:fixed;inset:0;right:0;bottom:0;z-index:1300;width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;border:0;border-radius:0;overflow:hidden;padding:0;box-sizing:border-box}
+.call-active.call-fullscreen,.call-active:fullscreen{position:fixed;inset:auto;top:var(--call-viewport-top,0px);left:var(--call-viewport-left,0px);z-index:1300;width:var(--call-viewport-width,100vw);height:var(--call-viewport-height,100dvh);max-width:none;max-height:none;margin:0;border:0;border-radius:0;overflow:hidden;padding:0;box-sizing:border-box}
+/* Native fullscreen owns its viewport; visual viewport offsets only affect the fallback. */
+.call-active:fullscreen{inset:0;width:100vw;height:100dvh}
 .call-fullscreen .call-header{padding-top:max(12px,env(safe-area-inset-top));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
 .call-fullscreen .call-stage{position:absolute;inset:0;margin:0;border-radius:0;min-height:0}
 .call-fullscreen .call-header{background:linear-gradient(#101b2cf5,#101b2c00);pointer-events:none}.call-fullscreen .call-header button{pointer-events:auto}
@@ -48,5 +50,21 @@
 .call-fullscreen .call-remote-name{bottom:calc(var(--call-footer-height,140px) + 8px)}
 .call-fullscreen .call-controls{justify-content:center}.call-fullscreen .call-controls button{flex:0 1 auto;min-width:74px;padding:10px}.call-fullscreen .call-conversation{width:auto;margin:auto}
 .chat-thread-header>.chat-call-buttons{flex:0 0 auto}.chat-call-buttons{display:flex;gap:4px;margin-left:auto}.chat-call-buttons button{display:inline-flex;align-items:center;gap:4px;padding:8px;min-height:40px;border-radius:8px;font-size:12px}.chat-call-buttons button:disabled{opacity:.4}.chat-call-event{display:flex;align-items:center;gap:10px;margin:8px 0}.chat-call-event span{display:flex;flex-direction:column}.chat-call-event small{color:#57657d}
-@media(max-width:600px){.call-floating{bottom:max(10px,env(safe-area-inset-bottom));right:max(10px,env(safe-area-inset-right));width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.call-video-panel{height:min(500px,calc(100dvh - 20px))}.call-self-view{width:100px}.call-fullscreen .call-self-view{width:clamp(96px,24vw,140px)}.call-footer .call-controls{gap:4px}.call-footer .call-controls button{padding:6px;min-width:44px;flex:1 1 28%}.call-fullscreen .call-controls button{flex:1 1 28%;min-width:44px}.chat-call-buttons button{padding:5px;font-size:11px}}
-@media(max-height:480px){.call-header{padding:6px 12px}.call-header p{font-size:11px}.call-footer .call-controls button{flex-direction:row;padding:7px}.call-footer .call-conversation{display:none}.call-footer .call-controls{flex-wrap:nowrap}.call-footer{max-height:45%}.call-self-view{width:96px}.call-fullscreen .call-self-view{width:120px}.call-fullscreen .call-controls button{min-width:44px;flex:1 1 0;font-size:11px}.call-fullscreen .call-header{padding-top:max(6px,env(safe-area-inset-top))}.call-voice-stage{padding:8px}.call-voice-stage .call-avatar{width:54px;height:54px}.call-fullscreen.call-voice-panel .call-voice-stage{padding-bottom:80px}}
+@media(max-width:600px){.call-floating{--call-edge:10px;width:calc(var(--call-viewport-width,100vw) - var(--call-left-gap) - var(--call-right-gap))}.call-video-panel{height:min(500px,calc(var(--call-viewport-height,100dvh) - var(--call-top-gap,10px) - var(--call-bottom-gap,10px)))}.call-self-view{width:100px}.call-fullscreen .call-self-view{width:clamp(96px,24vw,140px)}.call-footer .call-controls{gap:4px}.call-footer .call-controls button{padding:6px;min-width:44px;flex:1 1 28%}.call-fullscreen .call-controls button{flex:1 1 28%;min-width:44px}.chat-call-buttons button{padding:5px;font-size:11px}}
+/* A rotated phone can be wide while still having very little usable height. */
+@media(max-height:500px){
+  .call-floating{--call-edge:8px}
+  .call-header{padding:6px 12px}.call-header p{font-size:11px}
+  .call-footer .call-conversation{display:none}
+  .call-footer{max-height:45%;padding:0 8px 6px}
+  .call-footer .call-controls{flex-wrap:nowrap;gap:4px;margin:6px 0;position:sticky;top:0;z-index:3;background:var(--fluent-surface,#fff)}
+  .call-video-panel .call-controls{background:#101b2c}
+  .call-footer .call-controls button{flex:1 1 0;min-width:44px;flex-direction:column;gap:2px;padding:5px 3px;font-size:11px}
+  .call-controls button svg{flex-shrink:0}.call-controls button span{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .call-self-view{width:min(96px,calc((var(--call-viewport-height,100dvh) - var(--call-header-height,60px) - var(--call-footer-height,70px) - 32px)*.6))}
+  .call-fullscreen .call-self-view{width:min(120px,calc((var(--call-viewport-height,100dvh) - var(--call-footer-height,70px) - var(--call-header-height,60px) - 16px)*4/3))}
+  .call-fullscreen .call-header{padding-top:max(6px,env(safe-area-inset-top))}
+  .call-fullscreen .call-footer{padding-top:0;padding-bottom:max(6px,env(safe-area-inset-bottom))}
+  .call-voice-stage{padding:8px;gap:8px}.call-voice-person{gap:6px}.call-voice-stage .call-avatar{width:44px;height:44px;font-size:24px}
+  .call-fullscreen.call-voice-panel .call-voice-stage{padding-bottom:var(--call-footer-height,80px)}
+}

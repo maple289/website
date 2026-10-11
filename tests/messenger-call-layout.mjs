@@ -7,7 +7,8 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:5216';
 await fs.mkdir('.runtime/call-layout', { recursive: true });
 let checks = 0;
 try {
-  for (const [name, width, height, touch] of [['desktop',1440,900,false], ['tablet',768,1024,true], ['portrait',390,844,true], ['landscape',844,390,true]]) {
+  const profiles = [['desktop',1440,900,false], ['tablet',768,1024,true], ['portrait',390,844,true], ['landscape',844,390,true], ['landscape-short',667,280,true], ['landscape-small',568,250,true], ['landscape-wide',932,300,true]];
+  for (const [name, width, height, touch] of profiles.filter(([name]) => !process.env.LAYOUT_PROFILE || name === process.env.LAYOUT_PROFILE)) {
     const context = await browser.newContext({ viewport:{width,height}, hasTouch:touch, ...(!firefoxMode ? {isMobile:touch} : {}) });
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -17,6 +18,12 @@ try {
       window.__nativeRequests = 0; window.__rejectFullscreen = false; window.__fullscreen = null;
       window.__realFullscreen = {request:HTMLElement.prototype.requestFullscreen,exit:document.exitFullscreen,
         element:Object.getOwnPropertyDescriptor(Document.prototype,'fullscreenElement'),enabled:Object.getOwnPropertyDescriptor(Document.prototype,'fullscreenEnabled')};
+      const viewport=window.visualViewport;
+      for(const key of ['width','height','offsetLeft','offsetTop','scale']){
+        const descriptor=Object.getOwnPropertyDescriptor(VisualViewport.prototype,key);
+        Object.defineProperty(viewport,key,{configurable:true,get:()=>window.__visualBounds?.[key]??descriptor.get.call(viewport)});
+      }
+      window.__changeVisualViewport = bounds => {window.__visualBounds=bounds;viewport.dispatchEvent(new Event('resize'));viewport.dispatchEvent(new Event('scroll'));};
       Object.defineProperty(document, 'fullscreenEnabled', {configurable:true,get:()=>true});
       Object.defineProperty(document, 'fullscreenElement', {configurable:true,get:()=>window.__fullscreen});
       HTMLElement.prototype.requestFullscreen = async function() {
@@ -94,6 +101,21 @@ try {
     await page.goto(base+'/tests/messenger-call-ui.html');
     await page.getByRole('button',{name:'Video call',exact:true}).click();
     const panel=page.locator('.call-active');await panel.waitFor();
+    const controlsFit = async () => {
+      const dimensions = await panel.evaluate(node => {
+        const panel = node.getBoundingClientRect();
+        const v=window.visualViewport, visual=v&&Math.abs(v.scale-1)<0.01;
+        const viewport={x:visual?v.offsetLeft:0,y:visual?v.offsetTop:0,width:visual?v.width:innerWidth,height:visual?v.height:innerHeight};
+        return { viewport, panel: { x: panel.x, y: panel.y, right: panel.right, bottom: panel.bottom },
+          controls: [...node.querySelectorAll('.call-controls button')].map(button => {
+            const r = button.getBoundingClientRect(); return { label: button.textContent, x: r.x, y: r.y, right: r.right, bottom: r.bottom };
+          }) };
+      });
+      const v=dimensions.viewport;
+      assert.ok(dimensions.panel.x >= v.x-1 && dimensions.panel.y >= v.y-1 && dimensions.panel.right <= v.x+v.width+1 && dimensions.panel.bottom <= v.y+v.height+1, 'call panel fits visible phone viewport '+JSON.stringify(dimensions));
+      for (const r of dimensions.controls) assert.ok(r.x >= dimensions.panel.x && r.right <= dimensions.panel.right && r.y >= dimensions.panel.y && r.bottom <= dimensions.panel.bottom, name + ': reachable ' + r.label + ' ' + JSON.stringify(r));
+    };
+    await controlsFit();
     await page.waitForFunction(()=>window.__peers.length===1);
     await page.evaluate(()=>window.__attachRemote());
     await page.waitForFunction(()=>document.querySelector('.call-remote video')?.videoWidth>0);
@@ -130,9 +152,11 @@ try {
     assert.equal(await remote.evaluate(n=>getComputedStyle(n).transform),'none');
     assert.ok((await self.locator('video').evaluate(n=>getComputedStyle(n).transform)).includes('-1'));
     if(name==='desktop')await panel.screenshot({path:'.runtime/call-layout/video-normal.png'});
+    if(name==='landscape-short')await panel.screenshot({path:'.runtime/call-layout/'+(firefoxMode?'firefox-':'')+'landscape-normal.png'});
     await page.getByRole('button',{name:'Expand call',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.call-fullscreen'));
     const full=await panel.boundingBox();assert.ok(Math.abs(full.x)<1&&Math.abs(full.y)<1&&Math.abs(full.width-width)<1&&Math.abs(full.height-height)<1,'whole viewport');
+    await controlsFit();
     assert.equal(await page.evaluate(()=>document.fullscreenElement?.classList.contains('call-active')),true,'container fullscreen, not video');
     await cameraChange('disabled',3);await black();
     if(name==='desktop')await panel.screenshot({path:'.runtime/call-layout/camera-off-fullscreen.png'});
@@ -150,7 +174,12 @@ try {
     assert.equal(publishedStates.length,publishedBeforeHide,'Hide self-view emits no camera-state signal');
     await page.getByRole('button',{name:'Devices',exact:true}).click();
     await page.getByRole('combobox',{name:'Microphone',exact:true}).waitFor();
-    const preview=await self.boundingBox(),footer=await page.locator('.call-footer').boundingBox();assert.ok(preview.y+preview.height<=footer.y+1);
+    await page.waitForFunction(()=>{const panel=document.querySelector('.call-active'),footer=panel.querySelector('.call-footer');return parseFloat(panel.style.getPropertyValue('--call-footer-height'))===footer.offsetHeight;});
+    await controlsFit();
+    await page.locator('.call-footer').evaluate(node=>{node.scrollTop=node.scrollHeight;});
+    await controlsFit(); // Device selection must not scroll the hang-up control away.
+    await page.locator('.call-footer').evaluate(node=>{node.scrollTop=0;});
+    const preview=await self.boundingBox(),footer=await page.locator('.call-footer').boundingBox();assert.ok(preview.y+preview.height<=footer.y+1,'device settings leave PiP clear of controls '+JSON.stringify({preview,footer}));
     await page.getByRole('button',{name:'Devices',exact:true}).click();
     assert.deepEqual(await page.evaluate(()=>window.__mediaSnapshot()),before,'layout does not touch peers/tracks/media');
     assert.equal(await page.evaluate(()=>window.__videoNode===document.querySelector('.call-remote video')),true,'remote node retained');
@@ -159,20 +188,41 @@ try {
     await page.mouse.move(12,height-5,{steps:5});await page.mouse.up();
     assert.equal(await self.getAttribute('data-corner'),'bottom-left','drag snaps to safe corner');
     await page.setViewportSize({width:height,height:width});
+    await page.waitForFunction(()=>{const r=document.querySelector('.call-active').getBoundingClientRect();return Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1;});
     await page.waitForFunction(()=>{const s=document.querySelector('.call-self-view').getBoundingClientRect(),f=document.querySelector('.call-footer').getBoundingClientRect();return s.right<=innerWidth&&s.bottom<=f.top+1;});
     await page.setViewportSize({width,height});
+    await page.waitForFunction(()=>{const r=document.querySelector('.call-active').getBoundingClientRect();return Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1;});
     await page.waitForFunction(()=>{const s=document.querySelector('.call-self-view').getBoundingClientRect(),f=document.querySelector('.call-footer').getBoundingClientRect();return s.right<=innerWidth&&s.bottom<=f.top+1;});
     await self.getByRole('button',{name:'Move self-view to next corner'}).click();
     await self.getByRole('button',{name:'Move self-view to next corner'}).click();
     if(name==='desktop')await panel.screenshot({path:'.runtime/call-layout/video-fullscreen.png'});
+    if(name==='landscape-short')await panel.screenshot({path:'.runtime/call-layout/'+(firefoxMode?'firefox-':'')+'landscape-fullscreen.png'});
     await page.evaluate(()=>document.exitFullscreen());await page.waitForFunction(()=>!document.querySelector('.call-fullscreen'));
     await page.evaluate(()=>window.__rejectFullscreen=true);
     await page.getByRole('button',{name:'Expand call',exact:true}).click();await page.locator('.call-fullscreen').waitFor();
     assert.equal(await page.evaluate(()=>document.fullscreenElement),null,'CSS fallback after rejection');
     const fallback=await panel.boundingBox();assert.ok(Math.abs(fallback.width-width)<1&&Math.abs(fallback.height-height)<1);
+    if(name.startsWith('landscape')){
+      // Browser chrome/keyboard can reduce the visual viewport without a layout resize.
+      await page.evaluate(({width,height})=>window.__changeVisualViewport({width:width-24,height:height-60,offsetLeft:12,offsetTop:20,scale:1}),{width,height});
+      await page.waitForFunction(()=>{const r=document.querySelector('.call-active').getBoundingClientRect(),v=visualViewport;return Math.abs(r.x-v.offsetLeft)<1&&Math.abs(r.y-v.offsetTop)<1&&Math.abs(r.width-v.width)<1&&Math.abs(r.height-v.height)<1;});
+      await controlsFit();
+      await page.evaluate(()=>window.__changeVisualViewport(null));
+      await page.waitForFunction(()=>{const r=document.querySelector('.call-active').getBoundingClientRect();return Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1;});
+    }
     await page.keyboard.press('Escape');assert.ok(await page.locator('.call-fullscreen').isVisible(),'fallback retains task');
     const end=await page.getByRole('button',{name:'End call',exact:true}).boundingBox();assert.ok(end.y>=0&&end.y+end.height<=height,'hangup reachable');
     await page.getByRole('button',{name:'Exit fullscreen',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.call-fullscreen'));
+    if(name==='landscape-short'){
+      await page.evaluate(({width,height})=>window.__changeVisualViewport({width:width-24,height:height-60,offsetLeft:12,offsetTop:20,scale:1}),{width,height});
+      await page.waitForFunction(()=>document.querySelector('.call-active').style.getPropertyValue('--call-viewport-top')==='20px');
+      await controlsFit();
+      await page.evaluate(()=>window.__changeVisualViewport({width:innerWidth/2,height:innerHeight/2,offsetLeft:12,offsetTop:20,scale:2}));
+      await page.waitForFunction(()=>document.querySelector('.call-active').style.getPropertyValue('--call-viewport-height')===innerHeight+'px');
+      await controlsFit(); // Pinch zoom does not shrink the interface to counteract zoom.
+      await page.evaluate(()=>window.__changeVisualViewport(null));
+      await page.waitForFunction(()=>document.querySelector('.call-active').style.getPropertyValue('--call-viewport-top')==='0px');
+    }
     assert.deepEqual(await page.evaluate(()=>window.__mediaSnapshot()),before);
     if(name==='desktop'){
       await page.evaluate(()=>{
@@ -204,6 +254,7 @@ try {
     await page.getByRole('button',{name:'End call',exact:true}).click();await panel.waitFor({state:'detached'});
     await page.waitForFunction(()=>!document.fullscreenElement&&document.body.style.overflow==='');
     await page.getByRole('button',{name:'Voice call',exact:true}).click();await panel.waitFor();
+    await controlsFit();
     assert.equal(await page.evaluate(()=>window.__captures.at(-1).video),false,'voice capture microphone only');
     assert.equal(await page.locator('.call-stage,.call-self-view').count(),0,'voice has no video canvas');
     assert.equal(await page.getByRole('button',{name:'Camera off',exact:true}).count(),0);
