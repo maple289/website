@@ -174,6 +174,9 @@ def cleanup():
             api('DELETE', '/rest/v1/messenger_storage_cleanup?object_path=eq.' + quote(item['object_path'], safe=''))
         except Exception as cause:
             LOG.error(json.dumps({'operation': 'messenger_attachment_cleanup', 'type': type(cause).__name__}))
+    # Expire abandoned calls/signaling even when every browser has disconnected.
+    # Interactive signaling reconciles independently and never waits for this worker.
+    api('POST', '/rest/v1/rpc/messenger_reconcile_calls', json={})
 
 
 def main():

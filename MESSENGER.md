@@ -1,5 +1,8 @@
 # Native Messenger
 
+Voice/video calls, global notifications, screen sharing, floating controls and
+hosted TURN deployment are documented in [MESSENGER_CALLS.md](MESSENGER_CALLS.md).
+
 ## Interface
 
 Messages is a registered-user workspace item. Public Videos / Photos / Files

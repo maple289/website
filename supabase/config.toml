@@ -36,3 +36,6 @@ verify_jwt = false
 
 [functions.messenger-media]
 verify_jwt = true
+
+[functions.messenger-calls]
+verify_jwt = true

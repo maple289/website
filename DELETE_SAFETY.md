@@ -103,6 +103,12 @@ This internal cleanup never deletes or modifies original uploaded documents.
 
 ## Messenger
 
+Call history uses the existing confirmed message/clear/chat deletion operations;
+no separate history-delete caller was added. Hiding/deleting a history entry does
+not end its call or erase private call metadata. Ending/declining a call changes
+its session state; it does not delete saved history. Expired SDP/ICE rows are
+internal temporary signaling cleanup and contain no recorded media.
+
 Message Delete/Retry Deletion, Clear Messages, Delete Chat, Discard Pending Draft, Remove Group Member, Leave Group and Block User
 are routed through `useDeleteConfirmation`; the mutation occurs only in
 `onConfirm`. Message warnings name the text/attachment and accurately describe

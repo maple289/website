@@ -1,4 +1,11 @@
 services:
+  functions:
+    environment:
+      # The existing local coturn service signs temporary credentials with
+      # the same private secret. No hosted-provider tokens are needed.
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}
+      TURN_URLS: ${TURN_URLS:-}
+      STUN_URLS: ${STUN_URLS:-}
   realtime:
     environment:
       # The stock seed recreates the tenant and resets private_only. Seed only

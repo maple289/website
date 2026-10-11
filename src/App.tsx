@@ -9,6 +9,8 @@ import { FileDropArea } from '@/components/FileDropArea';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BarChart3, Clapperboard, FolderOpen, Home, Images, Menu, MessageCircle, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
 import { MessengerProvider } from '@/context/MessengerContext';
+import { CallProvider } from '@/context/CallContext';
+import { CallPanel } from '@/components/CallPanel';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -32,7 +34,7 @@ function App() {
   if (shared) return <TemporarySharePage token={shared.token} />;
   return (
     <div className="fluent-app"><AuthProvider>
-      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><AppContent /></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
+      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><CallProvider><AppContent /><CallPanel /></CallProvider></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
     </AuthProvider></div>
   );
 }

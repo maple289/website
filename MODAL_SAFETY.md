@@ -1,5 +1,11 @@
 # Modal safety inventory
 
+Messenger incoming-call and expanded-call dialogs use TaskModal. Overlay taps
+and Escape retain them; Accept/Decline/End and explicit Minimize control their
+lifecycle. Remote hang-up/timeout removes an unavailable invitation. Pending
+media requests disable closing controls. Calls have no editable draft. The
+minimized floating call panel is nonmodal so users can continue browsing.
+
 ## Shared behavior
 
 TaskModal uses useModalLayer for focus containment, restoring focus, nested

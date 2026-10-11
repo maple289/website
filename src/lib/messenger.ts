@@ -1,13 +1,15 @@
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
+import { authenticatedFetch, authenticatedRequest } from '@/lib/authSession';
 import type { FileEntry } from '@/lib/fileTree';
 import { boundedPreviewBlob } from '@/lib/filePreviews';
+import type { CallInfo } from '@/lib/calls';
 export { analyticsRequestId as chatRequestId } from '@/lib/analytics';
 
 export type ChatUser = { id: string; name: string };
 export type ChatMember = ChatUser & { role: 'owner' | 'admin' | 'member'; joined_sequence: number; delivered_sequence: number; read_sequence: number; online: boolean; last_seen: string | null; blocked: boolean };
 export type ChatAttachment = { id: string; name: string; mime_type: string; file_size: number; available?: boolean };
 export type ChatReaction = { user_id: string; name: string; reaction: string };
-export type ChatMessage = { id: string; conversation_id: string; sender_id: string | null; sender_name: string; sequence: number; body: string; created_at: string; edited_at: string | null; deleting: boolean; deleted: boolean; reply: { id: string; sender_name: string; body: string } | null; attachments: ChatAttachment[]; reactions: ChatReaction[] };
+export type ChatMessage = { id: string; conversation_id: string; sender_id: string | null; sender_name: string; sequence: number; body: string; created_at: string; edited_at: string | null; deleting: boolean; deleted: boolean; reply: { id: string; sender_name: string; body: string } | null; attachments: ChatAttachment[]; reactions: ChatReaction[]; call?: CallInfo | null; call_event?: boolean };
 export type Conversation = { id: string; kind: 'direct' | 'group'; name: string; updated_at: string; last_sequence: number; cleared_sequence: number; hidden: boolean; muted: boolean; role: ChatMember['role']; can_send: boolean; unread: number; latest: ChatMessage | null; members: ChatMember[] };
 export type ChatEvent = { conversation_id: string; message_id?: string | null; kind?: string };
 export const chatReactions = [
@@ -19,7 +21,7 @@ export class ChatRequestError extends Error {
   constructor(message: string, readonly uncertain: boolean, readonly code = '') { super(message); }
 }
 export async function chatRequest<T>(action: string, conversation?: string | null, data: Record<string, unknown> = {}): Promise<T> {
-  const { data: result, error } = await supabase.rpc('messenger_rpc', { p_action: action, p_conversation: conversation ?? null, p_data: data });
+  const { data: result, error } = await authenticatedRequest(() => supabase.rpc('messenger_rpc', { p_action: action, p_conversation: conversation ?? null, p_data: data }));
   if (error) {
     // Only deliberate database validation messages may reach the interface.
     throw new ChatRequestError(error.code === 'P0001' || error.code === '42501' ? error.message : 'Messages could not be updated. Please try again.', !error.code, error.code);
@@ -27,11 +29,9 @@ export async function chatRequest<T>(action: string, conversation?: string | nul
   return result as T;
 }
 async function chatFetch(params: URLSearchParams, options: RequestInit = {}): Promise<Response> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Please sign in to use Messages.');
   options.signal?.throwIfAborted();
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/messenger-media?${params}`, {
-    ...options, cache: 'no-store', headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${session.access_token}`, ...options.headers },
+  const response = await authenticatedFetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/messenger-media?${params}`, {
+    ...options, cache: 'no-store',
   });
   if (!response.ok && response.status !== 202) {
     const error = await response.json().catch(() => ({}));

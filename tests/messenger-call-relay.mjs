@@ -1,0 +1,32 @@
+// Execute the actual Edge handler with deterministic auth/local-TURN fixtures.
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { webcrypto } from 'node:crypto';
+import ts from 'typescript';
+const source=(await readFile(new URL('../supabase/functions/messenger-calls/index.ts',import.meta.url),'utf8')).replace(/^import .*;\r?$/gm,'');
+const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+let handler, authenticated=true, active=true, denied=false, revoke=false, authorizations=0, externalCalls=0, logs=[];
+const env={SUPABASE_URL:'https://test.invalid',SUPABASE_ANON_KEY:'anon',TURN_SHARED_SECRET:'private-coturn-secret',TURN_URLS:'turn:relay.example.test:3478?transport=udp,turn:relay.example.test:3478?transport=tcp',STUN_URLS:'stun:relay.example.test:3478'};
+const user='11111111-1111-4111-8111-111111111111',call='22222222-2222-4222-8222-222222222222',session='33333333-3333-4333-8333-333333333333';
+const client={auth:{getUser:async()=>({data:{user:authenticated?{id:user}:null},error:null})},rpc:async(name)=>{
+  if(name==='messenger_active')return {data:active,error:null};authorizations++;return {data:{ok:true},error:denied||(revoke&&authorizations%2===0)?{message:'denied'}:null};}};
+const unexpectedFetch=async()=>{externalCalls++;throw new Error('Local signing must not call an external credential provider');};
+new Function('Deno','createClient','fetch','crypto','console',js)({env:{get:k=>env[k]},serve:h=>{handler=h;}},()=>client,unexpectedFetch,webcrypto,{error:value=>logs.push(value)});
+const req=async(body,token='signed-in')=>handler(new Request('https://test.invalid/functions/v1/messenger-calls',{method:'POST',headers:{...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body)}));
+const credentials={action:'credentials',call_id:call,session_id:session};let checks=0;const pass=label=>{checks++;console.log('PASS '+label);};
+assert.equal((await req(credentials,'')).status,401);authenticated=false;assert.equal((await req(credentials)).status,401);authenticated=true;active=false;assert.equal((await req(credentials)).status,403);active=true;
+assert.equal(externalCalls,0);pass('missing, invalid and inactive sessions cannot get relay credentials');
+const preflight=await req({action:'configuration'});assert.equal(preflight.status,200);assert.deepEqual(await preflight.json(),{configured:true,maxParticipants:4});assert.equal(externalCalls,0);
+delete env.TURN_SHARED_SECRET;assert.equal((await req({action:'configuration'})).status,503);env.TURN_SHARED_SECRET='private-coturn-secret';
+assert.equal((await req({...credentials,call_id:'bad'})).status,400);denied=true;assert.equal((await req(credentials)).status,403);denied=false;assert.equal(externalCalls,0);
+pass('preflight exposes no secrets; missing configuration and unauthorized call fail closed');
+authorizations=0;const response=await req(credentials);assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);const data=await response.json();const server=data.iceServers[1];assert.ok(server.username.endsWith(':'+user));assert.ok(data.expiresAt>Date.now()+3590000);assert.equal(authorizations,2);assert.ok(!JSON.stringify(data).includes('private-coturn-secret'));
+const key=await webcrypto.subtle.importKey('raw',new TextEncoder().encode(env.TURN_SHARED_SECRET),{name:'HMAC',hash:'SHA-1'},false,['sign']);const signature=await webcrypto.subtle.sign('HMAC',key,new TextEncoder().encode(server.username));assert.equal(server.credential,Buffer.from(signature).toString('base64'));assert.equal(externalCalls,0);
+pass('local coturn credentials use private per-user TTL/HMAC signing');
+revoke=true;authorizations=0;const revoked=await req(credentials);assert.equal(revoked.status,403);assert.ok(!JSON.stringify(await revoked.json()).includes('iceServers'));revoke=false;
+pass('membership/session revocation during signing suppresses credential response');
+env.TURN_URLS='http://unsafe.invalid';assert.equal((await req({action:'configuration'})).status,503);assert.equal((await req(credentials)).status,503);
+env.TURN_URLS='turn:relay.example.test:70000';assert.equal((await req({action:'configuration'})).status,503);
+env.TURN_URLS='turn:relay.example.test:3478';env.STUN_URLS='https://unsafe.invalid';assert.equal((await req({action:'configuration'})).status,503);assert.ok(logs.every(x=>!x.includes('secret')));
+pass('preflight and credential issuance reject malformed relay/STUN configuration');
+console.log(`${checks} relay checks passed.`);

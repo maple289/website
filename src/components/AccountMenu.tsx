@@ -12,6 +12,9 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdmin();
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState('');
+  const signOutPending = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
   return (
     <div className="flex items-center gap-2"><MessageBell /><div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => { setOpen(!open); setError(''); }}
         aria-label="Account menu"
         aria-expanded={open}
         className="fluent-avatar"
@@ -68,11 +71,19 @@ export function AccountMenu({ onSignIn }: AccountMenuProps) {
           <a href="#/statistics" onClick={() => setOpen(false)}><BarChart3 size={18} />Statistics</a>
           <div className="my-1 h-px bg-[#2e2e2e]" />
           <button
-            onClick={async () => { await signOut(); setOpen(false); }}
+            disabled={signingOut}
+            onClick={async () => {
+              if (signOutPending.current) return;
+              signOutPending.current = true; setSigningOut(true); setError('');
+              try { await signOut(); setOpen(false); }
+              catch { setError('Could not sign out. Please try again.'); }
+              finally { signOutPending.current = false; setSigningOut(false); }
+            }}
             className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#d4d4d4] transition hover:bg-[#262626]"
           >
-            <LogOut size={18} /> Sign out
+            <LogOut size={18} /> {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
+          {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
         </div>
       )}
     </div></div>

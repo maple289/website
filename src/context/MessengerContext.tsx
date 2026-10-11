@@ -46,6 +46,8 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     const channel = supabase.channel(`messenger:user:${userId}`, { config: { private: true, broadcast: { self: false } } })
       .on('broadcast', { event: 'changed' }, ({ payload }: { payload: ChatEvent }) => {
         if (cancelled || !payload?.conversation_id) return;
+        if (payload.kind?.startsWith('call-')) window.dispatchEvent(new CustomEvent('messenger-call', { detail: payload.kind }));
+        if (payload.kind === 'call-signal') return;
         window.clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 120);
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
