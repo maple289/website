@@ -35,7 +35,7 @@ try {
     await sql('INSERT INTO auth.users(id) VALUES($1)', [id]);
     await sql('INSERT INTO profiles VALUES($1,$2,NULL,$3)', [id, name, name + '@test.invalid']);
   }
-  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql'])
+  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql','20261011030000_messenger_remove_deleted_cards.sql'])
     await db.exec(await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8'));
   pass('call migration applies with actual Messenger RPCs and serializers');
   await actor(a);

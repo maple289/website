@@ -19,7 +19,7 @@ const newDraft = (): Draft => ({ text: '', reply: null, attachments: [], nonce: 
 const currentConversation = () => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('conversation') ?? '';
 
 export function Messenger() {
-  const { user } = useAuth(), { conversations, connection, error, revision, refresh } = useMessenger();
+  const { user } = useAuth(), { conversations, connection, error, revision, refresh, visibility } = useMessenger();
   const [selected, setSelected] = useState(currentConversation), [query, setQuery] = useState(''), [list, setList] = useState<Conversation[]>(conversations), [more, setMore] = useState(conversations.length === 50), [listLoading, setListLoading] = useState(false), [listError, setListError] = useState('');
   const [newChat, setNewChat] = useState(false), [blocked, setBlocked] = useState(false);
   const drafts = useRef(new Map<string, Draft>());
@@ -43,10 +43,11 @@ export function Messenger() {
   }, [query, conversations]);
   const loadMore = async () => { if (listLoading) return; setListLoading(true); try { const data = await chatRequest<{ conversations: Conversation[] }>('inbox', null, { query, offset: list.length }); setList(current => [...new Map([...current, ...data.conversations].map(item => [item.id, item])).values()]); setMore(data.conversations.length === 50); } catch (cause) { setListError(chatError(cause)); } finally { setListLoading(false); } };
   if (!user) return null;
+  const visibleList = list.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }));
   return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations В· <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
     {error && <p className="chat-error chat-service-error" role="alert">{error} <button onClick={() => void refresh()}>Retry</button></p>}
     <div className="chat-workspace"><aside className="chat-conversation-list" aria-label="Conversations"><section className="chat-sidebar-conversations" aria-label="Conversations and groups"><h2 className="chat-sidebar-heading">Conversations / Groups</h2><label className="chat-search"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} /></label><div className="chat-inbox-items">
-      {list.map(item => <button key={item.id} className={`chat-inbox-item ${selected === item.id ? 'is-active' : ''}`} aria-current={selected === item.id ? 'page' : undefined} onClick={() => openConversation(item.id)}><span className="chat-avatar">{item.kind === 'group' ? <Users size={19} /> : item.name[0]?.toUpperCase()}<i data-online={item.members.some(member => member.id !== user.id && member.online)} /></span><span className="chat-inbox-text"><strong>{item.name}{item.muted && <BellOff size={13} />}</strong><span>{item.latest?.body || (item.latest?.attachments.length ? 'Sent an attachment' : 'No messages yet')}</span></span>{item.unread > 0 && <span className="chat-count">{item.unread > 99 ? '99+' : item.unread}</span>}</button>)}
+      {visibleList.map(item => <button key={item.id} className={`chat-inbox-item ${selected === item.id ? 'is-active' : ''}`} aria-current={selected === item.id ? 'page' : undefined} onClick={() => openConversation(item.id)}><span className="chat-avatar">{item.kind === 'group' ? <Users size={19} /> : item.name[0]?.toUpperCase()}<i data-online={item.members.some(member => member.id !== user.id && member.online)} /></span><span className="chat-inbox-text"><strong>{item.name}{item.muted && <BellOff size={13} />}</strong><span>{item.latest?.body || (item.latest?.attachments.length ? 'Sent an attachment' : 'No messages yet')}</span></span>{item.unread > 0 && <span className="chat-count">{item.unread > 99 ? '99+' : item.unread}</span>}</button>)}
       {!list.length && !listLoading && <p className="chat-empty">{query ? 'No matching conversations.' : 'Start a conversation with a registered user.'}</p>}
       {listLoading && <p role="status" className="chat-empty">LoadingвЂ¦</p>}{more && !listLoading && <button className="chat-load-more" onClick={() => void loadMore()}>More conversations</button>}{listError && <p className="chat-error" role="alert">{listError}</p>}
     </div></section><section className="chat-desktop-people" aria-label="People"><h2 className="chat-sidebar-heading">People</h2><MessengerPeople label="Search people" selectedConversation={selected} disabled={personBusy} onSelect={person => void choosePerson(person.id)} />{personBusy && <p className="chat-help" role="status">Opening conversation…</p>}{personError && <p className="chat-error" role="alert">{personError}</p>}</section></aside>
@@ -59,14 +60,14 @@ export function Messenger() {
 
 function ConversationPane({ id, revision, drafts }: { id: string; revision: number; drafts: Map<string, Draft> }) {
   const { state: calls, engine } = useCalls();
-  const { user } = useAuth(), { refresh, typing, setTyping } = useMessenger(), { requestDelete } = useDeleteConfirmation();
+  const { user } = useAuth(), { refresh, typing, setTyping, visibility, removeMessage } = useMessenger(), { requestDelete } = useDeleteConfirmation();
   const [conversation, setConversation] = useState<Conversation | null>(null), [messages, setMessages] = useState<ChatMessage[]>([]), [error, setError] = useState(''), [initial, setInitial] = useState(true), [hasOlder, setHasOlder] = useState(true), [olderBusy, setOlderBusy] = useState(false), [away, setAway] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => drafts.get(id) ?? newDraft()), [sending, setSending] = useState(false), [preview, setPreview] = useState<ChatAttachment | null>(null), [edit, setEdit] = useState<ChatMessage | null>(null), [dialog, setDialog] = useState<'info' | 'search' | 'files' | null>(null);
   const viewport = useRef<HTMLDivElement>(null), filePicker = useRef<HTMLInputElement>(null), input = useRef<HTMLTextAreaElement>(null), loaded = useRef<ChatMessage[]>([]), alive = useRef(true), fetching = useRef(false), refreshAgain = useRef(false), atBottom = useRef(true), readSequence = useRef(0), pending = useRef(false), uploads = useRef(new Map<string, AbortController>()), downloadPending = useRef(new Set<string>());
   const draftRef = useRef(draft);
   const preparingDelete = useRef(false);
   const updateDraft = (update: (current: Draft) => Draft) => { const next = update(draftRef.current); draftRef.current = next; drafts.set(id, next); setDraft(next); };
-  const replaceMessages = (rows: ChatMessage[]) => { loaded.current = rows; setMessages(rows); };
+  const replaceMessages = (rows: ChatMessage[]) => { const visible = visibility.messages(rows); loaded.current = visible; setMessages(visible); };
   const sync = useCallback(async () => {
     if (fetching.current) { refreshAgain.current = true; return; }
     fetching.current = true;
@@ -105,14 +106,21 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
     finally { fetching.current = false; if (refreshAgain.current && alive.current) { refreshAgain.current = false; void sync(); } }
     // Mutable refs deliberately preserve the loaded window and scroll position.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, visibility]);
   useEffect(() => { alive.current = true; const transfers = uploads.current; void sync(); return () => {
     alive.current = false;
     const cancelled = { ...draftRef.current, attachments: draftRef.current.attachments.map(item => item.state === 'uploading' ? { ...item, state: 'failed' as const, error: 'Upload cancelled. Select this file again to upload it.' } : item) };
     draftRef.current = cancelled; drafts.set(id, cancelled);
     for (const controller of transfers.values()) controller.abort(); setTyping(id, false);
   }; }, [id, sync, setTyping, drafts]);
-  useEffect(() => { void sync(); }, [revision, sync]);
+  useEffect(() => {
+    const previous = loaded.current, rows = visibility.messages(previous);
+    replaceMessages(rows);
+    setPreview(current => current && ((current.message_id && visibility.has(current.message_id)) || (previous.some(item => item.attachments.some(attachment => attachment.id === current.id)) && !rows.some(item => item.attachments.some(attachment => attachment.id === current.id)))) ? null : current);
+    setEdit(current => current && visibility.has(current.id) ? null : current);
+    if (draftRef.current.reply && visibility.has(draftRef.current.reply.id) && !draftRef.current.uncertain && !pending.current) updateDraft(current => ({ ...current, reply: null }));
+    void sync();
+  }, [revision, sync, visibility]); // eslint-disable-line react-hooks/exhaustive-deps
   const markRead = () => {
     const sequence = loaded.current[loaded.current.length - 1]?.sequence ?? 0;
     if (!document.hasFocus() || document.hidden || !atBottom.current || sequence <= readSequence.current || !alive.current) return;
@@ -182,9 +190,12 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
   const deleteMessage = (message: ChatMessage) => {
     void requestDelete({ title: 'Delete message', message: `Delete "${message.body.slice(0, 80) || message.attachments[0]?.name || 'Attachment'}"?`,
       choices: [{ id: 'self', label: 'Delete for myself', details: 'Hide this message and its attachments only for you. Other participants keep their messages.' },
-        ...(message.sender_id === user?.id && !message.deleted ? [{ id: 'everyone', label: 'Delete for everyone', details: 'Replace this message with вЂњThis message was deleted.вЂќ for everyone. Its reactions are removed and attachments become inaccessible immediately, with permanent storage cleanup queued. This cannot be undone.' }] : [])],
+        ...(message.sender_id === user?.id && !message.deleted ? [{ id: 'everyone', label: 'Delete for everyone', details: 'Remove this complete message for everyone. Its reactions are removed and attachments become inaccessible immediately, with permanent storage cleanup queued. This cannot be undone.' }] : [])],
       onConfirm: async scope => {
         await chatRequest(scope === 'everyone' ? 'delete-for-everyone' : 'delete-for-self', id, { id: message.id });
+        removeMessage(message.id, scope === 'everyone' ? 'everyone' : 'self');
+        if (!alive.current) return;
+        replaceMessages(loaded.current);
         if (draftRef.current.reply?.id === message.id && !draftRef.current.uncertain && !pending.current) updateDraft(current => ({ ...current, reply: null }));
         setPreview(current => message.attachments.some(attachment => attachment.id === current?.id) ? null : current);
         await changed();
@@ -245,7 +256,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
       {initial ? <p role="status" className="chat-empty"><LoaderCircle size={22} className="animate-spin" />Loading messagesвЂ¦</p> : <>
         {hasOlder && messages.length > 0 && <button className="chat-load-more" disabled={olderBusy} onClick={() => void loadOlder()}>{olderBusy ? 'LoadingвЂ¦' : 'Load older messages'}</button>}
         {!messages.length && conversation && <p className="chat-empty">No messages yet. Say hello.</p>}
-        {messages.map(message => <MessageItem key={message.id} message={message} conversation={conversation} own={message.sender_id === user?.id} reply={() => { if (!draftRef.current.uncertain) { updateDraft(current => ({ ...current, reply: message })); input.current?.focus(); } }} edit={() => setEdit(message)} remove={() => deleteMessage(message)} preview={setPreview} download={attachment => void download(attachment)} changed={changed} />)}
+        {visibility.messages(messages).map(message => <MessageItem key={message.id} message={message} conversation={conversation} own={message.sender_id === user?.id} reply={() => { if (!draftRef.current.uncertain) { updateDraft(current => ({ ...current, reply: message })); input.current?.focus(); } }} edit={() => setEdit(message)} remove={() => deleteMessage(message)} preview={attachment => setPreview({ ...attachment, message_id: message.id })} download={attachment => void download(attachment)} changed={changed} />)}
       </>}
     </div>
     <div className="chat-typing" role="status">{typingNames.length ? `${typingNames.slice(0, 3).join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typingвЂ¦` : ''}</div>
@@ -260,7 +271,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
     {dialog === 'info' && conversation && (conversation.kind === 'group' ? <GroupInformation conversation={conversation} close={() => setDialog(null)} changed={changed} /> : <ChatDialog title="Profile" close={() => setDialog(null)}><div className="chat-dialog-body"><h3>{other?.name || 'Deleted user'}</h3><p>{other?.online ? 'Online' : 'Offline'}</p>{other?.last_seen && <p>Last seen {new Date(other.last_seen).toLocaleString()}</p>}</div><footer><button onClick={() => setDialog(null)}>Close</button></footer></ChatDialog>)}
     {dialog === 'search' && conversation && <ConversationSearch conversation={conversation} revision={revision} close={() => setDialog(null)} reply={message => updateDraft(current => ({ ...current, reply: message }))} />}
     {dialog === 'files' && conversation && <SharedChatFiles conversation={conversation} revision={revision} close={() => setDialog(null)} preview={setPreview} download={attachment => void download(attachment)} />}
-    {preview && entry && <Suspense fallback={<p role="status">Loading previewвЂ¦</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}
+    {preview && entry && !(preview.message_id && visibility.has(preview.message_id)) && <Suspense fallback={<p role="status">Loading previewвЂ¦</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}
   </div>;
 }
 

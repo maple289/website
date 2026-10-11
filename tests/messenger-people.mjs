@@ -42,7 +42,7 @@ try {
     if (kind === 'no-profile') await sql('DELETE FROM profiles WHERE id=$1',[id]);
   }
   for (let i=0;i<108;i++) await register(randomUUID(), `Person ${String(i).padStart(3,'0')}`);
-  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql'])
+  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql','20261011030000_messenger_remove_deleted_cards.sql'])
     await db.exec(await readFile(new URL('../supabase/migrations/'+name,import.meta.url),'utf8'));
   await sql('INSERT INTO messenger_blocks VALUES($1,$2,now()),($3,$1,now())',[a,invalid[4],invalid[5]]);
   await actor(a);

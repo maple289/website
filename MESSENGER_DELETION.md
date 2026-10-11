@@ -13,7 +13,7 @@
 
 | Action | For myself | For everyone |
 | --- | --- | --- |
-| Delete message | Save a hide marker for the authenticated user | Author only: erase body/reactions/attachments; retain a deleted-message placeholder and reply IDs |
+| Delete message | Save a hide marker; immediately remove the entire card only for that user | Author only: erase body/reactions/attachments; remove every participant's card and retain only private tombstone/reply IDs |
 | Clear messages | Advance that member's history cutoff | Either participant in a direct chat; Owner/Admin in a group: erase the confirmed history and advance the shared cutoff |
 | Delete chat | Direct: hide the inbox entry and preserve history; group: leave and revoke access | Groups only, Owner/Admin: delete the conversation and its related records |
 
@@ -38,24 +38,42 @@ removal. Original library videos/photos/files are unaffected.
 
 The same visibility helper filters history, single-message lookup, reconnect
 snapshots, search, shared-file lists, preview/download authorization, reply quotes
-and unread counts. Deleted quotes use placeholders; hidden quotes do not expose
+and unread counts. Deleted rows (including historical placeholders and deletion
+attempts already started) never appear as message cards. Reply references say
+“Original message deleted”; hidden quotes do not expose
 their text. Reactions and edits are rejected for deleted or locally hidden messages.
 
-Notifications refresh the affected user's sessions for local changes and all
-members for shared changes. Open search/shared-file lists refresh with revisions;
-stale page responses cannot restore entries from an older list generation.
+Private `changed/hidden` events with a message ID remove cards in that account's
+sessions; `changed/deleted` events with a message ID remove them for all members.
+The successful confirmed RPC also removes the local card before refetching.
+An account-specific, synchronous visibility cache rejects stale inbox, history,
+snapshot, search and pagination results and neutralizes surviving reply previews.
+Open attachment previews close on removal; shared-file lists filter by message ID
+and refresh with revisions. Deletion caches reset when the authenticated account
+changes. Reconnect/reload use the server's persisted visibility rules.
 
 ## Migration and validation
 
 Deploy the forward migration
-`20261008040000_messenger_scoped_deletion.sql` with the frontend and Edge Function.
-Earlier migrations are unchanged. Existing members/messages default to visible,
-uncleared history; no existing content is deleted by the migration.
+`20261011030000_messenger_remove_deleted_cards.sql` with the frontend, after the
+existing Messenger migrations. Earlier migrations are unchanged. It replaces the
+shared visibility helper and the base serializer, preserving call metadata,
+permissions, reply IDs, retry behavior and existing attachment cleanup queues.
+Historical deleted cards disappear without deleting any additional stored content.
 
 The new helper functions and hide/receipt tables are inaccessible to anonymous or
 authenticated browser roles. Mutations remain behind the authenticated Messenger
 RPC. Older clients' delete actions are adapted to the same scoped deletion logic.
 
-TypeScript, targeted lint, production build and SQL/PL/pgSQL parsing are checked.
-No production conversations were deleted, and no automated behavioral or device
-tests were run for this change.
+Validation uses isolated PostgreSQL migration/RPC tests and browser fixtures with
+intercepted backend requests. The deletion checks cover both scopes, private event
+recipients, replies, attachment authorization/cleanup, reactions, reload/pagination
+and denied requests. TypeScript, lint and production compilation are also checked.
+No production conversation is changed by these tests.
+
+For the card-removal change, 36 desktop/mobile checks pass across Edge, Chrome and
+Firefox (`tests/messenger-deletion-ui.mjs`), plus 7 PostgreSQL deletion checks
+(`tests/messenger-message-deletion.mjs`), 9 existing call checks and 6 directory
+checks using the new migration. Browser back/forward, held pre-delete snapshots,
+older-message loading, open search/shared-file dialogs and account switching are
+included. These are local fixtures, not physical-device or production tests.

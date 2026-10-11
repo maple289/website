@@ -146,11 +146,14 @@ include their source bucket; source ID/version/path/bucket are verified before
 publication. Messenger previews do not increment Files analytics counters or
 inherit public Files sharing permissions.
 
-Deleting a message uses the shared named confirmation. A private deletion plan
-survives partial Storage cleanup; the message stays retryable until attachment
-and cached-preview catalog entries are absent. Final deletion cascades reactions
-and attachment metadata; replies lose their quote but remain. Worker cleanup
-retries derived caches and deleted attachment paths. Uncommitted reservations
+Deleting a message uses the shared named confirmation. Per-user deletion removes
+only that user's card; shared message data and attachments remain for others.
+Global deletion removes all participants' cards, reactions and attachment metadata
+and revokes attachment/preview access in one transaction. Private tombstones retain
+reply IDs and safe retries; surviving replies show a neutral deleted-original quote.
+Private-channel events remove cards immediately, and account-specific tombstones
+reject stale responses. Worker cleanup retries derived caches and deleted attachment
+paths independently of the UI. See `MESSENGER_DELETION.md`. Uncommitted reservations
 expire after 24 hours; reconciliation also catches late orphan upload completions
 after a 15-minute grace period. It never targets existing library storage.
 

@@ -2,11 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { ChatRequestError, chatRequest, chatRequestId, chatOperation, chatError, type Conversation, type ChatEvent } from '@/lib/messenger';
+import { MessageVisibility, type MessageDeleteScope } from '@/lib/messengerVisibility';
 
 type Typing = { conversation_id: string; user_id: string; expires_at: number };
-type MessengerValue = { conversations: Conversation[]; unread: number; connection: string; error: string; revision: number; refresh: () => Promise<void>; sessionId: string; typing: Typing[]; setTyping: (conversation: string, active: boolean) => void };
+type MessengerValue = { conversations: Conversation[]; unread: number; connection: string; error: string; revision: number; refresh: () => Promise<void>; sessionId: string; typing: Typing[]; setTyping: (conversation: string, active: boolean) => void; visibility: MessageVisibility; removeMessage: (id: string, scope: MessageDeleteScope) => void };
 const MessengerContext = createContext<MessengerValue | null>(null);
-const emptyValue: MessengerValue = { conversations: [], unread: 0, connection: 'Connecting', error: '', revision: 0, refresh: async () => {}, sessionId: '', typing: [], setTyping: () => {} };
+const emptyValue: MessengerValue = { conversations: [], unread: 0, connection: 'Connecting', error: '', revision: 0, refresh: async () => {}, sessionId: '', typing: [], setTyping: () => {}, visibility: new MessageVisibility(), removeMessage: () => {} };
 // eslint-disable-next-line react-refresh/only-export-components
 export function useMessenger() { const value = useContext(MessengerContext); if (!value) throw new Error('MessengerProvider is required'); return value; }
 
@@ -28,6 +29,12 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
   const [conversations, setConversations] = useState<Conversation[]>([]), [unread, setUnread] = useState(0);
   const [connection, setConnection] = useState('Connecting'), [error, setError] = useState(''), [revision, setRevision] = useState(0), [typing, setTypingState] = useState<Typing[]>([]);
   const [sessionId] = useState(chatRequestId);
+  const [visibility] = useState(() => new MessageVisibility());
+  const removeMessage = useCallback((id: string, scope: MessageDeleteScope) => {
+    visibility.remove(id, scope);
+    setConversations(current => current.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null })));
+    setRevision(value => value + 1);
+  }, [visibility]);
   const alive = useRef(true), fetching = useRef(false), again = useRef(false), lastTyping = useRef(0);
   const refresh = useCallback(async () => {
     if (!active || !alive.current) return;
@@ -35,10 +42,10 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     fetching.current = true;
     try {
       const result = await chatRequest<{ conversations: Conversation[]; unread: number }>('inbox');
-      if (alive.current) { setConversations(result.conversations); setUnread(result.unread); setError(''); setRevision(value => value + 1); }
+      if (alive.current) { setConversations(result.conversations.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }))); setUnread(result.unread); setError(''); setRevision(value => value + 1); }
     } catch (cause) { if (alive.current) { setError(chatError(cause)); if (cause instanceof ChatRequestError && cause.code === '42501') { setConversations([]); setUnread(0); setTypingState([]); setRevision(value => value + 1); } } }
     finally { fetching.current = false; if (again.current && alive.current) { again.current = false; window.setTimeout(() => void refresh(), 150); } }
-  }, [active]);
+  }, [active, visibility]);
   useEffect(() => {
     alive.current = true;
     if (!active) return () => { alive.current = false; };
@@ -46,6 +53,9 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     const channel = supabase.channel(`messenger:user:${userId}`, { config: { private: true, broadcast: { self: false } } })
       .on('broadcast', { event: 'changed' }, ({ payload }: { payload: ChatEvent }) => {
         if (cancelled || !payload?.conversation_id) return;
+        // Only the authenticated user's private channel delivers these events.
+        // hidden reaches that user's sessions; deleted reaches every member.
+        if (payload.message_id && (payload.kind === 'deleted' || payload.kind === 'hidden')) removeMessage(payload.message_id, payload.kind === 'deleted' ? 'everyone' : 'self');
         if (payload.kind?.startsWith('call-')) window.dispatchEvent(new CustomEvent('messenger-call', { detail: payload.kind }));
         if (payload.kind === 'call-signal') return;
         window.clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 120);
@@ -76,13 +86,13 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     };
     // Token refresh updates the existing connection in the separate effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, userId, sessionId, refresh]);
+  }, [active, userId, sessionId, refresh, removeMessage]);
   useEffect(() => { if (active) void supabase.realtime.setAuth(token).catch(() => undefined); }, [active, token]);
   const setTyping = useCallback((conversation: string, value: boolean) => {
     if (!active || !alive.current || (value && Date.now() - lastTyping.current < 3000)) return;
     lastTyping.current = Date.now();
     void chatOperation('typing', { conversation_id: conversation, session_id: sessionId, typing: value }).catch(() => undefined);
   }, [active, sessionId]);
-  useEffect(() => { publish(userId, { conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping }); }, [publish, userId, conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping]);
+  useEffect(() => { publish(userId, { conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping, visibility, removeMessage }); }, [publish, userId, conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping, visibility, removeMessage]);
   return null;
 }

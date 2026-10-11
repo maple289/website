@@ -112,8 +112,13 @@ internal temporary signaling cleanup and contain no recorded media.
 Message Delete/Retry Deletion, Clear Messages, Delete Chat, Discard Pending Draft, Remove Group Member, Leave Group and Block User
 are routed through `useDeleteConfirmation`; the mutation occurs only in
 `onConfirm`. Message warnings name the text/attachment and accurately describe
-the selected per-user/everyone scope. Single-message deletion for everyone retains
-a “This message was deleted.” placeholder and reply IDs. Clear Messages counts
+the selected per-user/everyone scope. Single-message deletion removes the entire
+card for the chosen scope; only private tombstones and reply IDs remain. Reply
+references show “Original message deleted” after global deletion. Server visibility
+excludes deleted/deleting rows in history, snapshots, pagination and inbox previews.
+Authenticated private-channel deletion events remove cards immediately; per-account
+in-memory tombstones also reject stale responses. Attachment/reaction cleanup and
+server authorization stay in the existing confirmed RPC. Clear Messages counts
 the affected history and captures its last sequence before confirmation; later
 messages survive. Direct-chat deletion for oneself hides only that inbox entry,
 preserves history and permits a new message to restore the chat. Group deletion

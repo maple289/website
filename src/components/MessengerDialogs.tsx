@@ -8,6 +8,7 @@ import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { chatRequest, chatError, chatSize, attachmentEntry, type ChatUser, type Conversation, type ChatMessage, type ChatAttachment } from '@/lib/messenger';
 import { filePreviewKind } from '@/lib/filePreviews';
 import { useAuth } from '@/hooks/useAuth';
+import { useMessenger } from '@/context/MessengerContext';
 
 export function ChatDialog({ title, close, children, busy = false }: { title: string; close: () => void; children: ReactNode; busy?: boolean }) {
   return <TaskModal aria-label={title} className="chat-modal"><section className="chat-dialog"><header><h2>{title}</h2><button type="button" aria-label="Close" disabled={busy} onClick={close}><X size={20} /></button></header>{children}</section></TaskModal>;
@@ -62,6 +63,7 @@ export function GroupInformation({ conversation, close, changed }: { conversatio
     {error && <p role="alert" className="chat-error">{error}</p>}</div><footer><button disabled={busy} onClick={guard}>Close</button></footer></ChatDialog>;
 }
 export function ConversationSearch({ conversation, revision, close, reply }: { conversation: Conversation; revision: number; close: () => void; reply: (message: ChatMessage) => void }) {
+  const { visibility } = useMessenger();
   const [query, setQuery] = useState(''), [results, setResults] = useState<ChatMessage[]>([]), [error, setError] = useState(''), [loading, setLoading] = useState(false), [more, setMore] = useState(false);
   const generation = useRef(0);
   useEffect(() => { let active = true; generation.current++; setResults([]); setMore(false); setError(''); setLoading(false); if (query.trim().length < 2) return;
@@ -70,15 +72,16 @@ export function ConversationSearch({ conversation, revision, close, reply }: { c
   }, [query, conversation.id, revision]);
   const loadMore = async () => { if (loading) return; const currentGeneration = generation.current; setLoading(true); try { const rows = await chatRequest<ChatMessage[]>('search', conversation.id, { query, offset: results.length }); if (generation.current !== currentGeneration) return; setResults(current => [...new Map([...current, ...rows].map(item => [item.id, item])).values()]); setMore(rows.length === 50); } catch (cause) { if (generation.current === currentGeneration) setError(chatError(cause)); } finally { if (generation.current === currentGeneration) setLoading(false); } };
   return <ChatDialog title={`Search · ${conversation.name}`} close={close}><div className="chat-dialog-body"><label><Search size={16} />Search messages<input value={query} onChange={event => setQuery(event.target.value)} placeholder="Words in this conversation" maxLength={100} /></label>
-    {results.map(item => <button className="chat-search-result" key={item.id} onClick={() => { reply(item); close(); }}><strong>{item.sender_name}</strong><time>{new Date(item.created_at).toLocaleString()}</time><span>{item.body}</span><small>Click to reply to this message</small></button>)}
+    {visibility.messages(results).map(item => <button className="chat-search-result" key={item.id} onClick={() => { reply(item); close(); }}><strong>{item.sender_name}</strong><time>{new Date(item.created_at).toLocaleString()}</time><span>{item.body}</span><small>Click to reply to this message</small></button>)}
     {loading && <p role="status">Searching…</p>}{!loading && query.trim().length >= 2 && !results.length && !error && <p>No matching messages.</p>}{more && <button disabled={loading} onClick={() => void loadMore()}>More results</button>}{error && <p className="chat-error" role="alert">{error}</p>}</div><footer><button onClick={close}>Close</button></footer></ChatDialog>;
 }
 export function SharedChatFiles({ conversation, revision, close, preview, download }: { conversation: Conversation; revision: number; close: () => void; preview: (attachment: ChatAttachment) => void; download: (attachment: ChatAttachment) => void }) {
+  const { visibility } = useMessenger();
   const [files, setFiles] = useState<ChatAttachment[]>([]), [loading, setLoading] = useState(false), [more, setMore] = useState(true), [error, setError] = useState('');
   const generation = useRef(0);
   const load = async (offset: number) => { const currentGeneration = generation.current; setLoading(true); try { const rows = await chatRequest<ChatAttachment[]>('files', conversation.id, { offset }); if (generation.current !== currentGeneration) return; setFiles(current => offset ? [...new Map([...current, ...rows].map(item => [item.id, item])).values()] : rows); setMore(rows.length === 50); } catch (cause) { if (generation.current === currentGeneration) setError(chatError(cause)); } finally { if (generation.current === currentGeneration) setLoading(false); } };
   useEffect(() => { generation.current++; setFiles([]); setError(''); void load(0); return () => { generation.current++; }; }, [conversation.id, revision]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <ChatDialog title="Shared media & files" close={close}><div className="chat-dialog-body">{files.map(item => <div className="chat-attachment" key={item.id}><FileTypeIcon entry={attachmentEntry(item)} size={28} /><span><strong>{item.name}</strong><small>{chatSize(item.file_size)}</small></span>{filePreviewKind(attachmentEntry(item)) && <button aria-label={`Preview ${item.name}`} onClick={() => preview(item)}><Eye size={18} /></button>}<button aria-label={`Download ${item.name}`} onClick={() => download(item)}><Download size={18} /></button></div>)}
+  return <ChatDialog title="Shared media & files" close={close}><div className="chat-dialog-body">{files.filter(item => !item.message_id || !visibility.has(item.message_id)).map(item => <div className="chat-attachment" key={item.id}><FileTypeIcon entry={attachmentEntry(item)} size={28} /><span><strong>{item.name}</strong><small>{chatSize(item.file_size)}</small></span>{filePreviewKind(attachmentEntry(item)) && <button aria-label={`Preview ${item.name}`} onClick={() => preview(item)}><Eye size={18} /></button>}<button aria-label={`Download ${item.name}`} onClick={() => download(item)}><Download size={18} /></button></div>)}
     {loading && <p role="status">Loading files…</p>}{!loading && !files.length && !error && <p>No shared files yet.</p>}{more && !loading && <button onClick={() => void load(files.length)}>Load more</button>}{error && <p className="chat-error" role="alert">{error}</p>}</div><footer><button onClick={close}>Close</button></footer></ChatDialog>;
 }
 export function BlockedUsers({ close, changed }: { close: () => void; changed: () => Promise<void> }) {
