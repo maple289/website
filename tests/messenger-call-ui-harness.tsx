@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Session, User } from '@supabase/supabase-js';
 import { AuthContext } from '../src/context/AuthContext';
-import { CallProvider } from '../src/context/CallContext';
+import { CallProvider, useCalls } from '../src/context/CallContext';
 import { CallPanel } from '../src/components/CallPanel';
 import { DeleteConfirmationProvider } from '../src/components/DeleteConfirmationProvider';
 import { useDeleteConfirmation } from '../src/lib/deleteConfirmation';
@@ -21,10 +21,13 @@ const auth = { user, session, loading: false, configured: true, passwordSetup: n
   cancelPasswordSetup: () => {}, signOut: async () => {} };
 
 function Background() {
+  const { engine } = useCalls();
   const [draft, setDraft] = useState('Saved draft'), [editing, setEditing] = useState(false);
   const { requestDelete } = useDeleteConfirmation();
   const confirmation = () => void requestDelete({ title: 'Fixture confirmation', message: 'An existing task must remain intact.', onConfirm: async () => {} });
-  return <main><button onClick={() => setEditing(true)}>Open edit form</button>
+  return <main><button onClick={() => void engine?.start('conversation', 'voice')}>Voice call</button>
+    <button onClick={() => void engine?.start('conversation', 'video')}>Video call</button>
+    <button onClick={() => setEditing(true)}>Open edit form</button>
     <button onClick={confirmation}>Open confirmation</button>
     {editing && <div style={{ position: 'fixed', inset: 0, background: '#0004', padding: 40 }}><TaskModal aria-label="Edit fixture" style={{ background: 'white', padding: 20 }}>
       <input aria-label="Draft" value={draft} onChange={event => setDraft(event.target.value)} />

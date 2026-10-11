@@ -1,10 +1,13 @@
 # Modal safety inventory
 
-Messenger incoming-call and expanded-call dialogs use TaskModal. Overlay taps
-and Escape retain them; Accept/Decline/End and explicit Minimize control their
-lifecycle. Remote hang-up/timeout removes an unavailable invitation. Pending
+Messenger incoming-call dialogs use TaskModal. The stable fullscreen call
+container uses useModalLayer, including for the CSS fullscreen fallback.
+Overlay taps and Escape never hang up or dismiss an invitation. Browser-native
+fullscreen exit restores the floating layout through fullscreenchange; the
+explicit Exit fullscreen button also restores it. Accept/Decline/End control the
+call lifecycle. Remote hang-up/timeout removes unavailable invitations. Pending
 media requests disable closing controls. Calls have no editable draft. The
-minimized floating call panel is nonmodal so users can continue browsing.
+floating call panel is nonmodal so users can continue browsing.
 
 ## Shared behavior
 
