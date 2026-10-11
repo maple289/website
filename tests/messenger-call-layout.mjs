@@ -9,7 +9,8 @@ let checks = 0;
 try {
   const profiles = [['desktop',1440,900,false], ['tablet',768,1024,true], ['portrait',390,844,true], ['landscape',844,390,true], ['landscape-short',667,280,true], ['landscape-small',568,250,true], ['landscape-wide',932,300,true]];
   for (const [name, width, height, touch] of profiles.filter(([name]) => !process.env.LAYOUT_PROFILE || name === process.env.LAYOUT_PROFILE)) {
-    const context = await browser.newContext({ viewport:{width,height}, hasTouch:touch, ...(!firefoxMode ? {isMobile:touch} : {}) });
+    const context = await browser.newContext({ viewport:{width,height}, hasTouch:touch, ...(!firefoxMode ? {isMobile:touch} : {}),
+      ...(touch ? {userAgent:'Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36'} : {}) });
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {

@@ -29,6 +29,8 @@
 .call-panel .call-conversation{display:flex;width:100%;min-height:30px;padding:4px;font-size:12px;background:transparent;border-color:transparent;color:inherit}
 .call-devices{display:flex;flex-wrap:wrap;gap:10px;padding:8px 0}.call-devices label{display:flex;flex:1;flex-direction:column;gap:4px;min-width:140px;font-size:13px}.call-devices select{padding:8px;border:1px solid #cad5e5;border-radius:6px;width:100%;background:#fff;color:#18243a}
 .call-error{color:#a31f35;font-size:13px;margin:8px 0}.call-video-panel .call-error{color:#ffc4ca}
+.call-panel .call-speaker-on{background:#176744;color:#fff;border-color:#52b98b}.call-route-status{overflow-wrap:anywhere}
+.call-output-options{flex:1 0 100%;min-width:0;font-size:12px}.call-output-options p{margin:5px 0;overflow-wrap:anywhere}.call-routing-error{color:#a31f35}.call-video-panel .call-routing-error{color:#ffc4ca}
 .call-audio{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .call-voice-stage .call-play-audio,.call-voice-stage .call-output-error{position:static;max-width:100%;width:100%;color:#a31f35;background:transparent}
 .call-play-audio{position:absolute;bottom:36px;left:8px;z-index:2}.call-output-error{position:absolute;bottom:40px;left:8px;right:8px;color:#ffc4ca;background:#15243a;padding:8px;font-size:12px;z-index:2}
