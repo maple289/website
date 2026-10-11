@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Download, Eye, Search, UserPlus, X } from 'lucide-react';
+import { Download, Eye, Search, X } from 'lucide-react';
+import { MessengerPeople } from './MessengerPeople';
 import { TaskModal } from '@/components/TaskModal';
 import { FileTypeIcon } from '@/components/FileTypeIcon';
 import { useGuardedClose } from '@/hooks/useGuardedClose';
@@ -11,38 +12,23 @@ import { useAuth } from '@/hooks/useAuth';
 export function ChatDialog({ title, close, children, busy = false }: { title: string; close: () => void; children: ReactNode; busy?: boolean }) {
   return <TaskModal aria-label={title} className="chat-modal"><section className="chat-dialog"><header><h2>{title}</h2><button type="button" aria-label="Close" disabled={busy} onClick={close}><X size={20} /></button></header>{children}</section></TaskModal>;
 }
-function UserSearch({ onSelect, excluded = [] }: { onSelect: (user: ChatUser) => void; excluded?: string[] }) {
-  const [query, setQuery] = useState(''), [users, setUsers] = useState<ChatUser[]>([]), [error, setError] = useState(''), [loading, setLoading] = useState(false);
-  useEffect(() => {
-    let active = true;
-    setUsers([]); setError(''); setLoading(false);
-    if (query.trim().length < 2) return;
-    setLoading(true);
-    const timer = window.setTimeout(() => { void chatRequest<ChatUser[]>('users', null, { query }).then(rows => { if (active) setUsers(rows); }).catch(cause => { if (active) setError(chatError(cause)); }).finally(() => { if (active) setLoading(false); }); }, 300);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [query]);
-  return <div className="chat-user-search"><label>Find registered users<input value={query} onChange={event => setQuery(event.target.value)} placeholder="Name or email (at least 2 characters)" maxLength={100} /></label>
-    {loading && <p role="status">Searching…</p>}{error && <p className="chat-error" role="alert">{error}</p>}
-    {users.filter(item => !excluded.includes(item.id)).map(item => <button type="button" key={item.id} onClick={() => onSelect(item)}><span className="chat-avatar">{item.name[0]?.toUpperCase()}</span><span>{item.name}</span><UserPlus size={17} /></button>)}
-    {!loading && query.trim().length >= 2 && !users.length && !error && <p>No matching users.</p>}
-  </div>;
-}
+const UserSearch = MessengerPeople;
 export function NewConversation({ close, created }: { close: () => void; created: (id: string) => void }) {
   const [group, setGroup] = useState(false), [name, setName] = useState(''), [selected, setSelected] = useState<ChatUser[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const pending = useRef(false), guarded = useGuardedClose(close, group || !!name || !!selected.length, busy);
-  const submit = async () => {
+  const submit = async (person?: ChatUser) => {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError('');
-    try { const result = await chatRequest<{ id: string }>('create', null, { kind: group ? 'group' : 'direct', text: name, members: selected.map(item => item.id) }); created(result.id); }
+    try { const result = await chatRequest<{ id: string }>('create', null, { kind: group ? 'group' : 'direct', text: name, members: person ? [person.id] : selected.map(item => item.id) }); created(result.id); }
     catch (cause) { setError(chatError(cause)); }
     finally { pending.current = false; setBusy(false); }
   };
   return <ChatDialog title={group ? 'Create group' : 'New conversation'} close={guarded} busy={busy}><div className="chat-dialog-body"><label className="chat-check"><input type="checkbox" checked={group} disabled={busy} onChange={event => { setGroup(event.target.checked); setSelected([]); }} />Group conversation</label>
     {group && <label>Group name<input value={name} disabled={busy} maxLength={100} onChange={event => setName(event.target.value)} /></label>}
     <div className="chat-selected-users">{selected.map(item => <button disabled={busy} type="button" key={item.id} onClick={() => setSelected(current => current.filter(user => user.id !== item.id))}>{item.name}<X size={14} /></button>)}</div>
-    {!busy && <UserSearch excluded={selected.map(item => item.id)} onSelect={item => setSelected(current => group ? [...current, item].slice(0, 49) : [item])} />}
+    <UserSearch disabled={busy || (group && selected.length >= 49)} excluded={selected.map(item => item.id)} onSelect={item => { if (group) setSelected(current => [...current, item].slice(0, 49)); else void submit(item); }} />
     <p className="chat-help">Only conversation members can read messages and attachments. Groups support up to 50 members.</p>{error && <p className="chat-error" role="alert">{error}</p>}</div>
-    <footer><button disabled={busy} onClick={guarded}>Cancel</button><button className="chat-primary" disabled={busy || !selected.length || (group && !name.trim())} onClick={() => void submit()}>{busy ? 'Creating…' : group ? 'Create group' : 'Open conversation'}</button></footer></ChatDialog>;
+    <footer><button disabled={busy} onClick={guarded}>Cancel</button>{group && <button className="chat-primary" disabled={busy || !selected.length || !name.trim()} onClick={() => void submit()}>{busy ? 'Creating…' : 'Create group'}</button>}{busy && !group && <span role="status">Opening conversation…</span>}</footer></ChatDialog>;
 }
 export function EditMessage({ message, close, saved }: { message: ChatMessage; close: () => void; saved: () => void }) {
   const [text, setText] = useState(message.body), [busy, setBusy] = useState(false), [error, setError] = useState('');

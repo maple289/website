@@ -11,6 +11,7 @@ import { filePreviewKind } from '@/lib/filePreviews';
 import { attachmentEntry, ChatRequestError, chatError, chatPreview, chatReactions, chatRequest, chatRequestId, chatSize, chatVideo, downloadChatAttachment, openConversation, uploadChatAttachment, type ChatAttachment, type ChatMessage, type Conversation, type PendingAttachment } from '@/lib/messenger';
 import { BlockedUsers, ChatDialog, ConversationSearch, EditMessage, GroupInformation, NewConversation, SharedChatFiles } from './MessengerDialogs';
 import './Messenger.css';
+import { MessengerPeople } from './MessengerPeople';
 
 const FilePreview = lazy(() => import('./FilePreview').then(module => ({ default: module.FilePreview })));
 type Draft = { text: string; reply: ChatMessage | null; attachments: PendingAttachment[]; nonce: string; uncertain: boolean };
@@ -22,6 +23,17 @@ export function Messenger() {
   const [selected, setSelected] = useState(currentConversation), [query, setQuery] = useState(''), [list, setList] = useState<Conversation[]>(conversations), [more, setMore] = useState(conversations.length === 50), [listLoading, setListLoading] = useState(false), [listError, setListError] = useState('');
   const [newChat, setNewChat] = useState(false), [blocked, setBlocked] = useState(false);
   const drafts = useRef(new Map<string, Draft>());
+  const personPending = useRef(false), [personBusy, setPersonBusy] = useState(false), [personError, setPersonError] = useState('');
+  const choosePerson = async (id: string) => {
+    if (personPending.current) return;
+    personPending.current = true; setPersonBusy(true); setPersonError('');
+    try {
+      // Server rechecks eligibility and reopens hidden chats under the pair lock.
+      const result = await chatRequest<{ id: string }>('create', null, { kind: 'direct', members: [id] });
+      openConversation(result.id); void refresh();
+    } catch (cause) { setPersonError(chatError(cause)); }
+    finally { personPending.current = false; setPersonBusy(false); }
+  };
   useEffect(() => { const change = () => setSelected(currentConversation()); window.addEventListener('hashchange', change); window.addEventListener('popstate', change); return () => { window.removeEventListener('hashchange', change); window.removeEventListener('popstate', change); }; }, []);
   useEffect(() => { let active = true; setListError('');
     if (!query.trim()) { setListLoading(false); setList(conversations); setMore(conversations.length === 50); return; }
@@ -33,11 +45,11 @@ export function Messenger() {
   if (!user) return null;
   return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations В· <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
     {error && <p className="chat-error chat-service-error" role="alert">{error} <button onClick={() => void refresh()}>Retry</button></p>}
-    <div className="chat-workspace"><aside className="chat-conversation-list" aria-label="Conversations"><label className="chat-search"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} /></label><div className="chat-inbox-items">
+    <div className="chat-workspace"><aside className="chat-conversation-list" aria-label="Conversations"><section className="chat-sidebar-conversations" aria-label="Conversations and groups"><h2 className="chat-sidebar-heading">Conversations / Groups</h2><label className="chat-search"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} /></label><div className="chat-inbox-items">
       {list.map(item => <button key={item.id} className={`chat-inbox-item ${selected === item.id ? 'is-active' : ''}`} aria-current={selected === item.id ? 'page' : undefined} onClick={() => openConversation(item.id)}><span className="chat-avatar">{item.kind === 'group' ? <Users size={19} /> : item.name[0]?.toUpperCase()}<i data-online={item.members.some(member => member.id !== user.id && member.online)} /></span><span className="chat-inbox-text"><strong>{item.name}{item.muted && <BellOff size={13} />}</strong><span>{item.latest?.body || (item.latest?.attachments.length ? 'Sent an attachment' : 'No messages yet')}</span></span>{item.unread > 0 && <span className="chat-count">{item.unread > 99 ? '99+' : item.unread}</span>}</button>)}
       {!list.length && !listLoading && <p className="chat-empty">{query ? 'No matching conversations.' : 'Start a conversation with a registered user.'}</p>}
       {listLoading && <p role="status" className="chat-empty">LoadingвЂ¦</p>}{more && !listLoading && <button className="chat-load-more" onClick={() => void loadMore()}>More conversations</button>}{listError && <p className="chat-error" role="alert">{listError}</p>}
-    </div></aside>
+    </div></section><section className="chat-desktop-people" aria-label="People"><h2 className="chat-sidebar-heading">People</h2><MessengerPeople label="Search people" selectedConversation={selected} disabled={personBusy} onSelect={person => void choosePerson(person.id)} />{personBusy && <p className="chat-help" role="status">Opening conversation…</p>}{personError && <p className="chat-error" role="alert">{personError}</p>}</section></aside>
       {selected ? <ConversationPane key={selected} id={selected} revision={revision} drafts={drafts.current} /> : <div className="chat-welcome"><MessageCircle size={48} /><h2>Your conversations</h2><p>Select a conversation or start a new message.</p><button className="chat-primary" onClick={() => setNewChat(true)}>New conversation</button></div>}
     </div>
     {newChat && <NewConversation close={() => setNewChat(false)} created={id => { setNewChat(false); openConversation(id); void refresh(); }} />}

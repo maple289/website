@@ -24,6 +24,13 @@ Busy forms cannot close. Completed saves bypass discard prompts.
 
 ## Inventory
 
+Messenger New Conversation and group-member pickers share the paginated People
+list. Direct selection closes only after successful server-authorized creation/
+reopening; failure stays in the task. Pending selection disables list and close
+controls, with a synchronous request guard. Group drafts retain useGuardedClose
+and Keep Editing preserves names and selected members. TaskModal continues to
+own focus, inertness and scroll locking; outside taps and Escape do not dismiss.
+
 The common content context menu remains lightweight. New media Rename/Share,
 temporary-link and file name-conflict dialogs use TaskModal. Rename/Share drafts
 and Move destination selection use useGuardedClose; pending requests block

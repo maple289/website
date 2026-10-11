@@ -11,13 +11,21 @@ notification bell, never initialize a chat channel, and cannot call Messenger
 RPCs, upload attachments, or retrieve attachment bytes. The canonical page is
 `#/messages`; conversation links use `#/messages?conversation=<uuid>`.
 
-Desktop uses a conversation list beside the thread. Tablet/mobile use a list
-followed by a thread with an explicit Back button. Messages load newest first
+Desktop uses independently scrolling Conversations / Groups and People lists
+beside the thread. People remains visible while chatting, has its own name/email
+search, and highlights the selected direct chat with presence and unread badges.
+Below 901px, New Conversation opens a searchable registered-user list; selecting
+a person opens the thread and closes the task. The user list is not permanently
+shown beside a mobile thread. An explicit Back button returns to conversations.
+Messages load newest first
 in 50-message pages; scrolling upward or Load Older retrieves previous pages.
 The browser retains a moving window of up to 500 messages, and can continue
 paging older history. Go to Latest returns to the recent conversation.
 
-New Message creates a direct chat or a named group. Groups support up to 50
+New Conversation opens an existing direct chat or creates one when necessary,
+including reopening a chat previously hidden for the current user. Selecting a
+person immediately opens their chat; group mode retains multi-selection and an
+explicit Create Group button. Groups support up to 50
 members. Each message has Reply and, for its author, Edit / Delete. A compact
 reaction selector opens upward; selecting the applied reaction again removes
 it, and a different reaction replaces it. Counts show names without a separate
@@ -35,8 +43,32 @@ introduced.
 The existing Supabase account session is the only identity. Database functions
 derive the actor from `auth.uid()` and reject inactive, banned, deleted or
 password-setup-required accounts. Browser-provided member IDs choose recipients;
-they never choose the actor. Display names use First Name, Last Name, then email
-prefix; the Messenger directory does not return complete email addresses.
+they never choose the actor. Display names combine available first/last names
+and fall back to the account email when both names are absent. The directory
+returns only ID, display name, session presence, the current account's direct
+conversation ID, and unread count. Email filtering happens on the server; named
+users' email addresses are not returned as separate fields.
+
+`20261011020000_messenger_people.sql` adds the `people` RPC action with 50-user
+cursor pages and literal case-insensitive name/email filtering, including empty
+and one-character queries. More People makes every eligible user reachable.
+The same existing active-account and bidirectional-block predicates govern the
+directory and conversation creation. Pending password-setup/disabled/banned/
+deleted accounts and accounts without profiles are excluded. Legacy accounts
+remain eligible under the existing activation rules. The directory helper is
+private; the authenticated RPC derives its actor from the session. Each loaded
+directory page refreshes with the existing inbox/presence refresh cycle (including
+realtime notifications, focus/reconnect and the 20-second active-page poll).
+Account changes discard directory rows and search state. Selection always calls
+the existing unique-pair/advisory-lock create action, so stale directory entries
+cannot bypass permission checks or produce duplicate direct conversations.
+
+Validation: `tests/messenger-people.mjs` runs the actual migrations and permission,
+pagination, direct-chat reuse, unread/presence and group checks in isolated
+PostgreSQL. `tests/messenger-people-ui.mjs` exercises the actual Messenger and
+providers against fixture responses at desktop, tablet and phone portrait/
+landscape sizes; it does not constitute physical-device testing. Apply the new
+migration before deploying the frontend that calls `people`.
 
 Group owners/admins can rename and add members. Only the owner assigns/removes
 the Admin role. Admins cannot remove another admin or the owner. All members
