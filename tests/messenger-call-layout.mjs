@@ -63,9 +63,15 @@ try {
         const stream=canvasStream(false);stream.addTrack(microphone());window.__remoteStream=stream;
         for(const track of stream.getTracks())window.__peers.at(-1).ontrack({track});
       };
+      window.__replaceRemoteVideo = () => {
+        const stream=window.__remoteStream;
+        for(const old of stream.getVideoTracks()){stream.removeTrack(old);old.stop();}
+        const track=canvasStream(false).getVideoTracks()[0];stream.addTrack(track);window.__peers.at(-1).ontrack({track});
+      };
       window.__mediaSnapshot=()=>({peers:window.__peers.length,captures:window.__captures.length,replaces:window.__replaces,trackIds:window.__peers.at(-1)?.getSenders().map(s=>s.track?.id)});
     });
-    let call=null, invitation=null;
+    let call=null, invitation=null, cameraSequence=0;
+    const cameraSignals=[], publishedStates=[];
     const makeCall = (media, incoming=false) => ({id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',conversation_id:'conversation',caller_id:incoming?'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       caller_name:'Alex',name:'Alex',media,state:incoming?'ringing':'active',my_state:incoming?'invited':'joined',mine:!incoming,seen:false,started_at:new Date().toISOString(),answered_at:incoming?null:new Date(Date.now()-65000).toISOString(),ended_at:null,duration:0,outcome:null,
       members:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'Alex',state:'joined'},{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',name:'You',state:incoming?'invited':'joined'}]});
@@ -77,7 +83,8 @@ try {
         case 'inbox':result=invitation?[invitation]:call?[call]:[];break;
         case 'start':call=makeCall(body.p_data.media);result=call;break;
         case 'heartbeat':result=call;break;
-        case 'signals':result=[];break;
+        case 'signals':result=cameraSignals.filter(s=>s.id>(body.p_data.after||0));break;
+        case 'media-state':publishedStates.push(body.p_data);result={};break;
         case 'end':result={...call,state:'ended',my_state:'left'};call=null;break;
         case 'decline':result={...invitation,state:'ended',my_state:'declined'};invitation=null;break;
         case 'accept':call={...invitation,state:'active',my_state:'joined',answered_at:new Date().toISOString()};invitation=null;result=call;break;
@@ -93,6 +100,30 @@ try {
     assert.equal(await page.evaluate(()=>window.__captures[0].video!==false),true);
     const remote=page.locator('.call-remote video'), self=page.locator('.call-self-view');
     const before=await page.evaluate(()=>{window.__videoNode=document.querySelector('.call-remote video');return window.__mediaSnapshot();});
+    const cameraChange=async(cameraState,revision,screenSharing=false)=>{
+      cameraSignals.push({id:++cameraSequence,sender_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',kind:'media-state',payload:{cameraState,screenSharing,revision}});
+      await page.evaluate(()=>window.dispatchEvent(new CustomEvent('messenger-call',{detail:'call-signal'})));
+    };
+    const black=async()=>{
+      await page.waitForFunction(()=>document.querySelector('.call-remote')?.dataset.videoState==='disabled');
+      assert.equal(await remote.evaluate(n=>getComputedStyle(n).visibility),'hidden','decoded frame suppressed');
+      assert.equal(await page.locator('.call-remote .call-camera-off').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(0, 0, 0)','solid black');
+      assert.equal(await page.evaluate(()=>window.__videoNode===document.querySelector('.call-remote video')),true,'media element retained');
+      assert.equal(await page.evaluate(()=>window.__remoteStream.getAudioTracks()[0].readyState),'live','remote audio retained');
+    };
+    const live=async()=>{await page.waitForFunction(()=>document.querySelector('.call-remote')?.dataset.videoState==='enabled');assert.equal(await remote.evaluate(n=>getComputedStyle(n).visibility),'visible');};
+    await cameraChange('disabled',1);await black();
+    assert.equal(await page.evaluate(()=>{const t=window.__remoteStream.getVideoTracks()[0];return t.enabled&&!t.muted&&t.readyState==='live';}),true,'signal overrides deceptively live remote track');
+    if(name==='desktop')await panel.screenshot({path:'.runtime/call-layout/camera-off-normal.png'});
+    await cameraChange('enabled',2);await live();
+    await cameraChange('disabled',1);await page.waitForTimeout(100);assert.equal(await page.locator('.call-remote').getAttribute('data-video-state'),'enabled','stale signal ignored');
+    await page.evaluate(()=>{const t=window.__remoteStream.getVideoTracks()[0];window.__trackMuted=true;Object.defineProperty(t,'muted',{configurable:true,get:()=>window.__trackMuted});t.dispatchEvent(new Event('mute'));});await black();
+    await page.evaluate(()=>{window.__trackMuted=false;window.__remoteStream.getVideoTracks()[0].dispatchEvent(new Event('unmute'));});await live();
+    await page.evaluate(()=>{window.__remoteStream.getVideoTracks()[0].enabled=false;});await black();
+    await page.evaluate(()=>{window.__remoteStream.getVideoTracks()[0].enabled=true;});await live();
+    await page.evaluate(()=>{const t=window.__remoteStream.getVideoTracks()[0];t.stop();t.dispatchEvent(new Event('ended'));});await black();
+    await page.evaluate(()=>window.__replaceRemoteVideo());await live();
+    assert.equal(await remote.evaluate(n=>n.srcObject.getVideoTracks().length),1,'new receiver supersedes ended video');
     const r=await remote.boundingBox(), s=await self.boundingBox();assert.ok(s.width<r.width*0.4&&s.height<r.height*0.6,'small PiP');
     assert.equal(await self.getAttribute('data-corner'),'top-right');
     assert.equal(await remote.evaluate(n=>getComputedStyle(n).objectFit),'contain');
@@ -103,13 +134,20 @@ try {
     await page.waitForFunction(()=>document.querySelector('.call-fullscreen'));
     const full=await panel.boundingBox();assert.ok(Math.abs(full.x)<1&&Math.abs(full.y)<1&&Math.abs(full.width-width)<1&&Math.abs(full.height-height)<1,'whole viewport');
     assert.equal(await page.evaluate(()=>document.fullscreenElement?.classList.contains('call-active')),true,'container fullscreen, not video');
+    await cameraChange('disabled',3);await black();
+    if(name==='desktop')await panel.screenshot({path:'.runtime/call-layout/camera-off-fullscreen.png'});
+    await cameraChange('enabled',4);await live();
+    await cameraChange('disabled',5,true);await live(); // A shared screen is still transmitted with camera off.
+    await cameraChange('disabled',6,false);await black();await cameraChange('enabled',7);await live();
     for(let i=0;i<4;i++){
       const preview=await self.boundingBox(), controls=await page.locator('.call-footer').boundingBox(), header=await page.locator('.call-header').boundingBox();
       assert.ok(preview.x>=0&&preview.y>=header.y+header.height&&preview.x+preview.width<=width+1&&preview.y+preview.height<=controls.y+1,'PiP inside safe area and clear of controls');
       await self.getByRole('button',{name:'Move self-view to next corner'}).click();
     }
+    const publishedBeforeHide=publishedStates.length;
     await page.getByRole('button',{name:'Hide self-view',exact:true}).click();assert.equal(await self.count(),0);
     await page.getByRole('button',{name:'Show self-view',exact:true}).click();await self.waitFor();
+    assert.equal(publishedStates.length,publishedBeforeHide,'Hide self-view emits no camera-state signal');
     await page.getByRole('button',{name:'Devices',exact:true}).click();
     await page.getByRole('combobox',{name:'Microphone',exact:true}).waitFor();
     const preview=await self.boundingBox(),footer=await page.locator('.call-footer').boundingBox();assert.ok(preview.y+preview.height<=footer.y+1);
@@ -148,9 +186,23 @@ try {
       assert.deepEqual(await page.evaluate(()=>window.__mediaSnapshot()),before,'real fullscreen leaves engine unchanged');
     }
     await page.getByRole('button',{name:'Camera off',exact:true}).click();await page.getByRole('button',{name:'Camera on',exact:true}).waitFor();
+    assert.equal(await self.getAttribute('data-video-state'),'disabled');assert.equal(await self.locator('video').evaluate(n=>getComputedStyle(n).visibility),'hidden');
+    assert.equal(await self.locator('.call-self-off').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(0, 0, 0)');
+    assert.equal(publishedStates.at(-1).cameraState,'disabled');
     assert.equal(await page.evaluate(()=>window.__peers[0].getSenders().find(s=>s.track?.kind==='audio').track.readyState),'live');
     assert.ok(await panel.isVisible(),'camera off keeps call');
+    await page.getByRole('button',{name:'Camera on',exact:true}).click();await page.getByRole('button',{name:'Camera off',exact:true}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('.call-self-view')?.dataset.videoState==='enabled');
+    assert.equal(publishedStates.at(-1).cameraState,'enabled');
+    assert.equal(await page.evaluate(()=>window.__peers.length),before.peers);
+    await page.getByRole('button',{name:'Expand call',exact:true}).click();await page.locator('.call-fullscreen').waitFor();
+    await page.getByRole('button',{name:'Camera off',exact:true}).click();await page.getByRole('button',{name:'Camera on',exact:true}).waitFor();
+    assert.equal(await self.getAttribute('data-video-state'),'disabled');assert.equal(await self.locator('video').evaluate(n=>getComputedStyle(n).visibility),'hidden');
+    assert.equal(await self.locator('.call-self-off').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(0, 0, 0)');
+    await page.getByRole('button',{name:'Camera on',exact:true}).click();await page.getByRole('button',{name:'Camera off',exact:true}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('.call-self-view')?.dataset.videoState==='enabled');
     await page.getByRole('button',{name:'End call',exact:true}).click();await panel.waitFor({state:'detached'});
+    await page.waitForFunction(()=>!document.fullscreenElement&&document.body.style.overflow==='');
     await page.getByRole('button',{name:'Voice call',exact:true}).click();await panel.waitFor();
     assert.equal(await page.evaluate(()=>window.__captures.at(-1).video),false,'voice capture microphone only');
     assert.equal(await page.locator('.call-stage,.call-self-view').count(),0,'voice has no video canvas');

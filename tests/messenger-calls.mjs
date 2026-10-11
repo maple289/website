@@ -35,7 +35,7 @@ try {
     await sql('INSERT INTO auth.users(id) VALUES($1)', [id]);
     await sql('INSERT INTO profiles VALUES($1,$2,NULL,$3)', [id, name, name + '@test.invalid']);
   }
-  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql'])
+  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql'])
     await db.exec(await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8'));
   pass('call migration applies with actual Messenger RPCs and serializers');
   await actor(a);
@@ -69,6 +69,28 @@ try {
   await actor(b); const signals = await rpc('signals',call.id,{session_id:sb}); assert.equal(signals.length,1); assert.equal(signals[0].sender_id,a);
   assert.equal((await rpc('signals',call.id,{session_id:sb,after:signals[0].id})).length,0);
   pass('acceptance, relay credentials, targeted signaling and cursor deduplication');
+  const off={session_id:sa,cameraState:'disabled',screenSharing:false,revision:1};
+  await actor(outsider);await assert.rejects(rpc('media-state',call.id,off),/unavailable/);
+  await actor(a);await assert.rejects(rpc('media-state',call.id,{...off,session_id:sb}),/another browser tab/);
+  for(const invalid of [{cameraState:'unknown'},{screenSharing:'false'},{revision:null},{revision:-1},{revision:1.5},{revision:9007199254740992}])
+    await assert.rejects(rpc('media-state',call.id,{...off,...invalid}),/Invalid camera state/);
+  await rpc('media-state',call.id,off);await rpc('media-state',call.id,{...off,cameraState:'enabled'});
+  let snapshot=await rpc('snapshot',call.id);
+  assert.deepEqual(snapshot.members.find(m=>m.id===a).mediaState,{cameraState:'disabled',screenSharing:false,revision:1});
+  await rpc('media-state',call.id,{...off,cameraState:'enabled',revision:3});await rpc('media-state',call.id,{...off,revision:2});
+  snapshot=await rpc('snapshot',call.id);assert.equal(snapshot.members.find(m=>m.id===a).mediaState.revision,3);
+  assert.equal(snapshot.members.find(m=>m.id===a).mediaState.cameraState,'enabled');
+  await actor(b);const cameraSignals=await rpc('signals',call.id,{session_id:sb,after:signals[0].id});
+  assert.equal(cameraSignals.length,2);assert.ok(cameraSignals.every(s=>s.kind==='media-state'&&s.sender_id===a));
+  await rpc('media-state',call.id,{session_id:sb,user_id:a,cameraState:'disabled',screenSharing:true,revision:1});
+  snapshot=await rpc('snapshot',call.id);assert.equal(snapshot.members.find(m=>m.id===a).mediaState.cameraState,'enabled');
+  assert.equal(snapshot.members.find(m=>m.id===b).mediaState.screenSharing,true);
+  await admin();await sql("UPDATE messenger_call_signals SET created_at=now()-interval '3 minutes' WHERE call_id=$1",[call.id]);
+  await actor(a);await rpc('heartbeat',call.id,{session_id:sa});
+  assert.equal((await rpc('signals',call.id,{session_id:sa})).length,0);
+  assert.equal((await rpc('snapshot',call.id)).members.find(m=>m.id===b).mediaState.screenSharing,true);
+  await actor(b);
+  pass('camera signals validate state/session/actor; versions ignore stale retries; latest state survives signal expiry');
   await rpc('end',call.id,{session_id:sb}); await actor(a);
   const ended = await rpc('heartbeat',call.id,{session_id:sa}); assert.equal(ended.state,'ended'); assert.equal(ended.outcome,'completed');
   const history = await chat('messages',cid); assert.equal(history[0].call.id,call.id); assert.equal(history[0].call.outcome,'completed');
@@ -99,6 +121,7 @@ try {
   pass('blocking, inactive accounts and midcall membership revocation are enforced');
   await actor(a); const group=await chat('create',null,{kind:'group',text:'Small group',members:[b,fourth]});
   const gc=await rpc('start',null,{conversation_id:group.id,session_id:sa,client_id:randomUUID(),media:'voice'});
+  await assert.rejects(rpc('media-state',gc.id,{...off,session_id:sa}),/Invalid camera state/);
   await actor(b); await rpc('accept',gc.id,{session_id:sb});
   await actor(fourth); await rpc('accept',gc.id,{session_id:randomUUID()});
   await actor(a); const left=await rpc('end',gc.id,{session_id:sa}); assert.equal(left.state,'active');

@@ -7,12 +7,13 @@ import { TaskModal } from '@/components/TaskModal';
 import { useModalLayer } from '@/hooks/useModalLayer';
 import { useCallFullscreen } from '@/hooks/useCallFullscreen';
 import { useCallRingtone } from '@/hooks/useCallRingtone';
+import { useVideoTrackState } from '@/hooks/useVideoTrackState';
 import { openConversation } from '@/lib/messenger';
 import type { CallEngine, CallState } from '@/lib/callEngine';
 import type { CallInfo } from '@/lib/calls';
 import './Calls.css';
 
-function Media({ stream, local = false, video = true, sink = '' }: { stream: MediaStream; local?: boolean; video?: boolean; sink?: string }) {
+function Media({ stream, local = false, video = true, visible = true, sink = '' }: { stream: MediaStream; local?: boolean; video?: boolean; visible?: boolean; sink?: string }) {
   const ref = useRef<HTMLVideoElement & { setSinkId?: (id: string) => Promise<void>; sinkId?: string }>(null);
   const [blocked, setBlocked] = useState(false), [outputError, setOutputError] = useState('');
   useEffect(() => {
@@ -31,15 +32,26 @@ function Media({ stream, local = false, video = true, sink = '' }: { stream: Med
     void node.setSinkId(sink).then(() => { if (alive) setOutputError(''); }).catch(() => { if (alive) setOutputError('Unable to switch speaker. Choose another output.'); });
     return () => { alive = false; };
   }, [sink, local]);
-  return <><video ref={ref} autoPlay playsInline muted={local} className={video ? 'call-video' : 'call-audio'} />
+  return <><video ref={ref} autoPlay playsInline muted={local} className={video ? 'call-video' : 'call-audio'} style={video && !visible ? { visibility: 'hidden' } : undefined} />
     {blocked && !local && <button className="call-play-audio" onClick={() => void ref.current?.play().then(() => setBlocked(false)).catch(() => setBlocked(true))}>Play call audio</button>}
     {outputError && <p role="alert" className="call-output-error">{outputError}</p>}</>;
 }
 function duration(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
 function Avatar({ name }: { name: string }) { return <span className="call-avatar" aria-hidden="true">{name.trim().slice(0, 1).toUpperCase() || <Phone size={30} />}</span>; }
 
+function RemoteVideo({ name, remote, sink }: { name: string; remote?: CallState['remotes'][number]; sink: string }) {
+  const media = remote?.mediaState;
+  const visible = useVideoTrackState(remote?.stream ?? null, !media || media.cameraState === 'enabled' || media.screenSharing);
+  return <div className="call-remote" data-video-state={visible ? 'enabled' : 'disabled'}>
+    {remote && <Media stream={remote.stream} sink={sink} visible={visible} />}
+    {!visible && <div className="call-video-placeholder call-camera-off"><VideoOff size={28} /><span>{name}</span><small>{media?.cameraState === 'disabled' && !media.screenSharing ? 'Camera off' : remote?.connected ? 'Video unavailable' : 'Connecting…'}</small></div>}
+    <span className="call-remote-name">{name}{remote && !remote.connected ? ' · Connecting…' : ''}</span>
+  </div>;
+}
+
 const corners = ['top-right', 'bottom-right', 'bottom-left', 'top-left'] as const;
 function SelfView({ state }: { state: CallState }) {
+  const visible = useVideoTrackState(state.local, state.camera || state.sharing);
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; startX: number; startY: number; left: number; top: number } | null>(null);
   const [corner, setCorner] = useState<(typeof corners)[number]>('top-right');
@@ -79,11 +91,11 @@ function SelfView({ state }: { state: CallState }) {
     setCorner(bottom ? (right ? 'bottom-right' : 'bottom-left') : (right ? 'top-right' : 'top-left'));
     drag.current = null; setPosition(null);
   };
-  return <div ref={ref} className={`call-self-view ${state.sharing ? 'call-self-screen' : ''}`} data-corner={corner}
+  return <div ref={ref} className={`call-self-view ${state.sharing ? 'call-self-screen' : ''}`} data-corner={corner} data-video-state={visible ? 'enabled' : 'disabled'}
     style={position ? { left: position.left, top: position.top, right: 'auto', bottom: 'auto' } : undefined}
     onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { drag.current = null; setPosition(null); }}>
-    {state.local && <Media stream={state.local} local video={state.camera || state.sharing} />}
-    {!state.camera && !state.sharing && <div className="call-self-off"><VideoOff size={22} /><span>Camera off</span></div>}
+    {state.local && <Media stream={state.local} local visible={visible} />}
+    {!visible && <div className="call-self-off"><VideoOff size={22} /><span>{state.sharing ? 'Screen unavailable' : state.camera ? 'Camera unavailable' : 'Camera off'}</span></div>}
     <span className="call-self-label">{state.sharing ? 'Your screen' : 'You'}{state.muted ? ' · Muted' : ''}</span>
     <button aria-label="Move self-view to next corner" title="Drag self-view, or move to next corner" onClick={() => setCorner(corners[(corners.indexOf(corner) + 1) % corners.length])}><Move size={14} /></button>
   </div>;
@@ -119,14 +131,7 @@ function ActiveCall({ call, state, engine }: { call: CallInfo; state: CallState;
       <button disabled={state.busy} aria-label={fullscreen ? 'Exit fullscreen' : 'Expand call'} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen call'} onClick={() => fullscreen ? void exit() : enter()}>{fullscreen ? <Minimize2 size={19} /> : <Maximize2 size={19} />}</button></header>
     {video ? <div className="call-stage">
       <div className={`call-remote-grid ${remotes.length > 1 ? 'call-group-grid' : ''}`}>
-        {remotes.map(member => {
-          const remote = state.remotes.find(r => r.id === member.id);
-          return <div className="call-remote" key={member.id}>
-            {remote && <Media stream={remote.stream} sink={sink} />}
-            {!remote?.stream.getVideoTracks().some(t => t.readyState === 'live' && !t.muted) && <div className="call-video-placeholder"><Avatar name={member.name} /><span>{member.name}</span><small>{remote?.connected ? 'Camera off' : 'Connecting…'}</small></div>}
-            <span className="call-remote-name">{member.name}{remote && !remote.connected ? ' · Connecting…' : ''}</span>
-          </div>;
-        })}
+        {remotes.map(member => <RemoteVideo key={member.id} name={member.name} remote={state.remotes.find(r => r.id === member.id)} sink={sink} />)}
         {!remotes.length && <div className="call-video-placeholder"><Video size={36} /><p>Waiting for participants…</p></div>}
       </div>
       {selfVisible && <SelfView state={state} />}

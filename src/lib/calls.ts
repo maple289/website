@@ -1,12 +1,14 @@
 import { supabase } from '@/lib/supabase';
 import { authenticatedFetch, authenticatedRequest } from '@/lib/authSession';
 import { ChatRequestError } from '@/lib/messenger';
-export type CallMember = { id: string; name: string; state: 'invited' | 'joined' | 'declined' | 'left' | 'missed' };
+export type CallMediaState = { cameraState: 'enabled' | 'disabled'; screenSharing: boolean; revision: number };
+export type CallMember = { id: string; name: string; state: 'invited' | 'joined' | 'declined' | 'left' | 'missed'; mediaState?: CallMediaState | null };
 export type CallInfo = { id: string; conversation_id: string; caller_id: string; caller_name: string; name: string;
   media: 'voice' | 'video'; state: 'ringing' | 'active' | 'ended'; outcome: string | null;
   started_at: string; answered_at: string | null; ended_at: string | null; duration: number;
   my_state: CallMember['state'] | null; mine: boolean; seen: boolean; members: CallMember[] };
-export type CallSignal = { id: number; sender_id: string; kind: 'offer' | 'answer' | 'candidate'; payload: RTCSessionDescriptionInit | RTCIceCandidateInit };
+export type CallSignal = { id: number; sender_id: string; kind: 'offer' | 'answer' | 'candidate'; payload: RTCSessionDescriptionInit | RTCIceCandidateInit }
+  | { id: number; sender_id: string; kind: 'media-state'; payload: CallMediaState };
 export type RelayConfig = { iceServers: RTCIceServer[]; expiresAt: number };
 export async function callRequest<T>(action: string, call: string | null = null, data: Record<string, unknown> = {}): Promise<T> {
   const { data: result, error } = await authenticatedRequest(() => supabase.rpc('messenger_calls_rpc', { p_action: action, p_call: call, p_data: data }));

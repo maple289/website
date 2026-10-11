@@ -12,7 +12,7 @@ class Peer {
   getSenders(){return this.senders.map(x=>x.sender);} getTransceivers(){return this.senders;}
   setConfiguration(configuration){this.configuration=configuration;} restartIce(){this.restarts=(this.restarts||0)+1;} close(){this.connectionState='closed';this.signalingState='closed';}
 }
-let serverCall=null, failEnd=false, requests=[], streams=[], pendingMedia=null, mediaRequests=0, relayRequests=0, pendingDevices=null;
+let serverCall=null, failEnd=false, requests=[], streams=[], pendingMedia=null, mediaRequests=0, relayRequests=0, pendingDevices=null, failMediaState=false;
 let timerId=0; const timers=new Map();
 const browser=new EventTarget(); Object.assign(browser,{isSecureContext:true,RTCPeerConnection:Peer,setInterval:()=>1,clearInterval:()=>{},
   setTimeout:(callback,delay)=>{const id=++timerId;timers.set(id,{callback,delay});return id;},clearTimeout:id=>timers.delete(id)});
@@ -21,7 +21,7 @@ const navigator={onLine:false,mediaDevices:{
   getDisplayMedia:async()=>{const s=new Stream([new Track('video')]);streams.push(s);return s;}, enumerateDevices:async()=>pendingDevices||[]}};
 const relay=async()=>{relayRequests++;return {iceServers:[{urls:'turn:fixture.invalid',username:'test',credential:'test'}],expiresAt:Date.now()+3600000};};
 const call={id:'call',conversation_id:'conversation',caller_id:'a',media:'video',state:'ringing',my_state:'joined',members:[{id:'a',state:'joined'},{id:'b',state:'invited'}]};
-const request=async(action,id,data)=>{requests.push({action,id,data});if(action==='start'){serverCall={...call};return serverCall;}if(action==='accept'){serverCall={...call,state:'active',members:call.members.map(m=>({...m,state:'joined'}))};return serverCall;}if(action==='inbox')return serverCall?[serverCall]:[];if(action==='signals')return [];if(action==='heartbeat')return serverCall;if(action==='end'){if(failEnd)throw Error('offline');serverCall={...serverCall,state:'ended',my_state:'left'};return serverCall;}return {};};
+const request=async(action,id,data)=>{requests.push({action,id,data});if(action==='media-state'&&failMediaState)throw Error('offline media');if(action==='start'){serverCall={...call,media:data.media};return serverCall;}if(action==='accept'){serverCall={...call,state:'active',members:call.members.map(m=>({...m,state:'joined'}))};return serverCall;}if(action==='inbox')return serverCall?[serverCall]:[];if(action==='signals')return [];if(action==='heartbeat')return serverCall;if(action==='end'){if(failEnd)throw Error('offline');serverCall={...serverCall,state:'ended',my_state:'left'};return serverCall;}return {};};
 const exports={}; new Function('exports','chatRequestId','callRelay','callRequest','window','navigator','RTCPeerConnection','MediaStream','document',compiled)(exports,()=>String(Math.random()),relay,request,browser,navigator,Peer,Stream,browser);
 const {CallEngine}=exports; let checks=0; const pass=label=>{checks++;console.log('PASS '+label);};
 let engine=new CallEngine('a',()=>{});
@@ -73,4 +73,39 @@ assert.equal(requests.filter(r=>r.action==='accept').length,beforeTimeout);
 const late=new Stream([new Track('audio'),new Track('video')]);resolveLate(late);await Promise.resolve();await Promise.resolve();
 assert.ok(late.getTracks().every(t=>t.readyState==='ended'));engine.dispose();pendingMedia=null;timers.clear();
 pass('stalled permission shows an actionable error, does not accept on the server and stops late capture');
+navigator.onLine=false;engine=new CallEngine('a',()=>{});await engine.start('conversation','video');
+serverCall={...serverCall,state:'active',members:call.members.map(m=>({...m,state:'joined'}))};navigator.onLine=true;await engine.poll();
+const samePeer=engine.peers.get('b').pc, sameAudio=engine.state.local.getAudioTracks()[0];
+const latestState=()=>requests.filter(r=>r.action==='media-state').at(-1).data;
+assert.equal(latestState().cameraState,'enabled');
+await engine.camera();await Promise.resolve();assert.equal(latestState().cameraState,'disabled');
+assert.equal(latestState().screenSharing,false);assert.equal(engine.peers.get('b').pc,samePeer);assert.equal(sameAudio.readyState,'live');
+await engine.camera();await Promise.resolve();assert.equal(latestState().cameraState,'enabled');
+await engine.receive({id:100,sender_id:'b',kind:'media-state',payload:{cameraState:'disabled',screenSharing:false,revision:7}});
+assert.equal(engine.state.remotes[0].mediaState.cameraState,'disabled');
+await engine.receive({id:101,sender_id:'b',kind:'media-state',payload:{cameraState:'enabled',screenSharing:false,revision:6}});
+assert.equal(engine.state.remotes[0].mediaState.cameraState,'disabled','stale event cannot undo camera off');
+serverCall={...serverCall,members:serverCall.members.map(m=>({...m,mediaState:{cameraState:'enabled',screenSharing:false,revision:2}}))};
+await engine.poll();assert.equal(engine.state.remotes[0].mediaState.revision,7,'stale inbox cannot override a signal');
+await engine.receive({id:102,sender_id:'b',kind:'media-state',payload:{cameraState:'enabled',screenSharing:false,revision:8}});
+assert.equal(engine.state.remotes[0].mediaState.cameraState,'enabled');assert.equal(engine.peers.get('b').pc,samePeer);
+await engine.share();await engine.camera();await Promise.resolve();
+assert.equal(latestState().cameraState,'disabled');assert.equal(latestState().screenSharing,true,'camera off does not suppress shared screen');
+await engine.share();await Promise.resolve();assert.equal(latestState().screenSharing,false);assert.equal(latestState().cameraState,'disabled');
+await engine.camera();const disconnected=engine.state.local.getVideoTracks()[0];disconnected.readyState='ended';disconnected.onended();
+await Promise.resolve();await Promise.resolve();assert.equal(engine.state.camera,false);assert.equal(latestState().cameraState,'disabled');
+assert.equal(engine.peers.get('b').pc,samePeer);assert.equal(sameAudio.readyState,'live');
+failMediaState=true;await engine.camera();await Promise.resolve();assert.match(engine.state.error,/synchronized/);
+await engine.camera();await Promise.resolve();assert.equal(engine.pendingMediaState.payload.cameraState,'disabled');
+const retryRevision=engine.pendingMediaState.payload.revision;
+failMediaState=false;await engine.poll();await Promise.resolve();await Promise.resolve();assert.equal(engine.pendingMediaState,null);
+assert.equal(latestState().revision,retryRevision);assert.equal(latestState().cameraState,'disabled');
+assert.equal(engine.peers.get('b').pc,samePeer);assert.equal(sameAudio.readyState,'live');
+await engine.end();engine.dispose();
+pass('camera state signals are versioned, honor actual capture, preserve screen/audio and reuse peer connections');
+navigator.onLine=false;engine=new CallEngine('a',()=>{});await engine.start('conversation','video');
+serverCall={...serverCall,state:'active',members:call.members.map(m=>({...m,state:'joined',mediaState:m.id==='b'?{cameraState:'disabled',screenSharing:false,revision:12}:null}))};
+navigator.onLine=true;await engine.poll();assert.equal(engine.state.remotes[0].mediaState.cameraState,'disabled');assert.equal(engine.state.remotes[0].mediaState.revision,12);
+await engine.end();engine.dispose();
+pass('new peer starts with persisted camera state for late joiners');
 console.log(`${checks} call engine checks passed.`);

@@ -31,8 +31,24 @@ layout. Ending a fullscreen call also exits fullscreen and releases modal locks.
 
 The existing protocol has no voice-to-video upgrade operation and creates video
 transceivers only for video calls. This optional upgrade is not added here;
-implementing it requires an explicit shared call-type transition. No changes
-were made to CallEngine, signaling RPCs, ICE, TURN credentials or router settings.
+implementing it requires an explicit shared call-type transition. SDP/ICE, TURN
+credentials and router settings remain unchanged.
+
+Camera availability is explicitly published through the existing authenticated
+signaling RPC as `media-state` with cameraState, screenSharing and a monotonically
+increasing revision. Only the joined participant's owning browser session may
+update it. The latest state is saved on the call member for late joiners and
+targeted events notify joined peers. Retries reuse the revision; stale requests,
+signals and inbox snapshots cannot overwrite newer state. Screen sharing remains
+visible when the camera is off. Failed publication retries during call polling.
+
+Remote and self-view presentation also monitors actual enabled/muted/readyState,
+mute/unmute/ended and stream track changes. Unavailable video is immediately
+masked with solid black and its image is hidden; the existing element stays
+attached for audio and automatic camera resume. A lightweight state check covers
+enabled changes and stop() implementations that emit no event. Replacement remote
+tracks supersede the old track of the same kind in the displayed stream without
+recreating the peer connection. Hide self-view sends no media-state update.
 
 ## Validation
 
@@ -41,16 +57,24 @@ were made to CallEngine, signaling RPCs, ICE, TURN credentials or router setting
   portrait/landscape; native API and CSS fallback; real browser fullscreen on
   desktop; drag/corner controls and orientation changes; mirrored local view;
   hide/show without changing capture/tracks/peers; camera off retains audio;
-  voice and incoming video capture constraints; ringtone/autoplay/cleanup;
+  voice and incoming video capture constraints; black video for explicit camera
+  off despite a still-live receiver track; mute/unmute/ended/enabled changes;
+  automatic resume and replacement tracks; normal/fullscreen black self-view;
+  screen-sharing preservation; ringtone/autoplay/cleanup;
   fullscreen hang-up cleanup. Run against Chromium and Firefox via the existing
   PLAYWRIGHT_MODULE / BROWSER_TYPE environment options. Screenshots are written
   to the ignored `.runtime/call-layout` folder.
 - `tests/messenger-call-ui.mjs`: incoming permission flow over nested task dialogs
   on four responsive profiles, including draft preservation and focus restoration.
 - `tests/messenger-call-engine.mjs` and `tests/messenger-call-relay.mjs`: media
-  lifecycle, ICE recovery/credential refresh, authentication and TURN authorization.
+  lifecycle, versioned camera signaling/retries/late joiners, ICE recovery and
+  credential refresh, authentication and TURN authorization.
+- `tests/messenger-calls.mjs`: applies the real migration in isolated PostgreSQL
+  and checks camera-state validation, owning-session authorization, actor scoping,
+  revision ordering, expiry persistence and the existing call/permission flows.
 - TypeScript, changed-file ESLint and Vite production build.
 
 Browser viewport emulation and synthetic media do not establish physical-phone
 camera/audio behavior or live P2P/TURN connectivity. Those need a two-device test
-after deploying the frontend; this UI change requires no database migration.
+after deployment. Apply `20261011010000_messenger_camera_state.sql` before deploying
+the frontend so the new media-state action and persisted member fields exist.
