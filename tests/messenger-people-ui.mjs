@@ -4,13 +4,20 @@ const browser = process.env.BROWSER_TYPE === 'firefox' ? await firefox.launch({h
 const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:5216';
 const me = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 let checks = 0;
+let diagnosticPage, diagnosticName; const directoryCalls = [];
 const pass = label => { checks++; console.log('PASS '+label); };
 try {
   for (const [name,width,height] of [['Desktop',1440,900],['Tablet',1024,768],['Phone',390,844],['Landscape',844,390]]) {
     const context = await browser.newContext({viewport:{width,height},hasTouch:width<1100});
     const page = await context.newPage(), errors = [];
+    diagnosticPage = page; diagnosticName = name; directoryCalls.length = 0;
+    if (process.env.PEOPLE_CPU_RATE && process.env.BROWSER_TYPE !== 'firefox') {
+      const session = await context.newCDPSession(page);
+      await session.send('Emulation.setCPUThrottlingRate',{rate:Number(process.env.PEOPLE_CPU_RATE)});
+    }
     page.on('pageerror',e=>errors.push(e.message));
     let denied = false, creates = 0, accountChanged = false, existing = true;
+    let holdDirectory = false, failDirectory = false; const heldDirectoryRequests = [];
     let people = Array.from({length:112},(_,i)=>({id:`person-${i}`,name:`Person ${String(i).padStart(3,'0')}`,online:i===0,conversation_id:i===0?'direct-0':null,unread:i===0?3:0}));
     const member = (id,label) => ({id,name:label,role:'member',joined_sequence:0,delivered_sequence:0,read_sequence:0,online:true,last_seen:null,blocked:false});
     const conversation = (id,group=false) => ({id,kind:group?'group':'direct',name:group?'Existing group':'Person 000',updated_at:new Date().toISOString(),last_sequence:0,cleared_sequence:0,hidden:false,muted:false,role:group?'owner':'member',can_send:true,unread:group?0:3,latest:null,members:[member(me,'Current user'),member('person-0','Person 000')]});
@@ -19,6 +26,11 @@ try {
       let result={};
       switch(body.p_action) {
         case 'people': {
+          directoryCalls.push({query:data.query,after:data.after});
+          if (holdDirectory) await new Promise(resolve=>heldDirectoryRequests.push(resolve));
+          if (failDirectory && data.after) {
+            return route.fulfill({status:400,json:{code:'P0001',message:'Fixture directory failure'}});
+          }
           const query=String(data.query||'').toLowerCase();
           const filtered=(accountChanged?[{id:'other-person',name:'Other account contact',online:false,conversation_id:null,unread:0}]:people).filter(p=>p.name.toLowerCase().includes(query)||(`email-${p.id}@example.test`).includes(query));
           const offset=data.after?filtered.findIndex(p=>p.id===data.after.id)+1:0;
@@ -45,11 +57,34 @@ try {
       await list.getByRole('button',{name:/Person 000/}).waitFor();
       assert.equal(await list.locator('.chat-inbox-item').count(),50);
       assert.equal(await list.getByRole('button',{name:/Person 000/}).getByLabel('3 unread messages').count(),1);
-      await list.getByRole('button',{name:'More people',exact:true}).click();
+      const more = list.locator('.chat-load-more');
+      await more.scrollIntoViewIfNeeded();
+      const button = await more.boundingBox();
+      await page.mouse.move(button.x+button.width/2,button.y+button.height/2);
+      await page.mouse.down();
+      // A focus/realtime refresh may land between down and up on a slow runner.
+      holdDirectory = true;
+      const refreshRequest = page.waitForRequest(request=>request.url().endsWith('/rpc/messenger_rpc')&&request.postDataJSON().p_action==='people');
+      await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+      await refreshRequest;
+      assert.equal(await more.isEnabled(),true,'background refresh must not swallow a pagination click');
+      await page.mouse.up();
+      holdDirectory = false; heldDirectoryRequests.splice(0).forEach(resolve=>resolve());
       await page.waitForFunction(()=>document.querySelector('.chat-desktop-people .chat-people-items').querySelectorAll('.chat-inbox-item').length===100);
       await list.getByRole('button',{name:'More people',exact:true}).click();
       await page.waitForFunction(()=>document.querySelector('.chat-desktop-people .chat-people-items').querySelectorAll('.chat-inbox-item').length===112);
       assert.equal(await list.evaluate(el=>el.scrollHeight>el.clientHeight),true);
+      await sidebar.getByRole('textbox',{name:'Search people'}).fill('Person');
+      await page.waitForFunction(()=>document.querySelector('.chat-desktop-people .chat-people-items').querySelectorAll('.chat-inbox-item').length===50);
+      failDirectory = true;
+      await list.getByRole('button',{name:'More people',exact:true}).click();
+      await sidebar.getByRole('alert').filter({hasText:'Fixture directory failure'}).waitFor();
+      assert.equal(await list.locator('.chat-inbox-item').count(),50);
+      failDirectory = false;
+      await list.getByRole('button',{name:'More people',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelector('.chat-desktop-people .chat-people-items').querySelectorAll('.chat-inbox-item').length===100);
+      assert.equal(await sidebar.getByRole('alert').count(),0);
+      pass(`${name}: failed pagination retains users; retry loads the same page without skipping ahead`);
       await sidebar.getByRole('textbox',{name:'Search people'}).fill('email-person-0@');
       await page.waitForFunction(()=>document.querySelector('.chat-desktop-people .chat-people-items').querySelectorAll('.chat-inbox-item').length===1);
       await list.getByRole('button',{name:/Person 000/}).click();
@@ -118,4 +153,10 @@ try {
     assert.deepEqual(errors,[]);await context.close();
   }
   console.log(`Messenger people UI: ${checks} checks passed`);
+} catch(cause) {
+  console.error('People fixture failure', {profile:diagnosticName,requests:directoryCalls.slice(-12),state:await diagnosticPage?.evaluate(()=>{
+    const list=document.querySelector('.chat-desktop-people .chat-people-items'),button=list?.querySelector('.chat-load-more');
+    return {count:list?.querySelectorAll('.chat-inbox-item').length,busy:list?.getAttribute('aria-busy'),button:button?.textContent,disabled:button?.disabled,errors:[...document.querySelectorAll('[role=alert]')].map(element=>element.textContent)};
+  })});
+  throw cause;
 } finally {await browser.close();}
