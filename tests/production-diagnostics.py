@@ -29,7 +29,13 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertNotIn(value, text)
         self.assertIn('Database connection failed', text)
         self.assertIn('PGRST_DB_CONFIG=true', text)
-        self.assertTrue(all(call[:2] in [['docker', 'inspect'], ['docker', 'logs']] for call in calls))
+        for call in calls:
+            if call[:2] == ['docker', 'exec']:
+                self.assertEqual(call[:5], ['docker', 'exec', 'supabase-media-worker-1', 'python', '-c'])
+                self.assertIn('requests.get(', call[5])
+                self.assertNotIn('requests.post(', call[5])
+            else:
+                self.assertIn(call[:2], [['docker', 'inspect'], ['docker', 'logs']])
 
 
 if __name__ == '__main__':
