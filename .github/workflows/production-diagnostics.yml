@@ -1,0 +1,18 @@
+name: Production diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: [self-hosted, linux, x64, streamly-production]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Read container health and sanitized REST errors
+        run: python3 scripts/production-health-diagnostics.py
