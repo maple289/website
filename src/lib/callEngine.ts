@@ -3,7 +3,7 @@ import { callRelay, callRequest, type CallInfo, type CallSignal, type CallMediaS
 
 export type CallState = { call: CallInfo | null; inbox: CallInfo[]; local: MediaStream | null;
   remotes: { id: string; stream: MediaStream; connected: boolean; mediaState?: CallMediaState | null }[]; busy: boolean; error: string;
-  muted: boolean; camera: boolean; sharing: boolean; devices: MediaDeviceInfo[] };
+  muted: boolean; camera: boolean; sharing: boolean; devices: MediaDeviceInfo[]; microphoneId?: string; cameraId?: string };
 export const emptyCallState: CallState = { call: null, inbox: [], local: null, remotes: [], busy: false,
   error: '', muted: false, camera: false, sharing: false, devices: [] };
 type Peer = { pc: RTCPeerConnection; stream: MediaStream; makingOffer: boolean; ignoreOffer: boolean;
@@ -116,7 +116,8 @@ export class CallEngine {
     if (!this.alive) { stream.getTracks().forEach(t => t.stop()); throw new Error('You are no longer signed in.'); }
     this.cameraTrack = stream.getVideoTracks()[0] ?? null;
     if (this.cameraTrack) this.watchCamera(this.cameraTrack);
-    this.update({ local: stream, camera: !!this.cameraTrack, muted: false });
+    this.update({ local: stream, camera: !!this.cameraTrack, muted: false,
+      microphoneId: stream.getAudioTracks()[0]?.getSettings?.().deviceId ?? '', cameraId: this.cameraTrack?.getSettings?.().deviceId ?? '' });
     // Device labels are optional; a slow enumerateDevices must not block Accept.
     void this.devices();
   }
@@ -356,7 +357,7 @@ export class CallEngine {
         try { if (!this.screen) await this.replace('video', track); }
         catch (cause) { track.stop(); throw cause; }
         if (!this.alive || !this.state.call) { track.stop(); return; }
-        this.cameraTrack = track; this.watchCamera(track); this.stopCamera(old); this.update({ camera: true }); this.queueMediaState(); await this.devices();
+        this.cameraTrack = track; this.watchCamera(track); this.stopCamera(old); this.update({ camera: true, cameraId: track.getSettings?.().deviceId ?? device ?? '' }); this.queueMediaState(); await this.devices();
       }
     } catch (cause) { this.update({ error: friendly(cause) }); }
     finally { this.update({ busy: false }); }
@@ -372,6 +373,7 @@ export class CallEngine {
       const old = this.state.local?.getAudioTracks() ?? [];
       try { await this.replace('audio', track); } catch (cause) { track.stop(); throw cause; }
       old.forEach(t => t.stop());
+      if (this.alive && this.state.call) this.update({ microphoneId: track.getSettings?.().deviceId ?? device });
     } catch (cause) { this.update({ error: friendly(cause) }); }
     finally { this.update({ busy: false }); }
   }
@@ -407,7 +409,7 @@ export class CallEngine {
     for (const p of this.peers.values()) { p.pc.onnegotiationneeded = null; p.pc.onicecandidate = null; p.pc.ontrack = null; p.pc.close(); }
     this.peers.clear(); this.screen?.getTracks().forEach(t => { t.onended = t.onmute = t.onunmute = null; t.stop(); }); this.screen = null;
     this.stopCamera(this.cameraTrack); this.cameraTrack = null; this.state.local?.getTracks().forEach(t => t.stop());
-    this.relay = null; this.update({ local: null, remotes: [], muted: false, camera: false, sharing: false });
+    this.relay = null; this.update({ local: null, remotes: [], muted: false, camera: false, sharing: false, microphoneId: '', cameraId: '' });
   }
   dispose() {
     this.alive = false; window.clearInterval(this.timer); window.removeEventListener('messenger-call', this.event); window.removeEventListener('online', this.event);

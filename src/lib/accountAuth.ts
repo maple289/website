@@ -13,5 +13,5 @@ export async function accountAction(body: Record<string, string>) {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Could not complete the request. Please try again.');
-  return data as { requires_password_setup?: boolean; setup_token?: string; expires_in?: number; success?: boolean; session?: { access_token: string; refresh_token: string } };
+  return data as { requires_password_setup?: boolean; email_verification_required?: boolean; expires_in?: number; success?: boolean; session?: { access_token: string; refresh_token: string } };
 }

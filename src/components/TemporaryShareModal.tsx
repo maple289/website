@@ -32,8 +32,8 @@ export function TemporaryShareModal({ target, onClose }: { target: ShareTarget; 
     const id = link.id;
     void requestDelete({ title: 'Revoke temporary link', message: `Revoke the temporary link for "${target.name}"?`, details: 'Anyone using this link will lose access immediately. Normal sharing settings stay the same.', confirmLabel: 'Revoke', onConfirm: async () => { await revokeTemporaryLink(id); setLink(null); } });
   };
-  return <TaskModal aria-label="Temporary Share Link" className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4">
-    <div className="content-task-panel"><h2>Temporary Share Link</h2><p className="break-words">{target.name}</p>
+  return <TaskModal aria-label="Temporary Share Link" className="fixed inset-0 z-80 flex items-center justify-center bg-slate-950/50 p-4">
+    <div className="content-task-panel"><h2>Temporary Share Link</h2><p className="wrap-break-word">{target.name}</p>
       <p>Anyone with this link can access {target.type === 'folder' ? 'this folder and its contents' : 'this item'} for 24 hours. Normal Private/Public settings stay the same.</p>
       {link?.url && <input aria-label="Temporary share URL" readOnly value={link.url} onFocus={event => event.target.select()} />}
       {link && <p>Valid until: <time dateTime={link.expires_at}>{new Date(link.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' })}</time></p>}

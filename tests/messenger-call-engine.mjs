@@ -38,13 +38,14 @@ const camera=engine.state.local.getVideoTracks()[0]; await engine.share();const 
 assert.equal(engine.state.sharing,true);assert.notEqual(screen,camera); await engine.share();assert.equal(screen.readyState,'ended');assert.equal(engine.state.local.getVideoTracks()[0],camera);
 await engine.camera();assert.equal(camera.readyState,'ended');assert.equal(engine.state.camera,false);await engine.camera();assert.equal(engine.state.camera,true);
 const oldAudio=engine.state.local.getAudioTracks()[0];await engine.microphone('chosen');assert.equal(oldAudio.readyState,'ended');assert.equal(engine.state.local.getAudioTracks()[0].enabled,false);
+assert.equal(engine.state.microphoneId,'chosen');
 pass('mute, camera toggles, device replacement and screen restoration release old tracks');
 // Test cleanup when replacement fails: the fresh camera must not leak capture.
 const peer=engine.peers.get('b').pc;const videoSender=peer.getTransceivers().find(t=>t.receiver.track.kind==='video').sender;
 const original=videoSender.replaceTrack; videoSender.replaceTrack=async()=>{throw Error('replace failed');};
-const retained=engine.state.local.getVideoTracks()[0];await engine.camera('bad-device');assert.equal(streams.at(-1).getVideoTracks()[0].readyState,'ended');assert.equal(retained.readyState,'live');videoSender.replaceTrack=original;
+const retained=engine.state.local.getVideoTracks()[0];await engine.camera('bad-device');assert.equal(streams.at(-1).getVideoTracks()[0].readyState,'ended');assert.equal(retained.readyState,'live');assert.notEqual(engine.state.cameraId,'bad-device');videoSender.replaceTrack=original;
 pass('failed device replacement stops newly acquired capture and retains old camera');
-failEnd=true;const captured=engine.state.local.getTracks();await Promise.all([engine.end(),engine.end()]);assert.ok(captured.every(t=>t.readyState==='ended'));assert.equal(engine.state.call,null);assert.match(engine.state.error,/capture stopped/);
+failEnd=true;const captured=engine.state.local.getTracks();await Promise.all([engine.end(),engine.end()]);assert.ok(captured.every(t=>t.readyState==='ended'));assert.equal(engine.state.call,null);assert.equal(engine.state.microphoneId,'');assert.equal(engine.state.cameraId,'');assert.match(engine.state.error,/capture stopped/);
 failEnd=false;await engine.poll();assert.equal(engine.ending,null);engine.dispose();
 pass('end stops capture during network failure, prevents duplicate submission and retries');
 navigator.onLine=false;engine=new CallEngine('a',()=>{});await engine.start('conversation','voice');const audio=engine.state.local.getAudioTracks()[0];

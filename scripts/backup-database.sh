@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 runtime_dir=${STREAMLY_RUNTIME_DIR:-/srv/streamly/supabase}
 backup_dir=${STREAMLY_BACKUP_DIR:-/srv/streamly/backups}
@@ -20,6 +21,7 @@ if [ ! -f "$compose_file" ] || [ ! -f "$runtime_env" ]; then
 fi
 
 mkdir -p "$backup_dir"
+chmod 700 "$backup_dir"
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 sql_file="$backup_dir/.postgres-$timestamp.sql"
 backup_file="$backup_dir/postgres-$timestamp.sql.gz"

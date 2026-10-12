@@ -89,6 +89,29 @@ def inspect_snapshot(snapshot, base=None):
             issue('ready_preview_missing', id=row['id'])
         if row['status'] == 'generating' and row['started_at'] and (datetime.now(timezone.utc) - datetime.fromisoformat(row['started_at'])).total_seconds() > 300:
             issue('stuck_preview_job', id=row['id'])
+    messages = {row['id']: row for row in snapshot.get('messenger_messages', [])}
+    for row in snapshot.get('messenger_attachments', []):
+        key = ('messenger-attachments', row['path'])
+        references.add(key)
+        obj = catalog.get(key)
+        if not obj:
+            issue('messenger_attachment_missing_object', id=row['id'])
+        elif row.get('source_id') != obj['id']:
+            issue('messenger_attachment_source_mismatch', id=row['id'])
+        message = messages.get(row.get('message_id'))
+        if row.get('message_id') and not message:
+            issue('messenger_attachment_missing_message', id=row['id'])
+        elif message and (message.get('deleted') or message.get('deleting')):
+            issue('deleted_message_retains_attachment', id=row['id'])
+    references.update(('messenger-attachments', path) for path in snapshot.get('messenger_cleanup', []))
+    references.update(('file-previews', path) for path in snapshot.get('preview_cleanup', []))
+    for link in snapshot.get('temporary_shares', []):
+        if link.get('revoked_at') or datetime.fromisoformat(link['expires_at']) <= datetime.now(timezone.utc):
+            continue  # Expired rows without revoked_at are intentional, not active access.
+        collection = snapshot['videos'] if link['type'] == 'video' else snapshot['photos'] if link['type'] == 'photo' else snapshot['file_metadata']
+        if not any(str(row.get('id') if link['type'] in ('video', 'photo') else row.get('path')) == link['content'] and
+                   (not link.get('owner') or row.get('owner') == link['owner']) for row in collection):
+            issue('active_share_missing_target', id=link['id'])
     for key in catalog:
         if key not in references: issue('unreferenced_storage_object', bucket=key[0], path=key[1])
         if key[0] in ('user-videos', 'user-images', 'user-files', 'media-staging') and not any(part in users for part in key[1].split('/')):

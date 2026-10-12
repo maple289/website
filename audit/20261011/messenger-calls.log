@@ -1,0 +1,10 @@
+PASS call migration applies with actual Messenger RPCs and serializers
+PASS start is idempotent, bound to session, and serializes busy participants
+PASS guest/nonmember/table access rejected; browser IDs cannot select actor
+PASS acceptance, relay credentials, targeted signaling and cursor deduplication
+PASS camera signals validate state/session/actor; versions ignore stale retries; latest state survives signal expiry
+PASS remote end returns terminal heartbeat, purges signaling, updates timeline and protects history
+PASS unanswered timeout, missed bell acknowledgement and decline
+PASS blocking, inactive accounts and midcall membership revocation are enforced
+PASS small group calls survive one departure and enforce participant limit
+9 Messenger call checks passed.

@@ -11,6 +11,18 @@ checker=importlib.util.module_from_spec(spec);spec.loader.exec_module(checker)
 
 
 class StorageAudit(unittest.TestCase):
+    def test_messenger_cleanup_and_temporary_share_inventory(self):
+        objects=[dict(id='object',bucket='messenger-attachments',name='owner/attachment',version='',size=4),
+                 dict(id='cleanup',bucket='messenger-attachments',name='owner/queued',version='',size=4)]
+        snapshot=dict(objects=objects,users=['owner'],videos=[],photos=[],file_metadata=[],jobs=[],previews=[],
+            messenger_messages=[dict(id='message',deleted=False,deleting=False)],
+            messenger_attachments=[dict(id='attachment',path='owner/attachment',source_id='object',message_id='message')],
+            messenger_cleanup=['owner/queued'],temporary_shares=[dict(id='expired',type='file',content='missing',expires_at='2000-01-01T00:00:00+00:00')])
+        self.assertEqual(checker.inspect_snapshot(snapshot),[])
+        snapshot['messenger_messages'][0]['deleted']=True
+        snapshot['temporary_shares'].append(dict(id='active',type='file',content='missing',expires_at='2999-01-01T00:00:00+00:00'))
+        found=checker.inspect_snapshot(snapshot)
+        self.assertEqual({row['category'] for row in found},{'deleted_message_retains_attachment','active_share_missing_target'})
     def test_read_only_missing_orphan_receipt_and_version_detection(self):
         owner=str(uuid.uuid4()); missing=str(uuid.uuid4()); version=str(uuid.uuid4())
         snapshot=dict(objects=[dict(id=missing,bucket='user-files',name=owner+'/missing.txt',version=version,size='1')],

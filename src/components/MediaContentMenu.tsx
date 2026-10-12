@@ -73,7 +73,7 @@ export function MediaContentMenu({ kind, item, onPreview, onEdit, onDelete, onCh
   if (owned) actions.push({ id: 'delete', label: 'Delete', icon: <Trash2 size={16} />, danger: true, disabled: busy, run: remove });
   return <>
     <ContentContextMenu name={item.file_name} actions={actions} className="content-menu-card" />
-    {error && <TaskModal aria-label="Content action failed" className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4"><div className="content-task-panel"><h2>Action failed</h2><p role="alert">{error}</p><button onClick={() => setError('')}>Close</button></div></TaskModal>}
+    {error && <TaskModal aria-label="Content action failed" className="fixed inset-0 z-80 flex items-center justify-center bg-slate-950/50 p-4"><div className="content-task-panel"><h2>Action failed</h2><p role="alert">{error}</p><button onClick={() => setError('')}>Close</button></div></TaskModal>}
     {owned && dialog === 'temporary' && <TemporaryShareModal target={{ type: kind, id: item.id, name: item.file_name }} onClose={() => setDialog(null)} />}
     {owned && dialog === 'edit' && <div className="mg-dialog">{kind === 'video' ? <EditVideoModal video={item as Video} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); changed(); }} /> : <EditPhotoModal photo={item as Photo} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); changed(); }} />}</div>}
     {owned && (dialog === 'rename' || dialog === 'share') && <MediaNameOrShareModal kind={kind} item={item} mode={dialog} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); changed(); }} />}
@@ -104,7 +104,7 @@ function MediaNameOrShareModal({ kind, item, mode, onClose, onSaved }: { kind: '
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save changes.'); throw cause; }
     finally { running.current = false; setBusy(false); }
   };
-  return <TaskModal aria-label={mode === 'rename' ? 'Rename content' : 'Share content'} className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4"><form className="content-task-panel" onSubmit={event => {
+  return <TaskModal aria-label={mode === 'rename' ? 'Rename content' : 'Share content'} className="fixed inset-0 z-80 flex items-center justify-center bg-slate-950/50 p-4"><form className="content-task-panel" onSubmit={event => {
     event.preventDefault();
     if (mode === 'share' && item.visibility === 'public' && visibility === 'private') void requestDelete({ title: 'Remove public access', message: `Make "${item.file_name}" private?`, details: 'This item will leave the public library. Temporary links remain valid until revoked or expired.', confirmLabel: 'Save sharing', onConfirm: save });
     else void save().catch(() => {});

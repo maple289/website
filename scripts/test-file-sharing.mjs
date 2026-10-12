@@ -1,8 +1,8 @@
 // Local PostgreSQL regression tests. See FILE_SHARING.md for setup.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { PGlite } from '../.runtime/sharing-tests/node_modules/@electric-sql/pglite/dist/index.js';
-import { pg_trgm } from '../.runtime/sharing-tests/node_modules/@electric-sql/pglite/dist/contrib/pg_trgm.js';
+import { PGlite } from '@electric-sql/pglite';
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 
 const db = new PGlite({ extensions: { pg_trgm } });
 const owner = '11111111-1111-4111-8111-111111111111';

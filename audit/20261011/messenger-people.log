@@ -1,0 +1,7 @@
+PASS all eligible people across three cursor pages; self, invalid accounts and both block directions excluded; minimal fields
+PASS full-name/email/one-character search, literal wildcard input, email fallback and cursor validation
+PASS repeated and reversed direct selection reuse one chat; session presence and unread/read badges work
+PASS hidden direct chats reopen; group creation and inbox remain intact
+PASS eligibility rechecked when selecting stale users; foreign chats/membership cannot be accessed
+PASS directory helper/tables remain private; guest, signed-out and disabled accounts cannot browse directory
+Messenger people: 6 checks passed

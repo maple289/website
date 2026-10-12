@@ -1,0 +1,127 @@
+[
+  {
+    "suite": "messenger-call-layout",
+    "exitCode": 0,
+    "seconds": 138,
+    "passes": [
+      "PASS desktop: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "PASS tablet: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "PASS portrait: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "PASS landscape: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "PASS landscape-short: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "PASS landscape-small: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "PASS landscape-wide: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup",
+      "7 responsive call layouts passed in Chromium (fixtures, not live network/media)."
+    ],
+    "failures": []
+  },
+  {
+    "suite": "messenger-call-audio-ui",
+    "exitCode": 0,
+    "seconds": 16,
+    "passes": [
+      "PASS voice-outgoing: confirmed routing/fallback; stable media and peers",
+      "PASS video-outgoing: confirmed routing/fallback; stable media and peers",
+      "PASS voice-incoming: confirmed routing/fallback; stable media and peers",
+      "PASS video-incoming: confirmed routing/fallback; stable media and peers",
+      "PASS bluetooth: confirmed routing/fallback; stable media and peers",
+      "PASS wired: confirmed routing/fallback; stable media and peers",
+      "PASS usb: confirmed routing/fallback; stable media and peers",
+      "PASS iphone-unsupported: confirmed routing/fallback; stable media and peers",
+      "PASS android-unsupported: confirmed routing/fallback; stable media and peers",
+      "PASS desktop: confirmed routing/fallback; stable media and peers",
+      "10 call audio UI scenarios passed in Edge (output API fixtures; not real phone routes)."
+    ],
+    "failures": []
+  },
+  {
+    "suite": "content-context",
+    "exitCode": 0,
+    "seconds": 7,
+    "passes": [
+      "PASS 1440px: media permissions, Files-only operations, overlay preserves card height",
+      "PASS 1440px: secure URL displayed, revoke confirmed, task dialog ignores Escape",
+      "PASS 1440px: Copy retains source, Paste uses clipboard, Keep both prevents overwrite",
+      "PASS 1440px: folder tree copied, original retained, retry skips completed steps",
+      "PASS 1440px: Move picker relocates full tree and removes the old location",
+      "PASS 1440px: replacement Cancel leaves data unchanged; confirmed Replace preserves prior item in Trash",
+      "PASS 1440px: clipboard does not cross users; no runtime errors",
+      "PASS 390px: media permissions, Files-only operations, overlay preserves card height",
+      "PASS 390px: secure URL displayed, revoke confirmed, task dialog ignores Escape",
+      "PASS 390px: Copy retains source, Paste uses clipboard, Keep both prevents overwrite",
+      "PASS 390px: folder tree copied, original retained, retry skips completed steps",
+      "PASS 390px: Move picker relocates full tree and removes the old location",
+      "PASS 390px: replacement Cancel leaves data unchanged; confirmed Replace preserves prior item in Trash",
+      "PASS 390px: clipboard does not cross users; no runtime errors",
+      "14 context-menu browser checks passed"
+    ],
+    "failures": []
+  },
+  {
+    "suite": "file-previews",
+    "exitCode": 1,
+    "seconds": 33,
+    "passes": [],
+    "failures": [
+      "locator.click: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for locator('.fm-menu').getByRole('button', { name: 'Preview', exact: true })\u001b[22m",
+      "    \"  - waiting for locator('.fm-menu').getByRole('button', { name: 'Preview', exact: true })\"",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "settings-navigation",
+    "exitCode": 1,
+    "seconds": 32,
+    "passes": [],
+    "failures": [
+      "locator.waitFor: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for getByLabel('First Name') to be visible\u001b[22m",
+      "  log: [ \"  - waiting for getByLabel('First Name') to be visible\" ],",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "public-navigation",
+    "exitCode": 0,
+    "seconds": 21,
+    "passes": [
+      "PASS 1440px My Videos → public Videos, active state, Back/Forward",
+      "PASS 1440px My Videos → public Photos, active state, Back/Forward",
+      "PASS 1440px My Videos → public Files, active state, Back/Forward",
+      "PASS 1440px My Photos → public Videos, active state, Back/Forward",
+      "PASS 1440px My Photos → public Photos, active state, Back/Forward",
+      "PASS 1440px My Photos → public Files, active state, Back/Forward",
+      "PASS 1440px File Storage → public Videos, active state, Back/Forward",
+      "PASS 1440px File Storage → public Photos, active state, Back/Forward",
+      "PASS 1440px File Storage → public Files, active state, Back/Forward",
+      "PASS 768px My Videos → public Videos, active state, Back/Forward",
+      "PASS 768px My Videos → public Photos, active state, Back/Forward",
+      "PASS 768px My Videos → public Files, active state, Back/Forward",
+      "PASS 768px My Photos → public Videos, active state, Back/Forward",
+      "PASS 768px My Photos → public Photos, active state, Back/Forward",
+      "PASS 768px My Photos → public Files, active state, Back/Forward",
+      "PASS 768px File Storage → public Videos, active state, Back/Forward",
+      "PASS 768px File Storage → public Photos, active state, Back/Forward",
+      "PASS 768px File Storage → public Files, active state, Back/Forward",
+      "PASS 375px My Videos → public Videos, active state, Back/Forward",
+      "PASS 375px My Videos → public Photos, active state, Back/Forward",
+      "PASS 375px My Videos → public Files, active state, Back/Forward",
+      "PASS 375px My Photos → public Videos, active state, Back/Forward",
+      "PASS 375px My Photos → public Photos, active state, Back/Forward",
+      "PASS 375px My Photos → public Files, active state, Back/Forward",
+      "PASS 375px File Storage → public Videos, active state, Back/Forward",
+      "PASS 375px File Storage → public Photos, active state, Back/Forward",
+      "PASS 375px File Storage → public Files, active state, Back/Forward",
+      "PASS guest public Photos",
+      "PASS guest refresh retains public Photos",
+      "PASS guest public Files",
+      "PASS guest refresh retains public Files",
+      "PASS guest public Videos",
+      "PASS guest refresh retains public Videos",
+      "PASS public videos loading error, no false empty state, Retry",
+      "PASS public photos loading error, no false empty state, Retry"
+    ],
+    "failures": []
+  }
+]

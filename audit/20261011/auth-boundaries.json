@@ -1,0 +1,17 @@
+[
+  {
+    "check": "is_admin for disabled/banned account with an existing actor claim",
+    "result": "authorization still returns true",
+    "classification": "confirmed SQL authorization gap; live JWT lifetime not probed"
+  },
+  {
+    "check": "existing authenticated actor claim for disabled regular owner",
+    "result": "actual photo ownership RLS still returns private content",
+    "classification": "confirmed RLS authorization gap; no production account disabled"
+  },
+  {
+    "check": "approved initial account, unauthenticated email-only login",
+    "result": "actual handler issues first-password capability without proof of mailbox possession",
+    "classification": "confirmed design vulnerability in local reproduction; no production account targeted"
+  }
+]

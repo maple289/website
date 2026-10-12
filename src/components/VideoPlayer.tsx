@@ -55,7 +55,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
 
 
   return (
-    <TaskModal aria-label="Video player" className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <TaskModal aria-label="Video player" className="fixed inset-0 z-70 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div className="video-player-surface relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border bg-[#0a0a0a] shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4">

@@ -11,9 +11,11 @@ const header = (length: number) => { const bytes = new Uint8Array(length); retur
 export async function downloadFolderArchive(root: FileEntry, userId: string): Promise<Blob> {
   const parts: BlobPart[] = [], central: BlobPart[] = [];
   let size = 0, centralSize = 0, count = 0;
+  const memoryLimit = 64 * 1024 * 1024;
   const visited = new Set<string>();
   const append = async (name: string, payload: Blob) => {
     const encoded = new TextEncoder().encode(name);
+    if (size + centralSize + payload.size + encoded.length * 2 + 98 > memoryLimit) throw new Error('This folder exceeds the 64 MB browser archive limit. Download its files individually.');
     if (encoded.length > 65535 || count >= 65535 || size + payload.size + encoded.length + 30 > 0xffffffff) throw new Error('This folder is too large for a browser ZIP download. Download its files individually.');
     let checksum = 0xffffffff;
     const reader = payload.stream().getReader();
@@ -36,7 +38,12 @@ export async function downloadFolderArchive(root: FileEntry, userId: string): Pr
         if (!child.name || /[\\/]/.test(child.name) || child.name === '.' || child.name === '..') throw new Error('Invalid file name in folder.');
         const name = `${relative}/${child.name}`;
         if (child.isFolder) await walk(child, name);
-        else { const { data, error } = await downloadFile(child); if (error || !data) throw new Error(error?.message ?? 'File unavailable.'); await append(name, data); }
+        else {
+          const remaining = memoryLimit - size - centralSize - new TextEncoder().encode(name).length * 2 - 98;
+          if (child.size > remaining) throw new Error('This folder exceeds the 64 MB browser archive limit. Download its files individually.');
+          const { data, error } = await downloadFile(child, remaining);
+          if (error || !data) throw new Error(error?.message ?? 'File unavailable.'); await append(name, data);
+        }
       }
       if (!page.hasMore) break;
       offset = page.nextOffset;

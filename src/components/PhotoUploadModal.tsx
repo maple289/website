@@ -72,7 +72,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
   if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="photo" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
-    <TaskModal aria-label="Upload photos" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Upload photos" className="fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">

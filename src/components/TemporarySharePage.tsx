@@ -31,7 +31,7 @@ export function TemporarySharePage({ token }: { token: string }) {
     {relative && <button className="mb-4 rounded-lg border p-2" onClick={() => { setRelative(relative.split('/').slice(0, -1).join('/')); setOffset(0); }}>Back</button>}
     {loading && <p role="status">Loading shared item…</p>}
     {error && <p role="alert">{error}</p>}
-    {item && <><h2 className="mb-4 break-words font-medium">{item.name}</h2>
+    {item && <><h2 className="mb-4 wrap-break-word font-medium">{item.name}</h2>
       {item.type === 'folder' ? <><ul>{item.entries?.map(entry => <li key={entry.relative}><button className="my-1 min-h-11 w-full rounded-lg border p-3 text-left hover:bg-blue-50" onClick={() => { setRelative(entry.relative); setOffset(0); }}>{entry.isFolder ? '📁 ' : ''}{entry.name}</button></li>)}</ul>
         {offset > 0 && <button className="m-2 rounded-lg border p-2" onClick={() => setOffset(value => Math.max(0, value - 100))}>Previous</button>}
         {item.hasMore && <button className="m-2 rounded-lg border p-2" onClick={() => setOffset(value => value + 100)}>Next</button>}

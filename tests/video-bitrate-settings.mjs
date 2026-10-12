@@ -2,12 +2,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
-import { PGlite } from '../.runtime/sharing-tests/node_modules/@electric-sql/pglite/dist/index.js';
+const { PGlite } = await import(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
 let caller = '11111111-1111-4111-8111-111111111111', handler, checks = 0, failSave = false;
 const member = '22222222-2222-4222-8222-222222222222';
 const pass = name => { checks++; console.log('PASS '+name); };
 const client = {
+  rpc: async name => ({data: name === 'is_admin' && caller === '11111111-1111-4111-8111-111111111111',error:null}),
   auth: { getUser: async () => ({data:{user:caller?{id:caller}:null},error:null}) },
   from(table) {
     let changes=null, filters=[];
@@ -43,7 +44,8 @@ try {
   pass('new setting defaults to 3.0 Mbps');
   let source=await readFile('supabase/functions/storage-settings/index.ts','utf8');
   source=source.replace(/^import .*;\s*$/gm,'')+'\n';
-  source='const createClient=()=>globalThis.__settingsClient;\n'+source;
+  const input=await readFile('supabase/functions/_shared/http-input.ts','utf8');
+  source='const createClient=()=>globalThis.__settingsClient;\n'+input.replace(/^export /gm,'')+'\n'+source;
   const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
   await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
   const request=async(body,method='PUT')=>{

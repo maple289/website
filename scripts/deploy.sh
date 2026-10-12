@@ -28,6 +28,7 @@ runtime_stack() {
     -f "$project_root/deploy/media-worker.compose.yml" \
     -f "$project_root/deploy/file-preview-worker.compose.yml" \
     -f "$project_root/deploy/analytics-collector.compose.yml" \
+    -f "$project_root/deploy/email-dispatcher.compose.yml" \
     -f "$project_root/deploy/messenger.compose.yml" "$@"
 }
 # Realtime owns its internal tenant table. Keep this deployment-only change on
@@ -83,6 +84,13 @@ export STREAMLY_REALTIME_SEED=false
 enforce_private_realtime
 runtime_stack up -d
 runtime_stack restart functions realtime
-runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector
+runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector email-dispatcher
+
+# Seed the currently running build before the first cache-volume cutover.
+# -m gives extracted chunks a fresh retention period, regardless of image age.
+if [ -n "$(docker compose --env-file "$app_env" -f "$project_root/compose.yml" ps -q web)" ]; then
+  docker compose --env-file "$app_env" -f "$project_root/compose.yml" exec -T web tar -C /srv -cf - assets | \
+    docker compose --env-file "$app_env" -f "$project_root/compose.yml" run --rm -T --no-deps --entrypoint tar web -xm -C /asset-cache -f -
+fi
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" up -d --build
 docker compose --env-file "$app_env" -f "$project_root/compose.yml" ps

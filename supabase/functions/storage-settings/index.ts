@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { InputError, readSmallJson } from "../_shared/http-input.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
@@ -20,15 +21,15 @@ function sanitizePath(raw: string): string {
   p = p.replace(/\/+/g, "/");
   // Strip trailing slash (unless it's just "/")
   if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
-  return p;
+  return p.replace(/^\/+|\/+$/g, "");
 }
 
 function validatePath(path: string): string | null {
-  if (!path) return "Path cannot be empty.";
+  if (!path) return null; // Empty means the root of the existing Storage bucket.
   if (path.length > 512) return "Path is too long (max 512 characters).";
-  // Allow absolute Unix paths, relative paths, and drive-letter paths (Windows)
-  if (!/^[a-zA-Z0-9._/: -]+$/.test(path)) {
-    return "Path contains invalid characters. Only letters, numbers, dots, dashes, slashes, and colons are allowed.";
+  // These are bucket-relative prefixes, never physical host paths.
+  if (!/^[a-zA-Z0-9._/ -]+$/.test(path)) {
+    return "Path contains invalid characters. Only letters, numbers, dots, dashes, slashes, are allowed.";
   }
   // Reject parent-directory traversal
   if (path.includes("..")) {
@@ -64,12 +65,8 @@ Deno.serve(async (req: Request) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
-    const { data: profile, error: profileErr } = await adminClient
-      .from("profiles")
-      .select("role")
-      .eq("id", callerData.user.id)
-      .single();
-    if (profileErr || !profile || profile.role !== "admin") {
+    const { data: allowed, error: permissionError } = await callerClient.rpc("is_admin");
+    if (permissionError || !allowed) {
       return json({ error: "Admin access required" }, 403);
     }
 
@@ -82,7 +79,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (settingsErr) {
-        console.error("storage-settings GET failed:", settingsErr);
+        console.error(JSON.stringify({ operation: "storage_settings_read", code: settingsErr.code }));
         return json({ error: "Could not load storage settings." }, 500);
       }
 
@@ -97,7 +94,7 @@ Deno.serve(async (req: Request) => {
 
     // PUT: update settings
     if (req.method === "PUT") {
-      const body = await req.json().catch(() => null);
+      const body = await readSmallJson(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Invalid settings." }, 400);
       const changes: Record<string, unknown> = {};
       for (const [field, label] of [["videos_base_path", "Video storage location"], ["images_base_path", "Image storage location"]]) {
@@ -119,23 +116,16 @@ Deno.serve(async (req: Request) => {
       if ("file_server_url" in body && typeof body.file_server_url !== "string") return json({ error: "Enter a valid File Storage Server URL." }, 400);
       const fileServerUrlRaw = typeof body.file_server_url === "string" ? body.file_server_url.trim() : "";
 
-      // Validate file server URL if provided
+      let fileServerUrl = '';
       if (fileServerUrlRaw) {
         try {
-          const parsed = new URL(fileServerUrlRaw);
-          if (!['http:', 'https:'].includes(parsed.protocol)) {
-            return json({ error: "File Storage Server URL must use http:// or https://" }, 400);
-          }
-        } catch {
-          // Could be a bare IP/hostname without scheme — prepend http:// and retry
-          try {
-            new URL(`http://${fileServerUrlRaw}`);
-          } catch {
-            return json({ error: "File Storage Server URL is not a valid URL or IP address." }, 400);
-          }
-        }
+          const parsed = new URL(/^[a-z][a-z0-9+.-]*:/i.test(fileServerUrlRaw) ? fileServerUrlRaw : `https://${fileServerUrlRaw}`);
+          if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname)
+            return json({ error: "Use an http:// or https:// URL without embedded credentials." }, 400);
+          fileServerUrl = parsed.href;
+        } catch { return json({ error: "File Storage Server URL is not a valid URL or IP address." }, 400); }
       }
-      if ("file_server_url" in body) changes.file_server_url = fileServerUrlRaw;
+      if ("file_server_url" in body) changes.file_server_url = fileServerUrl;
       if (!Object.keys(changes).length) return json({ error: "No settings were provided." }, 400);
 
       const { data: settings, error: updateErr } = await adminClient
@@ -150,7 +140,8 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (updateErr) {
-        console.error("storage-settings PUT failed:", updateErr);
+        if (updateErr.code === "23514") return json({ error: "Storage prefixes cannot change while media or processing history exists. Ask the server operator to plan a storage migration." }, 409);
+        console.error(JSON.stringify({ operation: "storage_settings", code: updateErr.code }));
         return json({ error: "Could not save storage settings." }, 500);
       }
 
@@ -159,7 +150,8 @@ Deno.serve(async (req: Request) => {
 
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
-    console.error("storage-settings failed:", err);
+    if (err instanceof InputError) return json({ error: err.message }, err.status);
+    console.error(JSON.stringify({ operation: "storage_settings", error: "request_failed" }));
     return json({ error: "Internal server error" }, 500);
   }
 });

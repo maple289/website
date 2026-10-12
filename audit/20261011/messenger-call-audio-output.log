@@ -1,0 +1,17 @@
+PASS mobile identity and conservative output labels, without screen-size/device-ID assumptions
+PASS voice default, confirmed toggle and late-participant consistency
+PASS video default, confirmed toggle and late-participant consistency
+PASS Bluetooth/wired/USB/unclassified outputs preserve the system route
+PASS known or opaque headset input protects OS routing even when its output is not enumerated
+PASS desktop default unchanged; explicit output selection remains available
+PASS unsupported routing leaves system audio intact
+PASS partial group switch rejects optimistic state and rolls back successful nodes
+PASS resolved API promise without matching sinkId never claims a successful switch
+PASS accessory connection restores OS routing for automatic defaults; chosen route persists until unavailable
+PASS permission picker grants dynamic output; cancellation preserves the route
+PASS synchronous guard prevents repeated pending switches
+PASS late browser completion restores the current choice without overlapping output requests
+PASS rejected device-loss fallback does not repeatedly retry on focus/devicechange
+PASS denied automatic preference remains on system audio without automatic retries
+PASS picker metadata survives an enumeration that started before permission was granted
+16 audio output policy checks passed (simulated browser outputs, not phone hardware).

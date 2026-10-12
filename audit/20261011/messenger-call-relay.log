@@ -1,0 +1,6 @@
+PASS missing, invalid and inactive sessions cannot get relay credentials
+PASS preflight exposes no secrets; missing configuration and unauthorized call fail closed
+PASS local coturn credentials use private per-user TTL/HMAC signing
+PASS membership/session revocation during signing suppresses credential response
+PASS preflight and credential issuance reject malformed relay/STUN configuration
+5 relay checks passed.

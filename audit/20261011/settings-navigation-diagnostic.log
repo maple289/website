@@ -1,0 +1,20 @@
+AUDIT fixture state  [
+  'MessengerProvider is required',
+  'MessengerProvider is required',
+  'MessengerProvider is required'
+]
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.waitFor: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByLabel('First Name') to be visible
+
+    at setup (C:\Users\aleks\OneDrive\Desktop\Bolt\Project\audit\20261011\settings-navigation-diagnostic.mjs:28:45)
+    at async file:///C:/Users/aleks/OneDrive/Desktop/Bolt/Project/audit/20261011/settings-navigation-diagnostic.mjs:42:20 {
+  log: [ "  - waiting for getByLabel('First Name') to be visible" ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.19.0

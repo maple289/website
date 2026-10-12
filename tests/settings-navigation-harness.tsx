@@ -4,20 +4,27 @@ import '@/components/FluentTheme.css';
 import { useFileNavigation } from '../src/hooks/useFileNavigation';
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { User } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 import { AuthContext } from '../src/context/AuthContext';
 import { SettingsPage } from '../src/components/SettingsPage';
 import { PhotoLibrary } from '../src/components/PhotoLibrary';
 import { DeleteConfirmationProvider } from '../src/components/DeleteConfirmationProvider';
 import { initializeAppHistory } from '../src/lib/appHistory';
 import { supabase } from '../src/lib/supabase';
+import { MessengerProvider } from '../src/context/MessengerContext';
+import { CallProvider } from '../src/context/CallContext';
 import '../src/index.css';
 
 initializeAppHistory();
 const user = { id: '11111111-1111-4111-8111-111111111111', email: 'fixture@example.test' } as User;
 const okay = async () => ({ error: null });
 supabase.auth.updateUser = async () => ({ data: { user }, error: null });
-const auth = { user, session: null, loading: false, configured: true, passwordSetup: null,
+const session = { user, access_token: 'isolated-fixture' } as Session;
+supabase.auth.getSession = async () => ({ data: { session }, error: null });
+supabase.realtime.setAuth = async () => {};
+supabase.channel = (() => { const channel = { on() { return channel; }, subscribe(callback: (state: string) => void) { callback('SUBSCRIBED'); return channel; } }; return channel; }) as typeof supabase.channel;
+supabase.removeChannel = async () => 'ok';
+const auth = { user, session, loading: false, configured: true, passwordSetup: null,
   signIn: okay, signUp: okay, requestRegistration: okay, completeInitialPassword: okay,
   cancelPasswordSetup: () => {}, signOut: async () => {} };
 function FilesFixture() {
@@ -28,13 +35,13 @@ function Harness() {
   const [route, setRoute] = useState(location.hash);
   useEffect(() => { const sync = () => setRoute(location.hash); window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync); }, []);
-  return <div className="fluent-app"><AuthContext.Provider value={auth}><DeleteConfirmationProvider>
+  return <div className="fluent-app"><AuthContext.Provider value={auth}><DeleteConfirmationProvider><MessengerProvider><CallProvider>
     {route === '#/settings' ? <SettingsPage /> : <div>
       <h1 data-testid="source">{route || 'Home'}</h1>
       <a href="#/settings">Settings</a>
       {route.startsWith('#/files') && <FilesFixture />} 
       {route === '#/photos' && <PhotoLibrary searchTerm="" />}
     </div>}
-  </DeleteConfirmationProvider></AuthContext.Provider></div>;
+  </CallProvider></MessengerProvider></DeleteConfirmationProvider></AuthContext.Provider></div>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Harness /></React.StrictMode>);

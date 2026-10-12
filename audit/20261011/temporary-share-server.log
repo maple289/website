@@ -1,0 +1,5 @@
+PASS anonymous single-item metadata; proxied range bytes; no signed URLs, owner IDs or service secrets
+PASS exact expiry boundary, revocation and deletion block bytes on every request
+PASS folder scope permits its children only; traversal and trashed ancestors denied
+PASS creation requires session; independent 256-bit Web Crypto tokens; database receives hashes only
+4 Edge security checks passed

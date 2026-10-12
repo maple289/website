@@ -1,0 +1,70 @@
+// Actual forward SQL and Edge issuer, synthetic identities, no network or email.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import ts from 'typescript';
+const {PGlite}=await import(process.env.PGLITE_MODULE||'@electric-sql/pglite');
+const db=new PGlite();
+const admin='11111111-1111-4111-8111-111111111111',second='22222222-2222-4222-8222-222222222222',owner='33333333-3333-4333-8333-333333333333',initial='44444444-4444-4444-8444-444444444444';
+const actor=async id=>db.exec(`RESET ROLE; SELECT set_config('request.jwt.claim.sub','${id}',false),set_config('request.jwt.claims','{"role":"authenticated"}',false); SET ROLE authenticated;`);
+try{
+ await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE ROLE authenticator;
+ CREATE SCHEMA auth; CREATE SCHEMA storage; GRANT USAGE ON SCHEMA auth TO authenticated,anon;
+ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,encrypted_password text,deleted_at timestamptz,banned_until timestamptz,email_confirmed_at timestamptz DEFAULT now());
+ CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,role text);
+ CREATE TABLE public.account_activation(user_id uuid PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,active boolean DEFAULT true,must_change_password boolean DEFAULT true,setup_token_hash text,setup_expires_at timestamptz,setup_claimed_at timestamptz,last_setup_request_at timestamptz,password_set_at timestamptz);
+ CREATE TABLE public.photos(id integer PRIMARY KEY,owner_id uuid,visibility text);
+ ALTER TABLE public.photos ENABLE ROW LEVEL SECURITY; GRANT SELECT ON public.photos TO authenticated;
+ CREATE POLICY owner_read ON public.photos FOR SELECT TO authenticated USING(owner_id=auth.uid());
+ INSERT INTO auth.users(id,email,encrypted_password) VALUES('${admin}','a@example.invalid','hash'),('${second}','b@example.invalid','hash'),('${owner}','c@example.invalid','hash'),('${initial}','initial@example.invalid','');
+ INSERT INTO profiles VALUES('${admin}','admin'),('${second}','admin'),('${owner}','user'),('${initial}','user');
+ INSERT INTO photos VALUES(1,'${owner}','private'); INSERT INTO account_activation(user_id,setup_token_hash) VALUES('${initial}',repeat('a',64));`);
+ await db.exec(await fs.readFile('supabase/migrations/20261012010000_account_security_boundaries.sql','utf8'));
+ assert.equal((await db.query("SELECT start_initial_login('initial@example.invalid',repeat('d',64)) allowed")).rows[0].allowed,false);
+ assert.equal((await db.query(`SELECT setup_token_hash FROM account_activation WHERE user_id='${initial}'`)).rows[0].setup_token_hash,null);
+ await actor(owner); assert.equal((await db.query('SELECT * FROM photos')).rows.length,1);
+ await db.exec(`RESET ROLE; UPDATE auth.users SET banned_until=now()+interval '1 hour' WHERE id='${owner}'`);
+ await actor(owner); assert.equal((await db.query('SELECT * FROM photos')).rows.length,0);
+ await assert.rejects(db.exec('SELECT enforce_active_account()'),/active account/);
+ console.log('PASS existing actor claims lose owner RLS and privileged REST access after disablement');
+ await db.exec(`RESET ROLE; UPDATE auth.users SET banned_until=now()+interval '1 hour' WHERE id='${admin}'`);
+ await actor(admin); assert.equal((await db.query('SELECT is_admin() allowed')).rows[0].allowed,false);
+ await db.exec('RESET ROLE');
+ await assert.rejects(db.exec(`DELETE FROM auth.users WHERE id='${second}'`),/last active administrator/);
+ await assert.rejects(db.exec(`UPDATE profiles SET role='user' WHERE id='${second}'`),/last active administrator/);
+ await assert.rejects(db.exec(`UPDATE auth.users SET banned_until=now()+interval '1 hour' WHERE id='${second}'`),/last active administrator/);
+ await db.exec(`UPDATE auth.users SET banned_until=NULL WHERE id='${admin}'; DELETE FROM auth.users WHERE id='${admin}'`);
+ await assert.rejects(db.exec(`DELETE FROM auth.users WHERE id='${second}'`),/last active administrator/);
+ assert.equal((await db.query("SELECT count(*)::int n FROM profiles WHERE role='admin'")).rows[0].n,1);
+ console.log('PASS Auth deletion, profile demotion and ban cannot remove the last active administrator');
+ let handler,mail,updates=0;
+ const rpc=async(name,args)=>{try{
+   const functions={claim_public_request:['p_bucket','p_seconds','p_limit'],issue_initial_password_email:['p_identifier','p_token_hash'],claim_initial_password:['p_token_hash']};
+   const keys=functions[name];
+   const sql=keys?`SELECT public.${name}(${keys.map((_,i)=>'$'+(i+1)).join(',')}) result`:null;
+   return sql?{data:(await db.query(sql,keys.map(k=>args[k]))).rows[0].result,error:null}:{data:null,error:null};
+ }catch(error){return {data:null,error};}};
+ // Reuse the established claim function with its original atomic/expiry checks.
+ const activation=await fs.readFile('supabase/migrations/20260926090000_registration_activation.sql','utf8');
+ await db.exec(activation.match(/CREATE FUNCTION public.claim_initial_password[\s\S]*?\$\$;/)[0]);
+ const client={rpc,auth:{admin:{updateUserById:async(id)=>{updates++; await db.exec(`UPDATE account_activation SET must_change_password=false,password_set_at=now(),setup_token_hash=NULL WHERE user_id='${id}'`); return {error:null};}}},from:()=>({select:()=>({eq:()=>({single:async()=>({data:{must_change_password:false,password_set_at:'set'},error:null})})})})};
+ const source=(await fs.readFile('supabase/functions/account-login/index.ts','utf8')).replace(/^import .*;\r?\n/gm,'');
+ const input=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(await fs.readFile('supabase/functions/_shared/http-input.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText).toString('base64'));
+ new Function('Deno','createClient','sendEmail','escapeHtml','readSmallJson','InputError',ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText)(
+  {env:{get:()=>''},serve:fn=>handler=fn},()=>client,async message=>{mail=message;return {accepted:true};},text=>text,input.readSmallJson,input.InputError);
+ const post=body=>handler(new Request('https://fixture.invalid',{method:'POST',body:JSON.stringify(body)}));
+ assert.equal((await post({body:'x'.repeat(8193)})).status,413);
+ const response=await post({action:'login',identifier:'initial@example.invalid',password:''});
+ assert.equal(response.status,200); const body=await response.json(); assert.equal(body.email_verification_required,true); assert.equal(body.setup_token,undefined);
+ const code=mail.text.match(/\b[a-f0-9]{64}\b/)[0]; assert.equal(mail.to,'initial@example.invalid');
+ assert.notEqual((await db.query('SELECT setup_token_hash FROM account_activation')).rows[0].setup_token_hash,code);
+ assert.equal((await post({action:'set-password',setup_token:'0'.repeat(64),new_password:'fixture password',confirm_password:'fixture password'})).status,401);
+ assert.equal(updates,0);
+ assert.equal((await post({action:'set-password',setup_token:code,new_password:'fixture password',confirm_password:'fixture password'})).status,200);
+ assert.equal((await post({action:'set-password',setup_token:code,new_password:'fixture password',confirm_password:'fixture password'})).status,401);
+ assert.equal(updates,1); console.log('PASS initial activation exposes no capability; only the mailed code can establish a password once');
+ await actor(owner); await assert.rejects(db.exec("SELECT claim_public_request('abuse',60,1)"),/permission denied/);
+ await db.exec('RESET ROLE'); assert.equal((await db.query("SELECT claim_public_request('abuse',60,1) okay")).rows[0].okay,true);
+ assert.equal((await db.query("SELECT claim_public_request('abuse',60,1) okay")).rows[0].okay,false);
+ console.log('PASS public request quotas are server-only and persist across requests');
+}finally{await db.close();}

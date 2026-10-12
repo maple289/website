@@ -29,13 +29,8 @@ async function verifyAdmin(supabaseUrl: string, serviceRoleKey: string, anonKey:
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
-  const { data: profile, error: profileErr } = await adminClient
-    .from("profiles")
-    .select("role, email")
-    .eq("id", callerData.user.id)
-    .maybeSingle();
-
-  if (profileErr || !profile || profile.role !== "admin") {
+  const { data: allowed, error: permissionError } = await callerClient.rpc("is_admin");
+  if (permissionError || !allowed) {
     return { authorized: false as const, status: 403, message: "Admin access required" };
   }
   return { authorized: true as const, userId: callerData.user.id, adminClient, callerClient };

@@ -82,7 +82,7 @@ export function FileShareModal({ path, name, isFolder, ownerEmail, onClose, onSa
     }
   };
 
-  return <TaskModal aria-labelledby="share-title" className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/50 p-4">
+  return <TaskModal aria-labelledby="share-title" className="fixed inset-0 z-85 flex items-center justify-center bg-slate-950/50 p-4">
     <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-slate-800 shadow-2xl outline-none">
       <div className="mb-4 flex items-center gap-3"><Share2 size={21} className="text-blue-600" /><h2 id="share-title" className="min-w-0 flex-1 truncate text-lg font-semibold">Share {name}</h2><button disabled={saving} onClick={close} aria-label="Close sharing" className="rounded-lg p-2 hover:bg-slate-100"><X size={18} /></button></div>
       <p className="mb-4 text-sm text-slate-500">Shared users can view and download. Only you can edit, move, delete, or manage sharing.{isFolder && ' Current and future files and subfolders inherit this access.'}</p>

@@ -1,0 +1,120 @@
+[
+  {
+    "suite": "messenger-deletion-ui",
+    "exitCode": 0,
+    "seconds": 69,
+    "passes": [
+      "PASS Desktop: confirmation required; Escape does not dismiss and Cancel preserves the complete message",
+      "PASS Desktop: self deletion removes full cards in both own sessions, retains recipient card and rejects delayed pre-delete snapshots",
+      "PASS Desktop: failed authorization keeps card and confirmation error intact",
+      "PASS Desktop: global broadcast removes entire card, attachments and reactions for all sessions; surviving reply stays usable",
+      "PASS Desktop: navigation, reload and reconnect do not restore deleted cards",
+      "PASS Desktop: per-user deletion cache resets on account change; recipient still sees message hidden by the first user",
+      "PASS Mobile: confirmation required; Escape does not dismiss and Cancel preserves the complete message",
+      "PASS Mobile: self deletion removes full cards in both own sessions, retains recipient card and rejects delayed pre-delete snapshots",
+      "PASS Mobile: failed authorization keeps card and confirmation error intact",
+      "PASS Mobile: global broadcast removes entire card, attachments and reactions for all sessions; surviving reply stays usable",
+      "PASS Mobile: navigation, reload and reconnect do not restore deleted cards",
+      "PASS Mobile: per-user deletion cache resets on account change; recipient still sees message hidden by the first user"
+    ],
+    "failures": []
+  },
+  {
+    "suite": "messenger-people-ui",
+    "exitCode": 0,
+    "seconds": 14,
+    "passes": [
+      "PASS Desktop: direct sidebar directory, pagination/scroll, email filter, badges, selection and existing chat reuse",
+      "PASS Desktop: existing refresh cycle updates directory presence and unread state",
+      "PASS Desktop: stale selection denial keeps current conversation and exposes retryable error",
+      "PASS Desktop: mobile/task list starts populated, filters, stays open on error/Escape, selects once then closes",
+      "PASS Desktop: group selection/create and draft guard retained; layout fits viewport",
+      "PASS Desktop: refresh removes newly unavailable contacts",
+      "PASS Desktop: changing accounts clears directory cache/search and previous contacts",
+      "PASS Tablet: direct sidebar directory, pagination/scroll, email filter, badges, selection and existing chat reuse",
+      "PASS Tablet: existing refresh cycle updates directory presence and unread state",
+      "PASS Tablet: stale selection denial keeps current conversation and exposes retryable error",
+      "PASS Tablet: mobile/task list starts populated, filters, stays open on error/Escape, selects once then closes",
+      "PASS Tablet: group selection/create and draft guard retained; layout fits viewport",
+      "PASS Tablet: refresh removes newly unavailable contacts",
+      "PASS Tablet: changing accounts clears directory cache/search and previous contacts",
+      "PASS Phone: mobile/task list starts populated, filters, stays open on error/Escape, selects once then closes",
+      "PASS Phone: group selection/create and draft guard retained; layout fits viewport",
+      "PASS Landscape: mobile/task list starts populated, filters, stays open on error/Escape, selects once then closes",
+      "PASS Landscape: group selection/create and draft guard retained; layout fits viewport"
+    ],
+    "failures": []
+  },
+  {
+    "suite": "messenger-call-layout",
+    "exitCode": 1,
+    "seconds": 32,
+    "passes": [],
+    "failures": [
+      "locator.waitFor: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for locator('.call-active') to be visible\u001b[22m",
+      "  log: [ \"  - waiting for locator('.call-active') to be visible\" ],",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "messenger-call-audio-ui",
+    "exitCode": 1,
+    "seconds": 32,
+    "passes": [],
+    "failures": [
+      "locator.waitFor: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for locator('.call-active') to be visible\u001b[22m",
+      "  log: [ \"  - waiting for locator('.call-active') to be visible\" ],",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "content-context",
+    "exitCode": 1,
+    "seconds": 32,
+    "passes": [],
+    "failures": [
+      "locator.waitFor: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for getByRole('button', { name: 'Actions for note.txt', exact: true }) to be visible\u001b[22m",
+      "    \"  - waiting for getByRole('button', { name: 'Actions for note.txt', exact: true }) to be visible\"",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "file-previews",
+    "exitCode": 1,
+    "seconds": 32,
+    "passes": [],
+    "failures": [
+      "locator.click: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for getByText('Documents', { exact: true })\u001b[22m",
+      "  log: [ \"  - waiting for getByText('Documents', { exact: true })\" ],",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "settings-navigation",
+    "exitCode": 1,
+    "seconds": 32,
+    "passes": [],
+    "failures": [
+      "locator.waitFor: Timeout 30000ms exceeded.",
+      "\u001b[2m  - waiting for getByLabel('First Name') to be visible\u001b[22m",
+      "  log: [ \"  - waiting for getByLabel('First Name') to be visible\" ],",
+      "  name: 'TimeoutError'"
+    ]
+  },
+  {
+    "suite": "public-navigation",
+    "exitCode": 1,
+    "seconds": 2,
+    "passes": [],
+    "failures": [
+      "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "  code: 'ERR_ASSERTION',",
+      "  actual: false,",
+      "  expected: true,"
+    ]
+  }
+]

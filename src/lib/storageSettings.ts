@@ -58,6 +58,7 @@ async function saveSettingsPatch(patch: Record<string, string | number>): Promis
     if (!res.ok) {
       return { ok: false, error: data.error ?? 'Could not save storage settings.' };
     }
+    invalidateStorageSettings();
     return {
       ok: true,
       settings: {
@@ -73,26 +74,23 @@ async function saveSettingsPatch(patch: Record<string, string | number>): Promis
   }
 }
 
-let cachedVideosBase: string | null = null;
-let cachedImagesBase: string | null = null;
-let cachedFileServerUrl: string | null = null;
+const settingsCache = new Map<string, { value: string; expires: number }>();
+export function invalidateStorageSettings() { settingsCache.clear(); window.dispatchEvent(new Event('storage-settings-changed')); }
+function cached(key: string) { const hit = settingsCache.get(key); return hit && hit.expires > Date.now() ? hit.value : undefined; }
+function cache(key: string, value: string) { settingsCache.set(key, { value, expires: Date.now() + 30000 }); return value; }
 
 export async function fetchFileServerUrl(): Promise<string> {
-  if (cachedFileServerUrl !== null) return cachedFileServerUrl;
+  const hit = cached('server'); if (hit !== undefined) return hit;
   const { data, error } = await supabase.rpc('get_file_server_url');
-  const url = error || !data ? '' : (data as string);
-  cachedFileServerUrl = url;
-  return url;
+  if (error) throw new Error('Could not load external file server settings.');
+  return cache('server', typeof data === 'string' ? data : '');
 }
 
 export async function fetchStorageBasePath(kind: 'videos' | 'images'): Promise<string> {
-  if (kind === 'videos' && cachedVideosBase !== null) return cachedVideosBase;
-  if (kind === 'images' && cachedImagesBase !== null) return cachedImagesBase;
+  const hit = cached(kind); if (hit !== undefined) return hit;
   const { data, error } = await supabase.rpc('get_storage_base_path', { p_kind: kind });
-  const base = error || !data ? '' : (data as string);
-  if (kind === 'videos') cachedVideosBase = base;
-  else cachedImagesBase = base;
-  return base;
+  if (error) throw new Error('Could not load media storage settings.');
+  return cache(kind, typeof data === 'string' ? data.replace(/^\/+|\/+$/g, '') : '');
 }
 
 export async function resolveBucketPath(dbPath: string, kind: 'videos' | 'images'): Promise<string> {

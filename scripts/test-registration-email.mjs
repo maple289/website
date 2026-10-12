@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
-import { PGlite } from '../.runtime/sharing-tests/node_modules/@electric-sql/pglite/dist/index.js';
+const { PGlite } = await import(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
 const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>'], ['CUSTOMER_EMAILS_ENABLED', 'true'], ['SITE_URL', 'https://myhostage.ca/video/'], ['SITE_NAME', 'Streamly']]);
 const logs = [], sent = [];
@@ -61,7 +61,7 @@ const client = {
     };
     return builder;
   },
-  async rpc(name, args) { try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id ?? args.p_registration_id ?? args.p_email]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
+  async rpc(name, args = {}) { if (name === 'claim_public_request') return {data:true,error:null}; if (name === 'is_admin') return {data: callerId === adminId,error:null}; try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id ?? args.p_registration_id ?? args.p_email]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
 };
 globalThis.__emailTestClient = client;
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString('base64');
@@ -90,11 +90,12 @@ try {
       INSERT INTO profiles(id,email,role) VALUES(a.user_id,a.email,'user');
       DELETE FROM pending_registrations WHERE id=r.id; RETURN to_jsonb(a);
     END; $$;`);
+  const inputUrl = moduleUrl(await readFile(new URL('../supabase/functions/_shared/http-input.ts', import.meta.url), 'utf8'));
   const sharedUrl = moduleUrl(await readFile(new URL('../supabase/functions/_shared/email.ts', import.meta.url), 'utf8'));
   const shared = await import(sharedUrl);
   const templatesUrl = moduleUrl((await readFile(new URL('../supabase/functions/_shared/registration-templates.ts', import.meta.url), 'utf8')).replace('"./email.ts"', JSON.stringify(sharedUrl)));
   let endpoint = await readFile(new URL('../supabase/functions/notify-admin-registration/index.ts', import.meta.url), 'utf8');
-  const prepare = source => source.replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";', '').replace('import { createClient } from "npm:@supabase/supabase-js@2.57.4";', 'const createClient = () => globalThis.__emailTestClient;').replace('"../_shared/email.ts"', JSON.stringify(sharedUrl)).replace('"../_shared/registration-templates.ts"', JSON.stringify(templatesUrl));
+  const prepare = source => source.replace('"../_shared/http-input.ts"', JSON.stringify(inputUrl)).replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";', '').replace('import { createClient } from "npm:@supabase/supabase-js@2.57.4";', 'const createClient = () => globalThis.__emailTestClient;').replace('"../_shared/email.ts"', JSON.stringify(sharedUrl)).replace('"../_shared/registration-templates.ts"', JSON.stringify(templatesUrl));
   endpoint = prepare(endpoint);
   await import(moduleUrl(endpoint));
   const registrationHandler = handler;

@@ -62,7 +62,7 @@ try {
   assert.deepEqual(children.map(row => row.relative), ['Sub/file.txt']);
   assert.equal((await query('SELECT public.temporary_share_children($1,$2) AS children', ['d'.repeat(64), '../Dest']))[0].children, null);
   await reset();
-  await db.exec(`UPDATE public.temporary_content_shares SET created_at=clock_timestamp()-interval '25 hours',expires_at=clock_timestamp()-interval '1 hour' WHERE id='${folderLink.id}';`);
+  await db.exec(`UPDATE public.temporary_content_shares SET created_at=now()-interval '25 hours',expires_at=now()-interval '1 hour' WHERE id='${folderLink.id}';`);
   assert.equal((await query('SELECT public.temporary_share_children($1) AS children', ['d'.repeat(64)]))[0].children, null);
   pass('folder capability lists only its subtree; rejects traversal and expired links');
   await actor(owner);

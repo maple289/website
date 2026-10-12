@@ -1,0 +1,169 @@
+CHECK PC private sample.pdf
+CHECK PC private sample.jpg
+CHECK PC private sample.jpeg
+CHECK PC private sample.png
+CHECK PC private sample.gif
+CHECK PC private sample.webp
+CHECK PC private sample.txt
+CHECK PC private sample.json
+CHECK PC private sample.xml
+CHECK PC private sample.csv
+CHECK PC private sample.docx
+CHECK PC private sample.xlsx
+CHECK PC private sample.pptx
+PASS PC private: all 13 formats render; folder retained; no page overflow
+CHECK PC private sample.txt
+PASS PC: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK PC private corrupt.docx
+CHECK PC private sample.bin
+PASS PC: failed and unsupported files retain Download; unsupported files not fetched
+CHECK PC private queued.docx
+PASS PC: closing a queued preview cancels polling
+CHECK PC public sample.pdf
+CHECK PC public sample.jpg
+CHECK PC public sample.jpeg
+CHECK PC public sample.png
+CHECK PC public sample.gif
+CHECK PC public sample.webp
+CHECK PC public sample.txt
+CHECK PC public sample.json
+CHECK PC public sample.xml
+CHECK PC public sample.csv
+CHECK PC public sample.docx
+CHECK PC public sample.xlsx
+CHECK PC public sample.pptx
+PASS PC public: all 13 formats render; folder retained; no page overflow
+CHECK PC public sample.txt
+PASS PC: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK PC public corrupt.docx
+CHECK PC public sample.bin
+PASS PC: failed and unsupported files retain Download; unsupported files not fetched
+CHECK PC public queued.docx
+PASS PC: closing a queued preview cancels polling
+CHECK Tablet private sample.pdf
+CHECK Tablet private sample.jpg
+CHECK Tablet private sample.jpeg
+CHECK Tablet private sample.png
+CHECK Tablet private sample.gif
+CHECK Tablet private sample.webp
+CHECK Tablet private sample.txt
+CHECK Tablet private sample.json
+CHECK Tablet private sample.xml
+CHECK Tablet private sample.csv
+CHECK Tablet private sample.docx
+CHECK Tablet private sample.xlsx
+CHECK Tablet private sample.pptx
+PASS Tablet private: all 13 formats render; folder retained; no page overflow
+CHECK Tablet private sample.txt
+PASS Tablet: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK Tablet private corrupt.docx
+CHECK Tablet private sample.bin
+PASS Tablet: failed and unsupported files retain Download; unsupported files not fetched
+CHECK Tablet private queued.docx
+PASS Tablet: closing a queued preview cancels polling
+CHECK Tablet public sample.pdf
+CHECK Tablet public sample.jpg
+CHECK Tablet public sample.jpeg
+CHECK Tablet public sample.png
+CHECK Tablet public sample.gif
+CHECK Tablet public sample.webp
+CHECK Tablet public sample.txt
+CHECK Tablet public sample.json
+CHECK Tablet public sample.xml
+CHECK Tablet public sample.csv
+CHECK Tablet public sample.docx
+CHECK Tablet public sample.xlsx
+CHECK Tablet public sample.pptx
+PASS Tablet public: all 13 formats render; folder retained; no page overflow
+CHECK Tablet public sample.txt
+PASS Tablet: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK Tablet public corrupt.docx
+CHECK Tablet public sample.bin
+PASS Tablet: failed and unsupported files retain Download; unsupported files not fetched
+CHECK Tablet public queued.docx
+PASS Tablet: closing a queued preview cancels polling
+CHECK Mobile private sample.pdf
+CHECK Mobile private sample.jpg
+CHECK Mobile private sample.jpeg
+CHECK Mobile private sample.png
+CHECK Mobile private sample.gif
+CHECK Mobile private sample.webp
+CHECK Mobile private sample.txt
+CHECK Mobile private sample.json
+CHECK Mobile private sample.xml
+CHECK Mobile private sample.csv
+CHECK Mobile private sample.docx
+CHECK Mobile private sample.xlsx
+CHECK Mobile private sample.pptx
+PASS Mobile private: all 13 formats render; folder retained; no page overflow
+CHECK Mobile private sample.txt
+PASS Mobile: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK Mobile private corrupt.docx
+CHECK Mobile private sample.bin
+PASS Mobile: failed and unsupported files retain Download; unsupported files not fetched
+CHECK Mobile private queued.docx
+PASS Mobile: closing a queued preview cancels polling
+CHECK Mobile public sample.pdf
+CHECK Mobile public sample.jpg
+CHECK Mobile public sample.jpeg
+CHECK Mobile public sample.png
+CHECK Mobile public sample.gif
+CHECK Mobile public sample.webp
+CHECK Mobile public sample.txt
+CHECK Mobile public sample.json
+CHECK Mobile public sample.xml
+CHECK Mobile public sample.csv
+CHECK Mobile public sample.docx
+CHECK Mobile public sample.xlsx
+CHECK Mobile public sample.pptx
+PASS Mobile public: all 13 formats render; folder retained; no page overflow
+CHECK Mobile public sample.txt
+PASS Mobile: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK Mobile public corrupt.docx
+CHECK Mobile public sample.bin
+PASS Mobile: failed and unsupported files retain Download; unsupported files not fetched
+CHECK Mobile public queued.docx
+PASS Mobile: closing a queued preview cancels polling
+CHECK Mobile landscape private sample.pdf
+CHECK Mobile landscape private sample.jpg
+CHECK Mobile landscape private sample.jpeg
+CHECK Mobile landscape private sample.png
+CHECK Mobile landscape private sample.gif
+CHECK Mobile landscape private sample.webp
+CHECK Mobile landscape private sample.txt
+CHECK Mobile landscape private sample.json
+CHECK Mobile landscape private sample.xml
+CHECK Mobile landscape private sample.csv
+CHECK Mobile landscape private sample.docx
+CHECK Mobile landscape private sample.xlsx
+CHECK Mobile landscape private sample.pptx
+PASS Mobile landscape private: all 13 formats render; folder retained; no page overflow
+CHECK Mobile landscape private sample.txt
+PASS Mobile landscape: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK Mobile landscape private corrupt.docx
+CHECK Mobile landscape private sample.bin
+PASS Mobile landscape: failed and unsupported files retain Download; unsupported files not fetched
+CHECK Mobile landscape private queued.docx
+PASS Mobile landscape: closing a queued preview cancels polling
+CHECK Mobile landscape public sample.pdf
+CHECK Mobile landscape public sample.jpg
+CHECK Mobile landscape public sample.jpeg
+CHECK Mobile landscape public sample.png
+CHECK Mobile landscape public sample.gif
+CHECK Mobile landscape public sample.webp
+CHECK Mobile landscape public sample.txt
+CHECK Mobile landscape public sample.json
+CHECK Mobile landscape public sample.xml
+CHECK Mobile landscape public sample.csv
+CHECK Mobile landscape public sample.docx
+CHECK Mobile landscape public sample.xlsx
+CHECK Mobile landscape public sample.pptx
+PASS Mobile landscape public: all 13 formats render; folder retained; no page overflow
+CHECK Mobile landscape public sample.txt
+PASS Mobile landscape: overlay/Escape protected, focus trapped, HTML displayed as text
+CHECK Mobile landscape public corrupt.docx
+CHECK Mobile landscape public sample.bin
+PASS Mobile landscape: failed and unsupported files retain Download; unsupported files not fetched
+CHECK Mobile landscape public queued.docx
+PASS Mobile landscape: closing a queued preview cancels polling
+PASS 32 browser groups

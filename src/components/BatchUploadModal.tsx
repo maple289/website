@@ -45,7 +45,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
   }, [active]);
-  return <TaskModal className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={`Upload ${kind}s`}>
+  return <TaskModal className="fixed inset-0 z-80 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={`Upload ${kind}s`}>
     <div className="w-full max-w-lg rounded-2xl border border-[#3a3a3a] bg-[#181818] p-6 text-white shadow-2xl">
       <h2 className="text-lg font-semibold">Upload {kind}s</h2><p className="mt-1 text-sm text-[#aaa]">{visibility === 'private' ? 'Private' : 'Public'} · {items.filter((item) => item.status === 'Completed').length} of {items.length} completed · {items.filter(item => item.status === 'Failed').length} failed</p>
       <div className="my-5 max-h-[60vh] space-y-3 overflow-y-auto" aria-live="polite">{items.map((item, index) => <div key={index} className="rounded-xl border border-[#333] p-3">

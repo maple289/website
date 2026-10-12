@@ -159,7 +159,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
   };
 
   return (
-    <TaskModal aria-label="Edit video" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Edit video" className="fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">

@@ -5,6 +5,7 @@ import { ProfileNameFields } from './ProfileNameFields';
 import { AccountMenu } from './AccountMenu';
 import './AdminConsole.css';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from './ErrorBoundary';
 import { ArrowLeft, Clapperboard, Menu, Search, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
@@ -139,7 +140,7 @@ export function AdminPage() {
       <main className="admin-main">
         <div className={`admin-content ${tab === 'statistics' ? 'admin-content-wide' : ''}`}>
           <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : tab === 'settings' ? 'Settings' : tab === 'system' ? 'System Load' : 'Statistics'}</span></p>
-          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : tab === 'system' ? <SystemLoadWidget {...systemLoad} /> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
+          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <ErrorBoundary compact><Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense></ErrorBoundary> : tab === 'system' ? <SystemLoadWidget {...systemLoad} /> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
         </div>
       </main>
     </div>
@@ -566,7 +567,7 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
   const isPromotion = newRole === 'admin';
 
   return (
-    <TaskModal aria-label="Change user role" className="admin-modal fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Change user role" className="admin-modal fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="admin-dialog-panel relative w-full max-w-md shadow-2xl">
         <div className="px-6 pt-6">
@@ -578,19 +579,19 @@ function ChangeRoleModal({ user, onClose, onConfirm, saving }: { user: Profile; 
           </h2>
           <p className="mt-2 text-sm leading-6 text-[#a5a5a5]">
             {isPromotion ? (
-              <>Are you sure you want to promote <span className="font-semibold text-[var(--fluent-text)]">{user.email}</span> to admin? They will gain full access to the Admin Console, including user management and storage configuration.</>
+              <>Are you sure you want to promote <span className="font-semibold text-(--fluent-text)">{user.email}</span> to admin? They will gain full access to the Admin Console, including user management and storage configuration.</>
             ) : (
-              <>Are you sure you want to demote <span className="font-semibold text-[var(--fluent-text)]">{user.email}</span> to a regular user? They will lose access to the Admin Console immediately.</>
+              <>Are you sure you want to demote <span className="font-semibold text-(--fluent-text)">{user.email}</span> to a regular user? They will lose access to the Admin Console immediately.</>
             )}
           </p>
         </div>
         <div className="px-6 pb-7 pt-5">
           <div className="admin-role-summary">
-            <span className="text-xs text-[var(--fluent-muted)]">Current role:</span>
-            <span className={`text-xs font-semibold ${user.role === 'admin' ? 'text-blue-700' : 'text-[var(--fluent-muted)]'}`}>{user.role === 'admin' ? 'Admin' : 'User'}</span>
+            <span className="text-xs text-(--fluent-muted)">Current role:</span>
+            <span className={`text-xs font-semibold ${user.role === 'admin' ? 'text-blue-700' : 'text-(--fluent-muted)'}`}>{user.role === 'admin' ? 'Admin' : 'User'}</span>
             <span className="mx-1 text-[#555]">→</span>
-            <span className="text-xs text-[var(--fluent-muted)]">New role:</span>
-            <span className={`text-xs font-semibold ${newRole === 'admin' ? 'text-blue-700' : 'text-[var(--fluent-muted)]'}`}>{newRole === 'admin' ? 'Admin' : 'User'}</span>
+            <span className="text-xs text-(--fluent-muted)">New role:</span>
+            <span className={`text-xs font-semibold ${newRole === 'admin' ? 'text-blue-700' : 'text-(--fluent-muted)'}`}>{newRole === 'admin' ? 'Admin' : 'User'}</span>
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={close} disabled={saving} className="fluent-button fluent-secondary flex-1">Cancel</button>
@@ -680,46 +681,46 @@ function StorageTab() {
     <div>
       <div className="admin-section-heading">
         <h2>Storage Settings</h2>
-        <p>Configure the physical disk and folder locations where user-uploaded videos and images are stored. These locations are used when saving new uploads and persist across restarts.</p>
+        <p>Configure object-key prefixes inside the existing video and image Storage buckets. Physical disk mounts are managed on the Ubuntu server.</p>
       </div>
 
       {/* Storage Settings Section */}
       <div className="admin-panel">
         <div className="mb-5 flex items-center gap-2">
           <HardDrive size={18} className="text-blue-600" />
-          <h3 className="text-sm font-semibold tracking-[-0.01em]">Storage Locations</h3>
+          <h3 className="text-sm font-semibold tracking-[-0.01em]">Storage Bucket Prefixes</h3>
         </div>
 
         {/* Videos location */}
         <div className="mb-5">
-          <label htmlFor="admin-videos-path" className="admin-form-label">User Videos Storage Location</label>
+          <label htmlFor="admin-videos-path" className="admin-form-label">Video bucket prefix</label>
           <div className="fluent-field">
             <FolderTree className="ml-3.5 text-[#888]" size={17} />
             <input
               id="admin-videos-path"
               value={videosPath}
               onChange={(e) => { setVideosPath(e.target.value); setSettingsSaved(false); }}
-              placeholder="/mnt/storage/videos"
+              placeholder="Leave empty for bucket root"
 
             />
           </div>
-          <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded videos will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/videos</code>).</p>
+          <p className="mt-1.5 text-xs leading-5 text-[#777]">Empty uses the existing bucket root. Prefixes cannot change after media or processing history exists; relocating saved content requires an operator-managed migration.</p>
         </div>
 
         {/* Images location */}
         <div className="mb-5">
-          <label htmlFor="admin-images-path" className="admin-form-label">User Images Storage Location</label>
+          <label htmlFor="admin-images-path" className="admin-form-label">Image bucket prefix</label>
           <div className="fluent-field">
             <FolderTree className="ml-3.5 text-[#888]" size={17} />
             <input
               id="admin-images-path"
               value={imagesPath}
               onChange={(e) => { setImagesPath(e.target.value); setSettingsSaved(false); }}
-              placeholder="/mnt/storage/images"
+              placeholder="Leave empty for bucket root"
 
             />
           </div>
-          <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded images will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/images</code>).</p>
+          <p className="mt-1.5 text-xs leading-5 text-[#777]">This is an object-key prefix, not a filesystem path. Existing media locations remain protected.</p>
         </div>
 
         {/* File Storage Server URL */}
@@ -735,14 +736,14 @@ function StorageTab() {
 
             />
           </div>
-          <p className="mt-1.5 text-xs leading-5 text-[#777]">The URL or IP address of the external file server. When users click "File Storage" in the sidebar, this address opens in a new tab. Leave empty to hide the link.</p>
+          <p className="mt-1.5 text-xs leading-5 text-[#777]">An optional external file server opens from a separate sidebar link. File Storage always opens your private File Manager. Leave empty to hide the external link.</p>
         </div>
 
         {/* Validation info */}
         <div className="admin-notice admin-notice-info">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[#4b86ff]" />
           <p className="text-xs leading-5 text-[#9ab3d4]">
-            When you save, the server validates that each folder exists and is writable. If a folder does not exist or cannot be written to, an error message will appear and the setting will not be saved.
+            The server validates prefix syntax and prevents changes that would break existing media. These settings do not create or validate physical folders; the server operator manages mounts and filesystem permissions.
           </p>
         </div>
 
@@ -750,7 +751,7 @@ function StorageTab() {
           <div role="alert" className="admin-notice admin-notice-error">{settingsError}</div>
         )}
         {settingsSaved && !settingsError && (
-          <div role="status" className="admin-notice admin-notice-success">Storage locations saved successfully. New uploads will use these paths.</div>
+          <div role="status" className="admin-notice admin-notice-success">Storage settings saved successfully.</div>
         )}
 
         <div className="admin-form-actions">
@@ -771,7 +772,7 @@ function StorageTab() {
             </button>
           )}
           {updatedAt && !hasUnsavedChanges && (
-            <span className="text-xs text-[var(--fluent-muted)]">Last updated {new Date(updatedAt).toLocaleString()}</span>
+            <span className="text-xs text-(--fluent-muted)">Last updated {new Date(updatedAt).toLocaleString()}</span>
           )}
         </div>
       </div>
@@ -838,7 +839,7 @@ function StatCard({ label, value, icon, active }: { label: string; value: string
         {icon}
         <span>{label}</span>
       </div>
-      <p className={active === false ? 'text-[var(--fluent-muted)]' : 'text-[var(--fluent-text)]'}>{value}</p>
+      <p className={active === false ? 'text-(--fluent-muted)' : 'text-(--fluent-text)'}>{value}</p>
     </div>
   );
 }
@@ -886,7 +887,7 @@ function AddUserModal({ onClose, onCreated, getAuthHeaders }: { onClose: () => v
   };
 
   return (
-    <TaskModal aria-label="Add user" className="admin-modal fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Add user" className="admin-modal fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="admin-dialog-panel relative w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
@@ -987,7 +988,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
   };
 
   return (
-    <TaskModal aria-label="Edit user" className="admin-modal fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Edit user" className="admin-modal fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="admin-dialog-panel relative w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6">
@@ -995,7 +996,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
             <div className="admin-dialog-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"><Pencil size={20} /></div>
             <div>
               <h2 className="text-lg font-semibold tracking-[-0.02em]">Edit User</h2>
-              <p className="text-xs text-[var(--fluent-muted)]">{user.email}</p>
+              <p className="text-xs text-(--fluent-muted)">{user.email}</p>
             </div>
           </div>
           <button onClick={close} disabled={saving} className="fluent-button fluent-secondary admin-icon-button" aria-label="Close"><X size={18} /></button>
@@ -1027,7 +1028,7 @@ function EditUserModal({ user, onClose, onSaved, getAuthHeaders }: { user: Profi
 
             />
           </div>
-          <p className="mb-5 text-xs text-[var(--fluent-muted)]">Leave password blank to keep it. Clear a name to remove it.</p>
+          <p className="mb-5 text-xs text-(--fluent-muted)">Leave password blank to keep it. Clear a name to remove it.</p>
 
           {error && <div role="alert" className="admin-notice admin-notice-error">{error}</div>}
 

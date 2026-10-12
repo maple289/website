@@ -1,0 +1,10 @@
+Re-optimizing dependencies because vite config has changed
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+PASS 1440px: copy → paste → confirmed Delete → paste; Trash payload preserved, no false conflict, retry skips preservation
+PASS 1440px: Trash retains the original name; Restore Cancel preserves it; Keep both never overwrites the current file
+PASS 1440px: complete folder preservation; permanent Delete requires confirmation, retains failure and deletes only the trashed tree
+PASS 390px: copy → paste → confirmed Delete → paste; Trash payload preserved, no false conflict, retry skips preservation
+PASS 390px: Trash retains the original name; Restore Cancel preserves it; Keep both never overwrites the current file
+PASS 390px: complete folder preservation; permanent Delete requires confirmation, retains failure and deletes only the trashed tree

@@ -22,6 +22,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - web_asset_cache:/asset-cache
     healthcheck:
       test: [CMD, wget, -qO-, http://127.0.0.1/healthz]
       interval: 30s
@@ -32,3 +33,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  web_asset_cache:

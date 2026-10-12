@@ -30,8 +30,13 @@ jobs:
         run: npm run typecheck
 
       - name: Lint
-        continue-on-error: true
         run: npm run lint
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=moderate
+
+      - name: Security and feature regressions
+        run: npm run test:core
 
       - name: Build frontend
         run: npm run build
@@ -39,12 +44,48 @@ jobs:
           VITE_SUPABASE_URL: http://localhost
           VITE_SUPABASE_ANON_KEY: ci-placeholder-key
 
+      - name: Install browser test runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser and transfer regressions
+        env:
+          BROWSER_CHANNEL: chromium
+        run: |
+          node scripts/create-preview-fixtures.mjs
+          npm run test:ui
+          node tests/file-trash.mjs
+          node tests/mobile-auth.mjs
+          node tests/temporary-share-hosting.mjs
+
+      - name: Email and reconciliation regressions
+        run: |
+          python -m pip install requests==2.32.5
+          python tests/email-dispatcher.py
+          python tests/storage-integrity.py
+          sh -n scripts/backup-full.sh
+          sh -n scripts/backup-database.sh
+          sh -n scripts/deploy.sh
+          sh -n docker/start-web.sh
+
       - name: Validate Docker image
         run: |
           docker build \
             --build-arg VITE_SUPABASE_URL=http://localhost \
             --build-arg VITE_SUPABASE_ANON_KEY=ci-placeholder-key \
             -t streamly-web:ci .
+
+      - name: Validate serving configuration
+        run: docker run --rm -e APP_ADDRESS=:80 -e SUPABASE_API_UPSTREAM=127.0.0.1:8000 --entrypoint caddy streamly-web:ci validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Serving and security-header regressions
+        env:
+          BROWSER_CHANNEL: chromium
+        run: |
+          docker create --name caddy-ci streamly-web:ci
+          docker cp caddy-ci:/usr/bin/caddy .runtime/caddy-ci
+          docker rm caddy-ci
+          chmod 755 .runtime/caddy-ci
+          CADDY_BIN="$PWD/.runtime/caddy-ci" node tests/serving-security.mjs
 
       - name: Validate Compose configuration
         run: docker compose --env-file .env.example -f compose.yml config --quiet

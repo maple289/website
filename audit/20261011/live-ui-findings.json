@@ -1,0 +1,14 @@
+[
+  {
+    "observedDates": "2026-10-11",
+    "classification": "confirmed live bug",
+    "asset": "/video/assets/AdminStatistics-fHZ8HZ1o.js",
+    "credentials": "none collected",
+    "contentType": "text/html; charset=utf-8",
+    "responseStatus": 200,
+    "component": "Admin Statistics / lazy module deployment",
+    "observed": "Opening Statistics from a previously open production tab replaced the entire app with Something went wrong",
+    "recovery": "Reload restored application; fresh Admin Statistics loaded",
+    "cacheControl": "public, max-age=31536000, immutable"
+  }
+]

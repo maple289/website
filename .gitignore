@@ -3,3 +3,6 @@ node_modules/
 .runtime/
 backups/
 public/pdfjs/
+dist/
+__pycache__/
+*.pyc

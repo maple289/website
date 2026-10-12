@@ -1,0 +1,513 @@
+{
+  "time": "2026-10-11T22:23:03.571Z",
+  "sourceCommit": "5c26cf7",
+  "results": [
+    {
+      "label": "root",
+      "status": 200,
+      "milliseconds": 85,
+      "bytes": 13056,
+      "headers": {
+        "content-type": "text/html",
+        "content-length": "13056",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": null,
+        "x-frame-options": null,
+        "referrer-policy": null,
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      }
+    },
+    {
+      "label": "frontend",
+      "status": 200,
+      "milliseconds": 17,
+      "bytes": 962,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "512",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      }
+    },
+    {
+      "label": "healthz",
+      "status": 404,
+      "milliseconds": 11,
+      "bytes": 1245,
+      "headers": {
+        "content-type": "text/html",
+        "content-length": "1245",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": null,
+        "x-frame-options": null,
+        "referrer-policy": null,
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      }
+    },
+    {
+      "label": "frontend-main-asset",
+      "status": 200,
+      "milliseconds": 88,
+      "bytes": 706756,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "content-length": "210617",
+        "cache-control": "public, max-age=31536000, immutable",
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      }
+    },
+    {
+      "label": "frontend-messenger-asset",
+      "status": 200,
+      "milliseconds": 14,
+      "bytes": 44909,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "content-length": "14282",
+        "cache-control": "public, max-age=31536000, immutable",
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      },
+      "completeCardRemovalText": true,
+      "legacyDeletedPlaceholderText": false
+    },
+    {
+      "label": "auth-settings",
+      "status": 200,
+      "milliseconds": 16,
+      "bytes": 561,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "252",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "anonymous-videos",
+      "status": 200,
+      "milliseconds": 15,
+      "bytes": 3768,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "1029",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "rowCount": 3,
+      "nonPublicRows": 0
+    },
+    {
+      "label": "anonymous-photos",
+      "status": 200,
+      "milliseconds": 14,
+      "bytes": 2679,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "652",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "rowCount": 4,
+      "nonPublicRows": 0
+    },
+    {
+      "label": "anonymous-profiles",
+      "status": 200,
+      "milliseconds": 15,
+      "bytes": 2,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "2",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "rowCount": 0
+    },
+    {
+      "label": "anonymous-pending_registrations",
+      "status": 200,
+      "milliseconds": 12,
+      "bytes": 2,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "2",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "rowCount": 0
+    },
+    {
+      "label": "anonymous-messenger_messages",
+      "status": 401,
+      "milliseconds": 15,
+      "bytes": 206,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "206",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "errorCode": "42501"
+    },
+    {
+      "label": "anonymous-messenger_attachments",
+      "status": 401,
+      "milliseconds": 16,
+      "bytes": 212,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "212",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "errorCode": "42501"
+    },
+    {
+      "label": "anonymous-temporary_content_shares",
+      "status": 401,
+      "milliseconds": 16,
+      "bytes": 218,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "218",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "errorCode": "42501"
+    },
+    {
+      "label": "anonymous-storage_settings",
+      "status": 200,
+      "milliseconds": 14,
+      "bytes": 2,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "2",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "rowCount": 0
+    },
+    {
+      "label": "anonymous-admin-users",
+      "status": 401,
+      "milliseconds": 520,
+      "bytes": 24,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "28",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "anonymous-storage-settings",
+      "status": 401,
+      "milliseconds": 546,
+      "bytes": 24,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "28",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "anonymous-messenger-media",
+      "status": 401,
+      "milliseconds": 509,
+      "bytes": 29,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "31",
+        "cache-control": "private, no-store",
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff, nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "anonymous-messenger-calls",
+      "status": 405,
+      "milliseconds": 534,
+      "bytes": 33,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "37",
+        "cache-control": "private, no-store",
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff, nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "anonymous-rpc-messenger_rpc",
+      "status": 401,
+      "milliseconds": 27,
+      "bytes": 100,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "100",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "errorCode": "42501"
+    },
+    {
+      "label": "anonymous-rpc-list_public_user_files",
+      "status": 200,
+      "milliseconds": 20,
+      "bytes": 300,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "300",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      },
+      "rowCount": 1,
+      "responseFieldNames": [
+        "id",
+        "name",
+        "path",
+        "size",
+        "favorite",
+        "isFolder",
+        "location",
+        "mimeType",
+        "ancestors",
+        "trashedAt",
+        "updatedAt"
+      ]
+    },
+    {
+      "label": "invalid-public-file",
+      "status": 404,
+      "milliseconds": 531,
+      "bytes": 16,
+      "headers": {
+        "content-type": "text/plain;charset=UTF-8",
+        "content-length": "20",
+        "cache-control": "no-store",
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff, nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "invalid-temporary-link",
+      "status": 404,
+      "milliseconds": 513,
+      "bytes": 51,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "45",
+        "cache-control": "no-store, max-age=0",
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff, nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin, no-referrer",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": "*"
+      }
+    },
+    {
+      "label": "temporary-route-frontend",
+      "status": 200,
+      "milliseconds": 15,
+      "bytes": 962,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "512",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      }
+    },
+    {
+      "label": "legacy-root-share-route",
+      "status": 404,
+      "milliseconds": 27,
+      "bytes": 1245,
+      "headers": {
+        "content-type": "text/html",
+        "content-length": "1245",
+        "cache-control": null,
+        "content-security-policy": null,
+        "strict-transport-security": null,
+        "x-content-type-options": null,
+        "x-frame-options": null,
+        "referrer-policy": null,
+        "permissions-policy": null,
+        "server": "Microsoft-IIS/10.0",
+        "location": null,
+        "access-control-allow-origin": null
+      }
+    }
+  ]
+}

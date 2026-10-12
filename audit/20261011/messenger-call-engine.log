@@ -1,0 +1,12 @@
+PASS synchronous pending guard prevents duplicate starts and media acquisition
+PASS production ICE permits direct paths; refreshing relay credentials does not restart healthy media
+PASS mute, camera toggles, device replacement and screen restoration release old tracks
+PASS failed device replacement stops newly acquired capture and retains old camera
+PASS end stops capture during network failure, prevents duplicate submission and retries
+PASS remote hangup clears local capture through terminal heartbeat
+PASS signout during browser permission acquisition cannot leak media
+PASS Accept requests permission synchronously, prevents double taps and never waits for optional device enumeration
+PASS stalled permission shows an actionable error, does not accept on the server and stops late capture
+PASS camera state signals are versioned, honor actual capture, preserve screen/audio and reuse peer connections
+PASS new peer starts with persisted camera state for late joiners
+11 call engine checks passed.

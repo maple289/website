@@ -1,0 +1,668 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index c15d6a7..6d8c558 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -25,6 +25,8 @@ import { PhotoUploadModal } from '@/components/PhotoUploadModal';
+ import { SettingsPage } from '@/components/SettingsPage';
+ import { InitialPasswordPage } from '@/components/InitialPasswordPage';
+ import { FileManager } from '@/components/FileManager';
++import { ErrorBoundary } from '@/components/ErrorBoundary';
++import { ExternalFileServerLink } from '@/components/ExternalFileServerLink';
+ 
+ const UserStatistics = lazy(() => import('@/components/UserStatistics').then(module => ({ default: module.UserStatistics })));
+ const Messenger = lazy(() => import('@/components/Messenger').then(module => ({ default: module.Messenger })));
+@@ -34,7 +36,7 @@ function App() {
+   if (shared) return <TemporarySharePage token={shared.token} />;
+   return (
+     <div className="fluent-app"><AuthProvider>
+-      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><CallProvider><AppContent /><CallPanel /></CallProvider></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
++      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><CallProvider><ErrorBoundary compact><AppContent /></ErrorBoundary><CallPanel /></CallProvider></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
+     </AuthProvider></div>
+   );
+ }
+@@ -199,6 +201,7 @@ function AppContent() {
+             <NavItem icon={<Video size={20} />} label="My Videos" active={route === 'library'} onClick={() => navigate('library')} />
+             <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
+             <NavItem icon={<FolderOpen size={20} />} label="File Storage" active={route === 'files'} onClick={() => navigate('files')} />
++            <ExternalFileServerLink key={user.id} />
+             <NavItem icon={<MessageCircle size={20} />} label="Messages" active={route === 'messages'} onClick={() => navigate('messages')} />
+             <div className="my-4 h-px bg-slate-200" />
+             {isAdmin && (
+diff --git a/src/components/AdminPage.tsx b/src/components/AdminPage.tsx
+index 9b847c4..352d499 100644
+--- a/src/components/AdminPage.tsx
++++ b/src/components/AdminPage.tsx
+@@ -5,6 +5,7 @@ import { ProfileNameFields } from './ProfileNameFields';
+ import { AccountMenu } from './AccountMenu';
+ import './AdminConsole.css';
+ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
++import { ErrorBoundary } from './ErrorBoundary';
+ import { ArrowLeft, Clapperboard, Menu, Search, HardDrive, Loader as Loader2, Mail, Lock, Pencil, ShieldCheck, Trash2, Users, UserPlus, X, FolderTree, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, ChevronDown, Clock, Check, XCircle, Save, AlertCircle } from 'lucide-react';
+ import { supabase, supabaseAnonKey } from '@/lib/supabase';
+ import { useAdmin } from '@/hooks/useAdmin';
+@@ -139,7 +140,7 @@ export function AdminPage() {
+       <main className="admin-main">
+         <div className={`admin-content ${tab === 'statistics' ? 'admin-content-wide' : ''}`}>
+           <p className="admin-location"><ShieldCheck size={14} /><span>Admin Console</span><span aria-hidden="true">/</span><span>{tab === 'users' ? 'Users' : tab === 'storage' ? 'Storage' : tab === 'settings' ? 'Settings' : tab === 'system' ? 'System Load' : 'Statistics'}</span></p>
+-          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense> : tab === 'system' ? <SystemLoadWidget {...systemLoad} /> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
++          {tab === 'users' ? <UsersTab currentUserId={currentUser?.id ?? null} onRoleChanged={refreshAdmin} /> : tab === 'statistics' ? <ErrorBoundary compact><Suspense fallback={<p role="status" className="admin-loading">Loading Statistics…</p>}><AdminStatistics /></Suspense></ErrorBoundary> : tab === 'system' ? <SystemLoadWidget {...systemLoad} /> : tab === 'settings' ? <VideoProcessingSettings /> : <StorageTab />}
+         </div>
+       </main>
+     </div>
+@@ -680,46 +681,46 @@ function StorageTab() {
+     <div>
+       <div className="admin-section-heading">
+         <h2>Storage Settings</h2>
+-        <p>Configure the physical disk and folder locations where user-uploaded videos and images are stored. These locations are used when saving new uploads and persist across restarts.</p>
++        <p>Configure object-key prefixes inside the existing video and image Storage buckets. Physical disk mounts are managed on the Ubuntu server.</p>
+       </div>
+ 
+       {/* Storage Settings Section */}
+       <div className="admin-panel">
+         <div className="mb-5 flex items-center gap-2">
+           <HardDrive size={18} className="text-blue-600" />
+-          <h3 className="text-sm font-semibold tracking-[-0.01em]">Storage Locations</h3>
++          <h3 className="text-sm font-semibold tracking-[-0.01em]">Storage Bucket Prefixes</h3>
+         </div>
+ 
+         {/* Videos location */}
+         <div className="mb-5">
+-          <label htmlFor="admin-videos-path" className="admin-form-label">User Videos Storage Location</label>
++          <label htmlFor="admin-videos-path" className="admin-form-label">Video bucket prefix</label>
+           <div className="fluent-field">
+             <FolderTree className="ml-3.5 text-[#888]" size={17} />
+             <input
+               id="admin-videos-path"
+               value={videosPath}
+               onChange={(e) => { setVideosPath(e.target.value); setSettingsSaved(false); }}
+-              placeholder="/mnt/storage/videos"
++              placeholder="Leave empty for bucket root"
+ 
+             />
+           </div>
+-          <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded videos will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/videos</code>).</p>
++          <p className="mt-1.5 text-xs leading-5 text-[#777]">Empty uses the existing bucket root. Prefixes cannot change after media or processing history exists; relocating saved content requires an operator-managed migration.</p>
+         </div>
+ 
+         {/* Images location */}
+         <div className="mb-5">
+-          <label htmlFor="admin-images-path" className="admin-form-label">User Images Storage Location</label>
++          <label htmlFor="admin-images-path" className="admin-form-label">Image bucket prefix</label>
+           <div className="fluent-field">
+             <FolderTree className="ml-3.5 text-[#888]" size={17} />
+             <input
+               id="admin-images-path"
+               value={imagesPath}
+               onChange={(e) => { setImagesPath(e.target.value); setSettingsSaved(false); }}
+-              placeholder="/mnt/storage/images"
++              placeholder="Leave empty for bucket root"
+ 
+             />
+           </div>
+-          <p className="mt-1.5 text-xs leading-5 text-[#777]">The physical disk or folder path where new user-uploaded images will be stored. Enter an absolute path (e.g. <code className="rounded bg-[#272727] px-1 py-0.5 font-mono text-[11px] text-[#ccc]">/mnt/storage/images</code>).</p>
++          <p className="mt-1.5 text-xs leading-5 text-[#777]">This is an object-key prefix, not a filesystem path. Existing media locations remain protected.</p>
+         </div>
+ 
+         {/* File Storage Server URL */}
+@@ -735,14 +736,14 @@ function StorageTab() {
+ 
+             />
+           </div>
+-          <p className="mt-1.5 text-xs leading-5 text-[#777]">The URL or IP address of the external file server. When users click "File Storage" in the sidebar, this address opens in a new tab. Leave empty to hide the link.</p>
++          <p className="mt-1.5 text-xs leading-5 text-[#777]">An optional external file server opens from a separate sidebar link. File Storage always opens your private File Manager. Leave empty to hide the external link.</p>
+         </div>
+ 
+         {/* Validation info */}
+         <div className="admin-notice admin-notice-info">
+           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[#4b86ff]" />
+           <p className="text-xs leading-5 text-[#9ab3d4]">
+-            When you save, the server validates that each folder exists and is writable. If a folder does not exist or cannot be written to, an error message will appear and the setting will not be saved.
++            The server validates prefix syntax and prevents changes that would break existing media. These settings do not create or validate physical folders; the server operator manages mounts and filesystem permissions.
+           </p>
+         </div>
+ 
+@@ -750,7 +751,7 @@ function StorageTab() {
+           <div role="alert" className="admin-notice admin-notice-error">{settingsError}</div>
+         )}
+         {settingsSaved && !settingsError && (
+-          <div role="status" className="admin-notice admin-notice-success">Storage locations saved successfully. New uploads will use these paths.</div>
++          <div role="status" className="admin-notice admin-notice-success">Storage settings saved successfully.</div>
+         )}
+ 
+         <div className="admin-form-actions">
+diff --git a/src/components/AuthModal.tsx b/src/components/AuthModal.tsx
+index 61d3617..f391f5b 100644
+--- a/src/components/AuthModal.tsx
++++ b/src/components/AuthModal.tsx
+@@ -154,7 +154,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
+                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                 </button>
+               </div>
+-              <p className="mt-2 text-xs leading-5 text-[#999]">First login after approval? Leave the password blank to set it up. Existing accounts require their password.</p>
++              <p className="mt-2 text-xs leading-5 text-[#999]">First login after approval? Leave the password blank to receive an email verification code and create your password. Existing accounts require their password.</p>
+             </>
+           )}
+ 
+diff --git a/src/components/CallPanel.tsx b/src/components/CallPanel.tsx
+index 0aaa7f9..cfdbc29 100644
+--- a/src/components/CallPanel.tsx
++++ b/src/components/CallPanel.tsx
+@@ -159,8 +159,8 @@ function ActiveCall({ call, state, engine }: { call: CallInfo; state: CallState;
+         <button title="Devices" aria-expanded={devicesVisible} onClick={() => setDevicesVisible(v => !v)}><Settings2 size={18} /><span>Devices</span></button>
+         <button className="call-end" title="End call" disabled={state.busy} onClick={() => void engine.end()}><PhoneOff size={18} /><span>End call</span></button>
+       </div>
+-      {devicesVisible && <div className="call-devices"><label>Microphone<select disabled={state.busy} value="" onChange={e => void engine.microphone(e.target.value)}><option value="" disabled>Select microphone</option>{state.devices.filter(d => d.kind === 'audioinput').map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}</select></label>
+-        {video && <label>Camera<select disabled={state.busy} value="" onChange={e => void engine.camera(e.target.value)}><option value="" disabled>Select camera</option>{state.devices.filter(d => d.kind === 'videoinput').map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>)}</select></label>}
++      {devicesVisible && <div className="call-devices"><label>Microphone<select disabled={state.busy} value={state.microphoneId ?? ''} onChange={e => void engine.microphone(e.target.value)}><option value="" disabled>Select microphone</option>{state.devices.filter(d => d.kind === 'audioinput').map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}</select></label>
++        {video && <label>Camera<select disabled={state.busy} value={state.cameraId ?? ''} onChange={e => void engine.camera(e.target.value)}><option value="" disabled>Select camera</option>{state.devices.filter(d => d.kind === 'videoinput').map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>)}</select></label>}
+         <div className="call-output-options"><p role="status">Audio output: {routeLabel}</p>
+           {audio.mobile && !toggleAvailable && <p>{audio.supported ? 'Speaker/earpiece switching is unavailable. Choose an output below or use your phone’s audio controls.' : 'Your phone controls the audio route. Use its audio controls or a connected headset.'}</p>}
+           {audio.supported && <label>Audio output<select disabled={audio.pending} value={audio.sinkId ?? 'unconfirmed'} onChange={e => void output.select(e.target.value)}>
+diff --git a/src/components/ErrorBoundary.tsx b/src/components/ErrorBoundary.tsx
+index 90a5756..319bb0b 100644
+--- a/src/components/ErrorBoundary.tsx
++++ b/src/components/ErrorBoundary.tsx
+@@ -1,6 +1,6 @@
+ import { Component, type ReactNode } from 'react';
+ 
+-type Props = { children: ReactNode };
++type Props = { children: ReactNode; compact?: boolean };
+ type State = { hasError: boolean; message: string };
+ 
+ export class ErrorBoundary extends Component<Props, State> {
+@@ -11,15 +11,15 @@ export class ErrorBoundary extends Component<Props, State> {
+   }
+ 
+   componentDidCatch(error: Error) {
+-    console.error('App render error:', error);
++    console.error('App render error', { name: error.name });
+   }
+ 
+   render() {
+     if (this.state.hasError) {
+       return (
+-        <div style={{ minHeight: '100vh', background: 'linear-gradient(90deg, #033C8D 0%, #001338 48%, #0062C7 100%)', color: '#f1f1f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px', fontFamily: 'system-ui, sans-serif' }}>
++        <div role="alert" style={{ minHeight: this.props.compact ? '180px' : '100dvh', background: 'linear-gradient(90deg, #033C8D 0%, #001338 48%, #0062C7 100%)', color: '#f1f1f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px', fontFamily: 'system-ui, sans-serif', padding: '20px' }}>
+           <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Something went wrong</h2>
+-          <p style={{ color: '#aaa', fontSize: '14px' }}>{this.state.message}</p>
++          <p style={{ color: '#aaa', fontSize: '14px' }}>This page could not load. Check your connection. Reloading may interrupt your current call or unsaved work.</p>
+           <button onClick={() => window.location.reload()} style={{ marginTop: '8px', padding: '10px 20px', background: '#ff3d46', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+             Reload page
+           </button>
+diff --git a/src/components/FileManager.tsx b/src/components/FileManager.tsx
+index 1e5d509..1143e81 100644
+--- a/src/components/FileManager.tsx
++++ b/src/components/FileManager.tsx
+@@ -3,7 +3,7 @@ import { ContentContextMenu, type ContentAction } from './ContentContextMenu';
+ import { TemporaryShareModal } from './TemporaryShareModal';
+ import { FolderDestinationPicker } from './FolderDestinationPicker';
+ import { useFileClipboard } from '@/context/FileClipboardContext';
+-import { copyName, executeFileOperation, planFileOperation, type FileOperationPlan } from '@/lib/fileOperations';
++import { copyName, executeFileOperation, planFileOperation, unfinishedFileOperations, type FileOperationPlan } from '@/lib/fileOperations';
+ import { downloadFolderArchive } from '@/lib/folderDownloads';
+ import { FilePreview } from './FilePreview';
+ import { recordFileEvent } from '@/lib/analytics';
+@@ -60,6 +60,19 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
+   const pendingPlans = useRef(new Map<string, FileOperationPlan>());
+   const completedTargets = useRef(new Set<string>());
+   const pendingReplacements = useRef(new Map<string, DeleteConfirmation>());
++  const [unfinishedTransfers, setUnfinishedTransfers] = useState<FileOperationPlan[]>([]);
++  const [transferRecoveryError, setTransferRecoveryError] = useState('');
++  useEffect(() => {
++    setUnfinishedTransfers([]); setTransferRecoveryError('');
++    if (!user?.id) return;
++    let alive = true;
++    const refresh = async () => {
++      try { const plans = await unfinishedFileOperations(); if (alive) { setUnfinishedTransfers(plans); setTransferRecoveryError(''); } }
++      catch (error) { if (alive) setTransferRecoveryError(error instanceof Error ? error.message : 'Transfer recovery unavailable.'); }
++    };
++    void refresh(); window.addEventListener('file-transfer-changed', refresh);
++    return () => { alive = false; window.removeEventListener('file-transfer-changed', refresh); };
++  }, [user?.id]);
+   const [shareIndicators, setShareIndicators] = useState<Record<string, 'users' | 'everyone'>>({});
+   const [shareVersion, setShareVersion] = useState(0);
+   const [sharedOffset, setSharedOffset] = useState(0);
+@@ -702,6 +715,19 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
+             </div>}
+           </div>
+           {!guest && <nav className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:hidden">{([['files', Folder, 'My Files'], ['recent', Clock3, 'Recent'], ['favorites', Star, 'Favorites'], ['shared', Share2, 'Shared'], ['trash', Trash2, 'Trash']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { navigate({ view: key }); }} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${view === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500'}`}><Icon size={14} />{label}</button>)}</nav>}
++          {!guest && transferRecoveryError && <p role="alert" className="mb-3 text-sm text-rose-700">{transferRecoveryError} <button className="underline" onClick={() => window.dispatchEvent(new Event('file-transfer-changed'))}>Retry</button></p>}
++          {!guest && unfinishedTransfers.length > 0 && <section aria-label="Unfinished transfers" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
++            <h2 className="text-sm font-semibold">Unfinished transfers</h2>
++            {unfinishedTransfers.map(plan => <div key={plan.operationId} className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
++              <span className="wrap-break-word">{plan.copy ? 'Copy' : plan.restore ? 'Restore' : 'Move'}: {plan.source.split('/').pop()}</span>
++              <button disabled={busy} className="fluent-button fluent-secondary" onClick={() => void requestDelete({
++                title: `Resume transfer of “${plan.source.split('/').pop()}”?`,
++                message: `Continue the saved transfer into “${plan.destination.split('/').slice(1).join('/')}”, including its planned folder contents. Completed steps are retained. Existing items will not be overwritten.`,
++                confirmLabel: 'Resume transfer', processingLabel: 'Resuming…',
++                onConfirm: async () => { if (!user) throw new Error('Please sign in.'); await executeFileOperation(plan, user.id); await load(); },
++              })}>Resume</button>
++            </div>)}
++          </section>}
+           {!guest && view === 'files' && <div role="status" className={`fm-clipboard-status mb-3 ${clipboard ? 'is-ready' : ''}`}>
+             <Copy size={17} aria-hidden="true" className="shrink-0" />
+             {clipboard ? <div className="min-w-0"><p className="text-sm"><strong>Ready to paste:</strong> <span className="wrap-break-word" title={clipboard.entry.name}>{clipboard.entry.name}</span></p><p className="mt-0.5 text-xs">{isSearching ? 'Clear search to paste into the current folder.' : `Use Paste above to copy into ${folder || 'My Files'}.`}</p></div>
+diff --git a/src/components/InitialPasswordPage.tsx b/src/components/InitialPasswordPage.tsx
+index 96493ea..eb53995 100644
+--- a/src/components/InitialPasswordPage.tsx
++++ b/src/components/InitialPasswordPage.tsx
+@@ -7,15 +7,16 @@ export function InitialPasswordPage() {
+   const { completeInitialPassword, cancelPasswordSetup } = useAuth();
+   const [password, setPassword] = useState('');
+   const [confirmation, setConfirmation] = useState('');
++  const [code, setCode] = useState('');
+   const [visible, setVisible] = useState(false);
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+-  const close = useGuardedClose(() => { setPassword(''); setConfirmation(''); cancelPasswordSetup(); window.location.hash = ''; }, !!password || !!confirmation, saving);
++  const close = useGuardedClose(() => { setPassword(''); setConfirmation(''); setCode(''); cancelPasswordSetup(); window.location.hash = ''; }, !!password || !!confirmation || !!code, saving);
+   return <main className="flex min-h-dvh items-center justify-center bg-[linear-gradient(145deg,#f7f9fc,#eef3f8)] p-5 text-slate-800">
+     <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+       <KeyRound className="mb-4 text-blue-600" size={28} />
+       <h1 className="text-xl font-semibold">Create your password</h1>
+-      <p className="mt-3 text-sm leading-6 text-slate-600">Your account does not have a password yet. Please create a password to continue.</p>
++      <p className="mt-3 text-sm leading-6 text-slate-600">Check your approved email address for a verification code. Paste it below and create your password. The code expires in 15 minutes.</p>
+       <form className="mt-6" onSubmit={async (event) => {
+         event.preventDefault();
+         if (saving) return;
+@@ -23,12 +24,14 @@ export function InitialPasswordPage() {
+         if (!password.trim() || password.length < 6) { setError('New password must be at least 6 characters.'); return; }
+         if (password !== confirmation) { setError('New password and confirmation do not match.'); return; }
+         setSaving(true);
+-        const result = await completeInitialPassword(password, confirmation);
++        const result = await completeInitialPassword(password, confirmation, code);
+         setSaving(false);
+         if (result.error) setError(result.error);
+-        else { setPassword(''); setConfirmation(''); }
++        else { setPassword(''); setConfirmation(''); setCode(''); }
+       }}>
+         <fieldset disabled={saving} className="min-w-0 space-y-4">
++          <div><label htmlFor="initial-code" className="mb-2 block text-sm">Email verification code</label>
++            <input id="initial-code" type="text" autoComplete="one-time-code" autoCapitalize="none" spellCheck={false} maxLength={64} value={code} onChange={e => setCode(e.target.value)} className="min-h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3" /></div>
+           <div><label htmlFor="initial-password" className="mb-2 block text-sm">New Password</label>
+             <input id="initial-password" type={visible ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="min-h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3" /></div>
+           <div><label htmlFor="initial-confirmation" className="mb-2 block text-sm">Confirm New Password</label>
+diff --git a/src/components/Messenger.tsx b/src/components/Messenger.tsx
+index 648bec7..fdf6631 100644
+--- a/src/components/Messenger.tsx
++++ b/src/components/Messenger.tsx
+@@ -44,12 +44,12 @@ export function Messenger() {
+   const loadMore = async () => { if (listLoading) return; setListLoading(true); try { const data = await chatRequest<{ conversations: Conversation[] }>('inbox', null, { query, offset: list.length }); setList(current => [...new Map([...current, ...data.conversations].map(item => [item.id, item])).values()]); setMore(data.conversations.length === 50); } catch (cause) { setListError(chatError(cause)); } finally { setListLoading(false); } };
+   if (!user) return null;
+   const visibleList = list.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }));
+-  return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations В· <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
++  return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations · <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
+     {error && <p className="chat-error chat-service-error" role="alert">{error} <button onClick={() => void refresh()}>Retry</button></p>}
+     <div className="chat-workspace"><aside className="chat-conversation-list" aria-label="Conversations"><section className="chat-sidebar-conversations" aria-label="Conversations and groups"><h2 className="chat-sidebar-heading">Conversations / Groups</h2><label className="chat-search"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} /></label><div className="chat-inbox-items">
+       {visibleList.map(item => <button key={item.id} className={`chat-inbox-item ${selected === item.id ? 'is-active' : ''}`} aria-current={selected === item.id ? 'page' : undefined} onClick={() => openConversation(item.id)}><span className="chat-avatar">{item.kind === 'group' ? <Users size={19} /> : item.name[0]?.toUpperCase()}<i data-online={item.members.some(member => member.id !== user.id && member.online)} /></span><span className="chat-inbox-text"><strong>{item.name}{item.muted && <BellOff size={13} />}</strong><span>{item.latest?.body || (item.latest?.attachments.length ? 'Sent an attachment' : 'No messages yet')}</span></span>{item.unread > 0 && <span className="chat-count">{item.unread > 99 ? '99+' : item.unread}</span>}</button>)}
+       {!list.length && !listLoading && <p className="chat-empty">{query ? 'No matching conversations.' : 'Start a conversation with a registered user.'}</p>}
+-      {listLoading && <p role="status" className="chat-empty">LoadingвЂ¦</p>}{more && !listLoading && <button className="chat-load-more" onClick={() => void loadMore()}>More conversations</button>}{listError && <p className="chat-error" role="alert">{listError}</p>}
++      {listLoading && <p role="status" className="chat-empty">Loading…</p>}{more && !listLoading && <button className="chat-load-more" onClick={() => void loadMore()}>More conversations</button>}{listError && <p className="chat-error" role="alert">{listError}</p>}
+     </div></section><section className="chat-desktop-people" aria-label="People"><h2 className="chat-sidebar-heading">People</h2><MessengerPeople label="Search people" selectedConversation={selected} disabled={personBusy} onSelect={person => void choosePerson(person.id)} />{personBusy && <p className="chat-help" role="status">Opening conversation…</p>}{personError && <p className="chat-error" role="alert">{personError}</p>}</section></aside>
+       {selected ? <ConversationPane key={selected} id={selected} revision={revision} drafts={drafts.current} /> : <div className="chat-welcome"><MessageCircle size={48} /><h2>Your conversations</h2><p>Select a conversation or start a new message.</p><button className="chat-primary" onClick={() => setNewChat(true)}>New conversation</button></div>}
+     </div>
+@@ -221,7 +221,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
+           ...(canEveryone ? [{ id: 'everyone', label: clear ? 'Clear for everyone' : 'Delete for everyone', details: clear
+             ? `Permanently clear ${counts.everyone_count} existing messages for all participants. Attachments become inaccessible immediately and are queued for permanent storage cleanup. New messages sent afterward remain. This cannot be undone.`
+             : `Permanently delete this group, its ${counts.everyone_count} messages and reactions for all members. Attachments become inaccessible immediately and are queued for permanent storage cleanup. This cannot be undone.` }] : [])],
+-        processingLabel: clear ? 'ClearingвЂ¦' : 'DeletingвЂ¦',
++        processingLabel: clear ? 'Clearing…' : 'Deleting…',
+         onConfirm: async scope => {
+           await chatRequest(action, id, { scope: scope === 'everyone' ? 'everyone' : 'self', client_id: clientId, through_sequence: counts.sequence });
+           setPreview(null); setDialog(null);
+@@ -251,27 +251,27 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
+   const entry = useMemo(() => preview ? attachmentEntry(preview) : null, [preview]);
+   return <div className="chat-pane"><header className="chat-thread-header"><button className="chat-mobile-back" aria-label="Back to conversations" onClick={() => openConversation()}><ArrowLeft size={20} /></button><span className="chat-avatar">{conversation?.kind === 'group' ? <Users size={19} /> : conversation?.name[0]?.toUpperCase() || <MessageCircle size={19} />}</span><div><h2>{conversation?.name || 'Conversation'}</h2><p>{conversation?.kind === 'group' ? `${conversation.members.length} members` : other?.online ? 'Online' : other?.last_seen ? `Last seen ${new Date(other.last_seen).toLocaleString()}` : 'Offline'}</p></div>{conversation && <div className="chat-call-buttons">{(['voice', 'video'] as const).map(media => <button key={media} disabled={!engine || calls.busy || !!calls.call || !conversation.can_send || conversation.members.length < 2 || conversation.members.length > 4} title={conversation.members.length > 4 ? 'Calls support up to four members' : media === 'voice' ? 'Voice call' : 'Video call'} aria-label={media === 'voice' ? 'Voice call' : 'Video call'} onClick={() => void engine?.start(id, media)}>{media === 'voice' ? <Phone size={19} /> : <Video size={19} />}<span>{media === 'voice' ? 'Voice' : 'Video'}</span></button>)}</div>}{conversation && <ContentContextMenu name={conversation.name} actions={actions} />}</header>
+     {error && <p className="chat-error" role="alert">{error}<button onClick={() => void sync()}>Refresh conversation</button></p>}
+-    {away && <button className="chat-load-more" onClick={() => { if (fetching.current) return; atBottom.current = true; setAway(false); loaded.current = []; void sync(); }}>Go to latest messages{conversation && conversation.last_sequence > (messages[messages.length - 1]?.sequence ?? 0) ? ' В· New messages' : ''}</button>}
++    {away && <button className="chat-load-more" onClick={() => { if (fetching.current) return; atBottom.current = true; setAway(false); loaded.current = []; void sync(); }}>Go to latest messages{conversation && conversation.last_sequence > (messages[messages.length - 1]?.sequence ?? 0) ? ' · New messages' : ''}</button>}
+     <div className="chat-message-list" ref={viewport} onScroll={() => { const node = viewport.current; if (!node) return; atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80 && (loaded.current[loaded.current.length - 1]?.sequence ?? 0) >= (conversation?.latest?.sequence ?? 0); setAway(!atBottom.current); markRead(); if (!atBottom.current && node.scrollTop < 30) void loadOlder(); }}>
+-      {initial ? <p role="status" className="chat-empty"><LoaderCircle size={22} className="animate-spin" />Loading messagesвЂ¦</p> : <>
+-        {hasOlder && messages.length > 0 && <button className="chat-load-more" disabled={olderBusy} onClick={() => void loadOlder()}>{olderBusy ? 'LoadingвЂ¦' : 'Load older messages'}</button>}
++      {initial ? <p role="status" className="chat-empty"><LoaderCircle size={22} className="animate-spin" />Loading messages…</p> : <>
++        {hasOlder && messages.length > 0 && <button className="chat-load-more" disabled={olderBusy} onClick={() => void loadOlder()}>{olderBusy ? 'Loading…' : 'Load older messages'}</button>}
+         {!messages.length && conversation && <p className="chat-empty">No messages yet. Say hello.</p>}
+         {visibility.messages(messages).map(message => <MessageItem key={message.id} message={message} conversation={conversation} own={message.sender_id === user?.id} reply={() => { if (!draftRef.current.uncertain) { updateDraft(current => ({ ...current, reply: message })); input.current?.focus(); } }} edit={() => setEdit(message)} remove={() => deleteMessage(message)} preview={attachment => setPreview({ ...attachment, message_id: message.id })} download={attachment => void download(attachment)} changed={changed} />)}
+       </>}
+     </div>
+-    <div className="chat-typing" role="status">{typingNames.length ? `${typingNames.slice(0, 3).join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typingвЂ¦` : ''}</div>
++    <div className="chat-typing" role="status">{typingNames.length ? `${typingNames.slice(0, 3).join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing…` : ''}</div>
+     {conversation && <form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
+       {!conversation.can_send && <p className="chat-help">Messaging is unavailable. A member may be blocked or inactive.</p>}
+       {draft.uncertain && <button type="button" disabled={sending} className="chat-danger chat-load-more" onClick={discardPending}>Discard pending draft</button>}
+       {draft.reply && <div className="chat-reply-draft"><span><strong>Reply to {draft.reply.sender_name}</strong><span>{draft.reply.body.slice(0, 120) || 'Attachment'}</span></span><button type="button" disabled={sending || draft.uncertain} aria-label="Cancel reply" onClick={() => updateDraft(current => ({ ...current, reply: null }))}><X size={17} /></button></div>}
+       {!!draft.attachments.length && <div className="chat-pending-files">{draft.attachments.map(item => <div key={item.id}><FileTypeIcon entry={attachmentEntry(item)} size={21} /><span><strong>{item.name}</strong><small>{item.state === 'uploading' ? `Uploading ${item.progress}%` : item.state === 'ready' ? 'Ready to send' : item.error || 'Upload failed'}</small>{item.state === 'uploading' && <progress value={item.progress} max={100} />}</span><button type="button" disabled={sending || draft.uncertain} aria-label={`Remove unsent attachment ${item.name}`} onClick={() => void removeDraftAttachment(item)}><X size={16} /></button></div>)}</div>}
+-      <div className="chat-composer-row"><input ref={filePicker} type="file" multiple hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(files); }} /><button type="button" aria-label="Attach files" title="Attach files (100 MB each)" disabled={!conversation.can_send || sending || draft.uncertain} onClick={() => filePicker.current?.click()}><Paperclip size={21} /></button><textarea ref={input} aria-label="Message" placeholder="Type a messageвЂ¦" rows={1} maxLength={10000} value={draft.text} disabled={!conversation.can_send || sending || draft.uncertain} onChange={event => { updateDraft(current => ({ ...current, text: event.target.value })); setTyping(id, !!event.target.value); }} onBlur={() => setTyping(id, false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); void send(); } }} /><button type="submit" className="chat-send" disabled={!conversation.can_send || sending || draft.attachments.some(item => item.state === 'uploading') || (!draft.text.trim() && !draft.attachments.some(item => item.state === 'ready'))} aria-label={draft.uncertain ? 'Retry Send' : 'Send message'} title={draft.uncertain ? 'Retry Send' : 'Send message'}>{sending ? <LoaderCircle size={21} className="animate-spin" /> : <Send size={21} />}{draft.uncertain && <span>Retry Send</span>}</button></div>
++      <div className="chat-composer-row"><input ref={filePicker} type="file" multiple hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(files); }} /><button type="button" aria-label="Attach files" title="Attach files (100 MB each)" disabled={!conversation.can_send || sending || draft.uncertain} onClick={() => filePicker.current?.click()}><Paperclip size={21} /></button><textarea ref={input} aria-label="Message" placeholder="Type a message…" rows={1} maxLength={10000} value={draft.text} disabled={!conversation.can_send || sending || draft.uncertain} onChange={event => { updateDraft(current => ({ ...current, text: event.target.value })); setTyping(id, !!event.target.value); }} onBlur={() => setTyping(id, false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); void send(); } }} /><button type="submit" className="chat-send" disabled={!conversation.can_send || sending || draft.attachments.some(item => item.state === 'uploading') || (!draft.text.trim() && !draft.attachments.some(item => item.state === 'ready'))} aria-label={draft.uncertain ? 'Retry Send' : 'Send message'} title={draft.uncertain ? 'Retry Send' : 'Send message'}>{sending ? <LoaderCircle size={21} className="animate-spin" /> : <Send size={21} />}{draft.uncertain && <span>Retry Send</span>}</button></div>
+     </form>}
+     {edit && <EditMessage message={edit} close={() => setEdit(null)} saved={() => void changed()} />}
+     {dialog === 'info' && conversation && (conversation.kind === 'group' ? <GroupInformation conversation={conversation} close={() => setDialog(null)} changed={changed} /> : <ChatDialog title="Profile" close={() => setDialog(null)}><div className="chat-dialog-body"><h3>{other?.name || 'Deleted user'}</h3><p>{other?.online ? 'Online' : 'Offline'}</p>{other?.last_seen && <p>Last seen {new Date(other.last_seen).toLocaleString()}</p>}</div><footer><button onClick={() => setDialog(null)}>Close</button></footer></ChatDialog>)}
+     {dialog === 'search' && conversation && <ConversationSearch conversation={conversation} revision={revision} close={() => setDialog(null)} reply={message => updateDraft(current => ({ ...current, reply: message }))} />}
+     {dialog === 'files' && conversation && <SharedChatFiles conversation={conversation} revision={revision} close={() => setDialog(null)} preview={setPreview} download={attachment => void download(attachment)} />}
+-    {preview && entry && !(preview.message_id && visibility.has(preview.message_id)) && <Suspense fallback={<p role="status">Loading previewвЂ¦</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}
++    {preview && entry && !(preview.message_id && visibility.has(preview.message_id)) && <Suspense fallback={<p role="status">Loading preview…</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}
+   </div>;
+ }
+ 
+@@ -284,7 +284,7 @@ function MessageItem({ message, conversation, own, reply, edit, remove, preview,
+   return <article data-message-id={message.id} className={`chat-message ${own ? 'chat-message-own' : ''}`}><div className="chat-message-bubble"><div className="chat-message-heading"><strong>{own ? 'You' : message.sender_name}</strong><ContentContextMenu name="message" actions={actions} /></div>
+     {message.reply && <blockquote><strong>{message.reply.sender_name}</strong><span>{message.reply.body || 'Attachment'}</span></blockquote>}
+     {message.call && !message.deleted && !message.deleting ? <div className="chat-call-event">{message.call.media === 'video' ? <Video size={22} /> : <Phone size={22} />}<span><strong>{message.call.media === 'video' ? 'Video' : 'Voice'} call</strong><small>{message.call.state === 'ended' ? message.call.outcome : message.call.state === 'ringing' ? 'Calling' : 'In progress'}{message.call.answered_at && ` · ${Math.floor(message.call.duration / 60)}:${String(message.call.duration % 60).padStart(2, '0')}`}</small></span></div> : message.body && <p className={`chat-body-text ${message.deleted || message.deleting ? 'chat-deleted-message' : ''}`}>{message.body}</p>}
+-    {message.attachments.map(attachment => <div className="chat-attachment" key={attachment.id}><FileTypeIcon entry={attachmentEntry(attachment)} size={28} /><span><strong>{attachment.name}</strong><small>{chatSize(attachment.file_size)}{!attachment.available || message.deleting ? ' В· Unavailable' : ''}</small></span>{filePreviewKind(attachmentEntry(attachment)) && <button aria-label={`Preview ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => preview(attachment)}><Eye size={18} /></button>}<button aria-label={`Download ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => download(attachment)}><Download size={18} /></button></div>)}
++    {message.attachments.map(attachment => <div className="chat-attachment" key={attachment.id}><FileTypeIcon entry={attachmentEntry(attachment)} size={28} /><span><strong>{attachment.name}</strong><small>{chatSize(attachment.file_size)}{!attachment.available || message.deleting ? ' · Unavailable' : ''}</small></span>{filePreviewKind(attachmentEntry(attachment)) && <button aria-label={`Preview ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => preview(attachment)}><Eye size={18} /></button>}<button aria-label={`Download ${attachment.name}`} disabled={!attachment.available || message.deleting} onClick={() => download(attachment)}><Download size={18} /></button></div>)}
+     {message.deleting && <p className="chat-help">Deletion is incomplete. The author can retry deletion.</p>}
+     <footer><time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>{new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{message.edited_at && <span>edited</span>}{own && <span className={read ? 'chat-read' : ''} title={read ? 'Read by all recipients' : delivered ? 'Delivered to all recipients' : 'Sent'} aria-label={read ? 'Read' : delivered ? 'Delivered' : 'Sent'}>{read || delivered ? <CheckCheck size={15} /> : <Check size={15} />}</span>}</footer>
+     {!message.deleting && !message.deleted && <MessageReactions message={message} changed={changed} />}
+@@ -307,3 +307,4 @@ function MessageReactions({ message, changed }: { message: ChatMessage; changed:
+     }}>{chatReactions.map(type => <button role="menuitem" key={type.id} title={type.name} aria-label={type.name} aria-current={mine?.reaction === type.id ? 'true' : undefined} disabled={busy} onClick={() => void react(type.id)}>{type.emoji}</button>)}</div>, document.body)}{error && <span role="alert" className="chat-error">{error}</span>}
+   </div>;
+ }
++
+diff --git a/src/context/AuthContext.tsx b/src/context/AuthContext.tsx
+index c09a8d6..c3e3ebf 100644
+--- a/src/context/AuthContext.tsx
++++ b/src/context/AuthContext.tsx
+@@ -6,7 +6,7 @@ import { touchActivity } from '@/lib/analytics';
+ import { installSession, prepareSignIn, signOutSession } from '@/lib/authSession';
+ import { authSessionEvent, savedSession, sessionIsSignedOut, sessionRevision } from '@/lib/authSessionStorage';
+ 
+-type PasswordSetup = { token: string; identifier: string; expiresAt: number };
++type PasswordSetup = { identifier: string; expiresAt: number };
+ const setupStorageKey = 'streamly.initial-password-setup';
+ function clearSavedPasswordSetup() {
+   try { sessionStorage.removeItem(setupStorageKey); } catch { /* optional storage */ }
+@@ -14,7 +14,7 @@ function clearSavedPasswordSetup() {
+ function readPasswordSetup(): PasswordSetup | null {
+   try {
+     const saved = JSON.parse(sessionStorage.getItem(setupStorageKey) || 'null');
+-    return saved && /^[a-f0-9]{64}$/.test(saved.token) && typeof saved.identifier === 'string' && saved.expiresAt > Date.now() ? saved : null;
++    return saved && !('token' in saved) && typeof saved.identifier === 'string' && saved.expiresAt > Date.now() ? saved : null;
+   } catch { return null; }
+ }
+ 
+@@ -29,7 +29,7 @@ type AuthContextValue = {
+   requestRegistration: (email: string, firstName?: string, lastName?: string) => Promise<{ error: string | null }>;
+   passwordSetup: PasswordSetup | null;
+   cancelPasswordSetup: () => void;
+-  completeInitialPassword: (password: string, confirmation: string) => Promise<{ error: string | null }>;
++  completeInitialPassword: (password: string, confirmation: string, verificationCode?: string) => Promise<{ error: string | null }>;
+ };
+ 
+ export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+@@ -130,12 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+     configured: isSupabaseConfigured,
+     passwordSetup,
+     cancelPasswordSetup: () => setPasswordSetup(null),
+-    completeInitialPassword: async (password, confirmation) => {
++    completeInitialPassword: async (password, confirmation, verificationCode = '') => {
+       const revision = sessionRevision();
+       if (!passwordSetup) return { error: 'Sign in again to start password setup.' };
+       try {
+         await prepareSignIn(revision);
+-        await accountAction({ action: 'set-password', setup_token: passwordSetup.token, new_password: password, confirm_password: confirmation });
++        if (!/^[a-f0-9]{64}$/.test(verificationCode.trim())) return { error: 'Paste the verification code sent to your email.' };
++        await accountAction({ action: 'set-password', setup_token: verificationCode.trim(), new_password: password, confirm_password: confirmation });
+         if (revision !== sessionRevision()) throw new Error('This session has ended. Please sign in again.');
+         const result = await accountAction({ action: 'login', identifier: passwordSetup.identifier, password });
+         if (!result.session) return { error: 'Your password was saved. Return to sign in and use your new password.' };
+@@ -185,8 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+         await prepareSignIn(revision);
+         const result = await accountAction({ action: 'login', identifier: email, password });
+         if (revision !== sessionRevision()) throw new Error('Sign-in was cancelled. Please try again.');
+-        if (result.requires_password_setup && result.setup_token) {
+-          setPasswordSetup({ token: result.setup_token, identifier: email, expiresAt: Date.now() + (result.expires_in ?? 900) * 1000 });
++        if (result.requires_password_setup && result.email_verification_required) {
++          setPasswordSetup({ identifier: email, expiresAt: Date.now() + (result.expires_in ?? 900) * 1000 });
+           window.location.hash = '#/setup-password';
+           return { error: null };
+         }
+diff --git a/src/lib/accountAuth.ts b/src/lib/accountAuth.ts
+index 498615e..094b490 100644
+--- a/src/lib/accountAuth.ts
++++ b/src/lib/accountAuth.ts
+@@ -13,5 +13,5 @@ export async function accountAction(body: Record<string, string>) {
+   });
+   const data = await response.json();
+   if (!response.ok) throw new Error(data.error || 'Could not complete the request. Please try again.');
+-  return data as { requires_password_setup?: boolean; setup_token?: string; expires_in?: number; success?: boolean; session?: { access_token: string; refresh_token: string } };
++  return data as { requires_password_setup?: boolean; email_verification_required?: boolean; expires_in?: number; success?: boolean; session?: { access_token: string; refresh_token: string } };
+ }
+diff --git a/src/lib/callEngine.ts b/src/lib/callEngine.ts
+index 9a1da33..88e4f9d 100644
+--- a/src/lib/callEngine.ts
++++ b/src/lib/callEngine.ts
+@@ -3,7 +3,7 @@ import { callRelay, callRequest, type CallInfo, type CallSignal, type CallMediaS
+ 
+ export type CallState = { call: CallInfo | null; inbox: CallInfo[]; local: MediaStream | null;
+   remotes: { id: string; stream: MediaStream; connected: boolean; mediaState?: CallMediaState | null }[]; busy: boolean; error: string;
+-  muted: boolean; camera: boolean; sharing: boolean; devices: MediaDeviceInfo[] };
++  muted: boolean; camera: boolean; sharing: boolean; devices: MediaDeviceInfo[]; microphoneId?: string; cameraId?: string };
+ export const emptyCallState: CallState = { call: null, inbox: [], local: null, remotes: [], busy: false,
+   error: '', muted: false, camera: false, sharing: false, devices: [] };
+ type Peer = { pc: RTCPeerConnection; stream: MediaStream; makingOffer: boolean; ignoreOffer: boolean;
+@@ -116,7 +116,8 @@ export class CallEngine {
+     if (!this.alive) { stream.getTracks().forEach(t => t.stop()); throw new Error('You are no longer signed in.'); }
+     this.cameraTrack = stream.getVideoTracks()[0] ?? null;
+     if (this.cameraTrack) this.watchCamera(this.cameraTrack);
+-    this.update({ local: stream, camera: !!this.cameraTrack, muted: false });
++    this.update({ local: stream, camera: !!this.cameraTrack, muted: false,
++      microphoneId: stream.getAudioTracks()[0]?.getSettings?.().deviceId ?? '', cameraId: this.cameraTrack?.getSettings?.().deviceId ?? '' });
+     // Device labels are optional; a slow enumerateDevices must not block Accept.
+     void this.devices();
+   }
+@@ -356,7 +357,7 @@ export class CallEngine {
+         try { if (!this.screen) await this.replace('video', track); }
+         catch (cause) { track.stop(); throw cause; }
+         if (!this.alive || !this.state.call) { track.stop(); return; }
+-        this.cameraTrack = track; this.watchCamera(track); this.stopCamera(old); this.update({ camera: true }); this.queueMediaState(); await this.devices();
++        this.cameraTrack = track; this.watchCamera(track); this.stopCamera(old); this.update({ camera: true, cameraId: track.getSettings?.().deviceId ?? device ?? '' }); this.queueMediaState(); await this.devices();
+       }
+     } catch (cause) { this.update({ error: friendly(cause) }); }
+     finally { this.update({ busy: false }); }
+@@ -372,6 +373,7 @@ export class CallEngine {
+       const old = this.state.local?.getAudioTracks() ?? [];
+       try { await this.replace('audio', track); } catch (cause) { track.stop(); throw cause; }
+       old.forEach(t => t.stop());
++      if (this.alive && this.state.call) this.update({ microphoneId: track.getSettings?.().deviceId ?? device });
+     } catch (cause) { this.update({ error: friendly(cause) }); }
+     finally { this.update({ busy: false }); }
+   }
+diff --git a/src/lib/fileOperations.ts b/src/lib/fileOperations.ts
+index 4313a18..d61a45e 100644
+--- a/src/lib/fileOperations.ts
++++ b/src/lib/fileOperations.ts
+@@ -1,33 +1,45 @@
+ import { supabase } from './supabase';
+ import type { FileEntry, FileMetadata } from './fileTree';
+-export type FileOperationPlan = { source: string; destination: string; copy: boolean; restore?: boolean; preserveTrash?: FileOperationPlan; objects: string[]; metadata: FileMetadata[]; done: Set<string>; metadataDone: Set<string> };
+-type ServerPlan = Omit<FileOperationPlan, 'done' | 'metadataDone' | 'preserveTrash'> & { preserveTrash?: ServerPlan };
+-const preparePlan = (plan: ServerPlan): FileOperationPlan => ({ ...plan, done: new Set(), metadataDone: new Set(), preserveTrash: plan.preserveTrash ? preparePlan(plan.preserveTrash) : undefined });
++export type FileOperationPlan = { source: string; destination: string; copy: boolean; restore?: boolean; operationId?: string; preserveTrash?: FileOperationPlan; objects: string[]; metadata: FileMetadata[]; done: Set<string>; metadataDone: Set<string> };
++type ServerPlan = Omit<FileOperationPlan, 'done' | 'metadataDone' | 'preserveTrash'> & { objectsDone?: string[]; metadataDone?: string[]; preserveTrash?: ServerPlan };
++const preparePlan = (plan: ServerPlan): FileOperationPlan => ({ ...plan, done: new Set(plan.objectsDone), metadataDone: new Set(plan.metadataDone), preserveTrash: plan.preserveTrash ? preparePlan({ ...plan.preserveTrash, operationId: plan.operationId, objectsDone: plan.objectsDone, metadataDone: plan.metadataDone }) : undefined });
+ export async function planFileOperation(entry: FileEntry, destination: string, copy: boolean, restore = false): Promise<FileOperationPlan | null> {
+-  const { data, error } = restore
+-    ? await supabase.rpc('plan_file_restore', { p_source: entry.path, p_destination: destination })
+-    : await supabase.rpc('plan_file_operation', { p_source: entry.path, p_destination: destination, p_copy: copy });
++  const { data, error } = await supabase.rpc('begin_file_operation', { p_id: crypto.randomUUID(), p_source: entry.path, p_destination: destination, p_copy: copy, p_restore: restore });
+   if (error) throw new Error(error.message);
+   if (data.conflict) return null;
++  if (typeof data.operationId !== 'string' || !Array.isArray(data.objects)) throw new Error('Transfer recovery is unavailable. Please try again after the server is updated.');
+   return preparePlan({ ...data, source: entry.path, destination, copy, restore });
+ }
++export async function unfinishedFileOperations(): Promise<FileOperationPlan[]> {
++  const { data, error } = await supabase.rpc('unfinished_file_operations');
++  if (error) throw new Error('Could not load unfinished transfers.');
++  return (data ?? []).map((plan: ServerPlan) => preparePlan(plan));
++}
++async function checkpoint(plan: FileOperationPlan, source: string, metadata: boolean, commit = false): Promise<boolean> {
++  if (!plan.operationId) throw new Error('Transfer receipt unavailable.');
++  const { data, error } = await supabase.rpc('file_operation_step', { p_id: plan.operationId, p_source: source, p_metadata: metadata, p_commit: commit });
++  if (error) throw new Error(error.message);
++  return data === true;
++}
+ // Keep the original immutable plan after partial failures. Retrying skips all
+ // confirmed steps. An uncertain response stops for review rather than risking
+ // overwriting a destination that may already have committed.
+-export async function executeFileOperation(plan: FileOperationPlan, owner: string) {
++export async function executeFileOperation(plan: FileOperationPlan, owner: string, nested = false) {
++  try {
+   // This is preservation of an already deleted item, not a second deletion:
+   // retain its bytes, identity and Trash state before freeing the old name.
+-  if (plan.preserveTrash) await executeFileOperation(plan.preserveTrash, owner);
++  if (plan.preserveTrash) await executeFileOperation(plan.preserveTrash, owner, true);
+   const bucket = supabase.storage.from('user-files');
+   for (const source of plan.objects) {
+-    if (plan.done.has(source)) continue;
++    if (await checkpoint(plan, source, false)) { plan.done.add(source); continue; }
+     const destination = plan.destination + source.slice(plan.source.length);
+     const { error } = plan.copy ? await bucket.copy(source, destination) : await bucket.move(source, destination);
+     if (error) throw new Error(`${error.message}. Some contents may have completed. Retry skips completed steps; existing destinations are never overwritten.`);
++    await checkpoint(plan, source, false, true);
+     plan.done.add(source);
+   }
+   for (const row of plan.metadata) {
+-    if (plan.metadataDone.has(row.object_path)) continue;
++    if (await checkpoint(plan, row.object_path, true)) { plan.metadataDone.add(row.object_path); continue; }
+     const path = plan.destination + row.object_path.slice(plan.source.length);
+     const trash = { trashed_at: plan.restore ? null : row.trashed_at,
+       trash_original_path: plan.restore || plan.copy ? null : row.trash_original_path ?? null };
+@@ -42,7 +54,13 @@ export async function executeFileOperation(plan: FileOperationPlan, owner: strin
+       if (error) throw new Error(error.message);
+     }
+     plan.metadataDone.add(row.object_path);
++    await checkpoint(plan, row.object_path, true, true);
++  }
++  if (!nested) {
++    const { error } = await supabase.rpc('finish_file_operation', { p_id: plan.operationId });
++    if (error) throw new Error(error.message);
+   }
++  } finally { if (!nested) window.dispatchEvent(new Event('file-transfer-changed')); }
+ }
+ export function copyName(name: string, index: number, folder: boolean) {
+   const split = !folder && name.lastIndexOf('.') > 0 ? name.lastIndexOf('.') : name.length;
+diff --git a/src/lib/folderDownloads.ts b/src/lib/folderDownloads.ts
+index bd565b9..e89d33a 100644
+--- a/src/lib/folderDownloads.ts
++++ b/src/lib/folderDownloads.ts
+@@ -11,9 +11,11 @@ const header = (length: number) => { const bytes = new Uint8Array(length); retur
+ export async function downloadFolderArchive(root: FileEntry, userId: string): Promise<Blob> {
+   const parts: BlobPart[] = [], central: BlobPart[] = [];
+   let size = 0, centralSize = 0, count = 0;
++  const memoryLimit = 64 * 1024 * 1024;
+   const visited = new Set<string>();
+   const append = async (name: string, payload: Blob) => {
+     const encoded = new TextEncoder().encode(name);
++    if (size + centralSize + payload.size + encoded.length * 2 + 98 > memoryLimit) throw new Error('This folder exceeds the 64 MB browser archive limit. Download its files individually.');
+     if (encoded.length > 65535 || count >= 65535 || size + payload.size + encoded.length + 30 > 0xffffffff) throw new Error('This folder is too large for a browser ZIP download. Download its files individually.');
+     let checksum = 0xffffffff;
+     const reader = payload.stream().getReader();
+@@ -36,7 +38,12 @@ export async function downloadFolderArchive(root: FileEntry, userId: string): Pr
+         if (!child.name || /[\\/]/.test(child.name) || child.name === '.' || child.name === '..') throw new Error('Invalid file name in folder.');
+         const name = `${relative}/${child.name}`;
+         if (child.isFolder) await walk(child, name);
+-        else { const { data, error } = await downloadFile(child); if (error || !data) throw new Error(error?.message ?? 'File unavailable.'); await append(name, data); }
++        else {
++          const remaining = memoryLimit - size - centralSize - new TextEncoder().encode(name).length * 2 - 98;
++          if (child.size > remaining) throw new Error('This folder exceeds the 64 MB browser archive limit. Download its files individually.');
++          const { data, error } = await downloadFile(child, remaining);
++          if (error || !data) throw new Error(error?.message ?? 'File unavailable.'); await append(name, data);
++        }
+       }
+       if (!page.hasMore) break;
+       offset = page.nextOffset;
+diff --git a/src/lib/publicFiles.ts b/src/lib/publicFiles.ts
+index 2dff82f..9dd10b5 100644
+--- a/src/lib/publicFiles.ts
++++ b/src/lib/publicFiles.ts
+@@ -10,15 +10,36 @@ export async function loadPublicFiles(path = '', offset = 0, query = ''): Promis
+   return { entries: rows.slice(0, 50), hasMore: rows.length > 50, nextOffset: offset + 50 };
+ }
+ 
+-export async function downloadFile(entry: FileEntry): Promise<{ data: Blob | null; error: Error | null }> {
+-  if (!entry.id) return supabase.storage.from('user-files').download(entry.path);
++export async function downloadFile(entry: FileEntry, maximumBytes?: number): Promise<{ data: Blob | null; error: Error | null }> {
++  if (!entry.id && maximumBytes === undefined) return supabase.storage.from('user-files').download(entry.path);
+   try {
+-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-public-file?id=${encodeURIComponent(entry.id)}`, {
++    let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-public-file?id=${encodeURIComponent(entry.id ?? '')}`;
++    if (!entry.id) {
++      const { data, error } = await supabase.storage.from('user-files').createSignedUrl(entry.path, 60);
++      if (error || !data?.signedUrl) throw new Error('This file is no longer available.');
++      url = data.signedUrl;
++    }
++    const response = await fetch(url, {
+       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` }, cache: 'no-store',
+     });
+     if (!response.ok) throw new Error('This public file is no longer available.');
+     // Only allow existing safe preview types; HTML/SVG are never inline documents.
+     const type = /^(image\/(png|jpeg|gif|webp|avif)|video\/[\w.+-]+|audio\/[\w.+-]+|application\/pdf|text\/plain)$/.test(entry.mimeType) ? entry.mimeType : 'application/octet-stream';
+-    return { data: new Blob([await response.arrayBuffer()], { type }), error: null };
+-  } catch { return { data: null, error: new Error('This public file is no longer available.') }; }
++    if (maximumBytes === undefined) return { data: new Blob([await response.arrayBuffer()], { type }), error: null };
++    if (Number(response.headers.get('content-length') || 0) > maximumBytes) {
++      await response.body?.cancel(); throw new Error('This folder exceeds the 64 MB browser archive limit. Download its files individually.');
++    }
++    const reader = response.body?.getReader();
++    if (!reader) throw new Error('This file could not be downloaded.');
++    const parts: BlobPart[] = []; let bytes = 0;
++    try {
++      for (;;) {
++        const { value, done } = await reader.read(); if (done) break;
++        bytes += value.byteLength;
++        if (bytes > maximumBytes) { await reader.cancel(); throw new Error('This folder exceeds the 64 MB browser archive limit. Download its files individually.'); }
++        parts.push(value);
++      }
++    } finally { reader.releaseLock(); }
++    return { data: new Blob(parts, { type }), error: null };
++  } catch (error) { return { data: null, error: error instanceof Error ? error : new Error('This file is no longer available.') }; }
+ }
+diff --git a/src/lib/storageSettings.ts b/src/lib/storageSettings.ts
+index eb20514..00cddbb 100644
+--- a/src/lib/storageSettings.ts
++++ b/src/lib/storageSettings.ts
+@@ -58,6 +58,7 @@ async function saveSettingsPatch(patch: Record<string, string | number>): Promis
+     if (!res.ok) {
+       return { ok: false, error: data.error ?? 'Could not save storage settings.' };
+     }
++    invalidateStorageSettings();
+     return {
+       ok: true,
+       settings: {
+@@ -73,26 +74,23 @@ async function saveSettingsPatch(patch: Record<string, string | number>): Promis
+   }
+ }
+ 
+-let cachedVideosBase: string | null = null;
+-let cachedImagesBase: string | null = null;
+-let cachedFileServerUrl: string | null = null;
++const settingsCache = new Map<string, { value: string; expires: number }>();
++export function invalidateStorageSettings() { settingsCache.clear(); window.dispatchEvent(new Event('storage-settings-changed')); }
++function cached(key: string) { const hit = settingsCache.get(key); return hit && hit.expires > Date.now() ? hit.value : undefined; }
++function cache(key: string, value: string) { settingsCache.set(key, { value, expires: Date.now() + 30000 }); return value; }
+ 
+ export async function fetchFileServerUrl(): Promise<string> {
+-  if (cachedFileServerUrl !== null) return cachedFileServerUrl;
++  const hit = cached('server'); if (hit !== undefined) return hit;
+   const { data, error } = await supabase.rpc('get_file_server_url');
+-  const url = error || !data ? '' : (data as string);
+-  cachedFileServerUrl = url;
+-  return url;
++  if (error) throw new Error('Could not load external file server settings.');
++  return cache('server', typeof data === 'string' ? data : '');
+ }
+ 
+ export async function fetchStorageBasePath(kind: 'videos' | 'images'): Promise<string> {
+-  if (kind === 'videos' && cachedVideosBase !== null) return cachedVideosBase;
+-  if (kind === 'images' && cachedImagesBase !== null) return cachedImagesBase;
++  const hit = cached(kind); if (hit !== undefined) return hit;
+   const { data, error } = await supabase.rpc('get_storage_base_path', { p_kind: kind });
+-  const base = error || !data ? '' : (data as string);
+-  if (kind === 'videos') cachedVideosBase = base;
+-  else cachedImagesBase = base;
+-  return base;
++  if (error) throw new Error('Could not load media storage settings.');
++  return cache(kind, typeof data === 'string' ? data : '');
+ }
+ 
+ export async function resolveBucketPath(dbPath: string, kind: 'videos' | 'images'): Promise<string> {

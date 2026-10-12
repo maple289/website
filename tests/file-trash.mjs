@@ -26,18 +26,20 @@ try {
         CREATE SCHEMA auth; CREATE SCHEMA storage;
         CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
         GRANT USAGE ON SCHEMA public,auth,storage TO authenticated,anon,service_role;
+        CREATE TABLE auth.users(id uuid PRIMARY KEY); INSERT INTO auth.users VALUES ('${owner}'),('${other}');
+        CREATE FUNCTION public.active_account(id uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT id IS NOT NULL $$;
         CREATE TABLE public.profiles(id uuid PRIMARY KEY);
         CREATE TABLE public.videos(id uuid PRIMARY KEY,owner_id uuid,processing_status text);
         CREATE TABLE public.photos(id uuid PRIMARY KEY,owner_id uuid);
         CREATE TABLE public.user_file_metadata(owner_id uuid,object_path text,is_folder boolean,trashed_at timestamptz,is_favorite boolean DEFAULT false,file_size bigint DEFAULT 7,mime_type text DEFAULT 'text/plain',created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now(),PRIMARY KEY(owner_id,object_path));
-        CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text,metadata jsonb DEFAULT '{"size":7,"mimetype":"text/plain"}',UNIQUE(bucket_id,name));
+        CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text,version text DEFAULT 'fixture-version',updated_at timestamptz DEFAULT now(),metadata jsonb DEFAULT '{"size":7,"mimetype":"text/plain"}',UNIQUE(bucket_id,name));
         INSERT INTO public.profiles VALUES ('${owner}'),('${other}');
         GRANT SELECT,INSERT,UPDATE,DELETE ON public.user_file_metadata,storage.objects TO authenticated;
         ALTER TABLE public.user_file_metadata ENABLE ROW LEVEL SECURITY;
         CREATE POLICY owner_metadata ON public.user_file_metadata TO authenticated USING(owner_id=auth.uid()) WITH CHECK(owner_id=auth.uid());
         ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
         CREATE POLICY owner_storage ON storage.objects TO authenticated USING(starts_with(name,auth.uid()::text||'/')) WITH CHECK(starts_with(name,auth.uid()::text||'/'));`);
-      for (const migration of ['20261003130000_file_catalog_integrity.sql','20261007010000_content_context_actions.sql','20261007020000_reuse_trashed_file_names.sql']) {
+      for (const migration of ['20261003130000_file_catalog_integrity.sql','20261007010000_content_context_actions.sql','20261007020000_reuse_trashed_file_names.sql','20261012040000_durable_file_transfers.sql']) {
         await db.exec(await fs.readFile(new URL('../supabase/migrations/' + migration, import.meta.url), 'utf8'));
       }
       await query('INSERT INTO storage.objects(bucket_id,name) SELECT $1,unnest($2::text[])', ['user-files',
@@ -47,6 +49,43 @@ try {
       await assert.rejects(query('SELECT public.plan_file_restore($1,$2)', [`${owner}/test/OEM Mode.txt`,`${owner}/everyone/OEM Mode.txt`]), /Only an item in Trash/);
       await assert.rejects(query('SELECT public.plan_file_operation($1,$2,true)', [`${owner}/test/OEM Mode.txt`,`${other}/OEM Mode.txt`]), /permission/);
 
+      // Server receipts survive lost responses and are isolated between users.
+      await db.exec('RESET ROLE');
+      await query("INSERT INTO storage.objects(bucket_id,name) VALUES('user-files',$1)", [`${owner}/recovery.txt`]);
+      await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${owner}';`);
+      const transfer = crypto.randomUUID();
+      const planned = (await query('SELECT begin_file_operation($1,$2,$3,false,false) result', [transfer,`${owner}/recovery.txt`,`${owner}/recovered.txt`]))[0].result;
+      assert.equal((await query('SELECT file_operation_step($1,$2,false,false) result',[transfer,planned.source]))[0].result,false);
+      await query("UPDATE storage.objects SET name=$2 WHERE name=$1",[planned.source,planned.destination]);
+      assert.equal((await query('SELECT file_operation_step($1,$2,false,false) result',[transfer,planned.source]))[0].result,true);
+      await assert.rejects(query('SELECT finish_file_operation($1)',[transfer]), /unfinished/);
+      for(const row of planned.metadata) await query('SELECT file_operation_step($1,$2,true,true)',[transfer,row.object_path]);
+      assert.ok((await query('SELECT unfinished_file_operations() result')).some(row=>row.result.operationId===transfer));
+      await db.exec(`SET request.jwt.claim.sub='${other}';`);
+      assert.deepEqual(await query('SELECT unfinished_file_operations() result'),[]);
+      await assert.rejects(query('SELECT file_operation_step($1,$2,false,false)',[transfer,planned.source]),/unavailable/);
+      await db.exec(`SET request.jwt.claim.sub='${owner}';`);
+      await query('SELECT finish_file_operation($1)',[transfer]);
+      const copyId=crypto.randomUUID();
+      const copyPlan=(await query('SELECT begin_file_operation($1,$2,$3,true,false) result',[copyId,planned.destination,`${owner}/copy-recovery.txt`]))[0].result;
+      await query('SELECT file_operation_step($1,$2,false,false)',[copyId,copyPlan.source]);
+      await query("INSERT INTO storage.objects(bucket_id,name) VALUES('user-files',$1)",[copyPlan.destination]);
+      await assert.rejects(query('SELECT file_operation_step($1,$2,false,false)',[copyId,copyPlan.source]),/without a confirmed copy receipt/);
+      await query("DELETE FROM storage.objects WHERE name=$1",[copyPlan.destination]);
+      await query("UPDATE storage.objects SET version='changed' WHERE name=$1",[copyPlan.source]);
+      await assert.rejects(query('SELECT file_operation_step($1,$2,false,false)',[copyId,copyPlan.source]),/original item changed/);
+      await db.exec('RESET ROLE');
+      await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${other}';`);
+      await assert.rejects(query('SELECT stop_file_operation_tracking($1)',[copyId]),/unavailable/);
+      await db.exec(`SET request.jwt.claim.sub='${owner}';`);
+      await query('SELECT stop_file_operation_tracking($1)',[copyId]);
+      assert.equal((await query('SELECT unfinished_file_operations() result')).some(row=>row.result.operationId===copyId),false);
+      await assert.rejects(query('SELECT file_operation_step($1,$2,false,false)',[copyId,copyPlan.source]),/tracking was stopped/);
+      assert.equal((await query('SELECT version FROM storage.objects WHERE name=$1',[copyPlan.source]))[0].version,'changed');
+      await db.exec('RESET ROLE');
+      await query("DELETE FROM storage.objects WHERE name=$1",[planned.destination]);
+      await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${owner}';`);
+      console.log(`PASS ${width}px: durable Move receipt, lost-response recovery, user isolation, uncertain-copy and changed-source guards`);
       const page = await context.newPage();
       page.setDefaultTimeout(15000);
       const errors = [], moves = [];
@@ -63,9 +102,13 @@ try {
               file_manager_storage_bytes: [], valid_file_clipboard: [body.p_path],
               plan_file_operation: [body.p_source,body.p_destination,body.p_copy],
               plan_file_restore: [body.p_source,body.p_destination],
+              begin_file_operation: [body.p_id,body.p_source,body.p_destination,body.p_copy,body.p_restore],
+              file_operation_step: [body.p_id,body.p_source,body.p_metadata,body.p_commit],
+              finish_file_operation: [body.p_id], unfinished_file_operations: [],
             }[rpc];
             if (!args) return route.fulfill({ json: rpc === 'get_temporary_share' ? null : [] });
             const calls = args.map((_, i) => '$' + (i + 1)).join(',');
+            if (rpc === 'unfinished_file_operations') return route.fulfill({ json: (await query('SELECT public.unfinished_file_operations() result')).map(row => row.result) });
             if (rpc === 'file_manager_metadata') return route.fulfill({ json: await query(`SELECT * FROM public.${rpc}(${calls})`, args) });
             return route.fulfill({ json: (await query(`SELECT public.${rpc}(${calls}) AS result`, args))[0].result });
           }
@@ -155,8 +198,17 @@ try {
       const archived = (await query('SELECT * FROM public.user_file_metadata WHERE trash_original_path=$1', [`${owner}/everyone/OEM Mode.txt`]))[0];
       assert.ok(archived.trashed_at);
       assert.equal(archived.file_size, 7);
-      await action.getByRole('button', { name: 'Continue', exact: true }).click();
-      await action.waitFor({ state: 'hidden' });
+      await action.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await action.waitFor({state:'hidden'});
+      await page.reload();
+      const recovery=page.getByRole('region',{name:'Unfinished transfers'});
+      await recovery.waitFor();
+      await recovery.getByRole('button',{name:'Stop tracking',exact:true}).click();
+      await confirmation.getByRole('button',{name:'Cancel',exact:true}).click();
+      await recovery.getByRole('button',{name:'Resume',exact:true}).click();
+      await confirmation.getByRole('button',{name:'Resume transfer',exact:true}).click();
+      await confirmation.waitFor({state:'hidden'});
+      await recovery.waitFor({state:'hidden'});
       await page.getByRole('button', { name: 'Actions for OEM Mode.txt', exact: true }).waitFor();
       assert.equal(moves.filter(source => source === `${owner}/everyone/OEM Mode.txt`).length, 1);
       assert.equal((await rowsAt('everyone/OEM Mode.txt'))[0].trashed_at, null);

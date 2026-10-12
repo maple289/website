@@ -1,0 +1,22 @@
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+PASS chromium 390px: outgoing video call refreshes a rejected token without asking for sign-in
+PASS chromium 390px: incoming video call recovers both RPC and relay authentication
+PASS chromium 390px: concurrent 401s share refresh; permission denial never retries or bypasses authorization
+PASS chromium 390px: repeated 401 stops after one retry and does not misleadingly request another sign-in
+PASS chromium 390px: sign-out survives server outage and an in-flight refresh, clears both tabs and persisted tokens, stops call capture
+PASS chromium 390px: explicit new login persists normally and synchronizes the other tab
+PASS chromium 390px: delayed global logout cannot revoke a new login from another tab
+PASS chromium 390px: a genuinely invalid refresh ends the session; no stale signed-in UI or browser errors
+PASS chromium 390px: blocked browser storage still permits same-tab login, calling and complete local sign-out
+PASS chromium 1440px: outgoing video call refreshes a rejected token without asking for sign-in
+PASS chromium 1440px: incoming video call recovers both RPC and relay authentication
+PASS chromium 1440px: concurrent 401s share refresh; permission denial never retries or bypasses authorization
+PASS chromium 1440px: repeated 401 stops after one retry and does not misleadingly request another sign-in
+PASS chromium 1440px: sign-out survives server outage and an in-flight refresh, clears both tabs and persisted tokens, stops call capture
+PASS chromium 1440px: explicit new login persists normally and synchronizes the other tab
+PASS chromium 1440px: delayed global logout cannot revoke a new login from another tab
+PASS chromium 1440px: a genuinely invalid refresh ends the session; no stale signed-in UI or browser errors
+PASS chromium 1440px: blocked browser storage still permits same-tab login, calling and complete local sign-out
+18 auth/session checks passed (local browser tests; no physical-device or live TURN media validation).

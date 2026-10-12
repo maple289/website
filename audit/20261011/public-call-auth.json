@@ -1,0 +1,6 @@
+{
+  "check": "Unauthenticated POST call configuration",
+  "status": 401,
+  "cacheControl": "private, no-store",
+  "credentialsStored": false
+}

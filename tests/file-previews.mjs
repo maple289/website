@@ -52,7 +52,7 @@ try {
       }
       async function open(name) {
         await menu(name);
-        await page.locator('.fm-menu').getByRole('button', { name: 'Preview', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
         await dialog.waitFor();
       }
       async function close() {
@@ -101,8 +101,8 @@ try {
       assert.ok(await dialog.getByRole('button', { name: 'Download original file', exact: true }).last().isVisible()); await close();
       const beforeUnsupported = previewRequests.length;
       await menu('sample.bin');
-      assert.equal(await page.locator('.fm-menu').getByRole('button', { name: 'Preview', exact: true }).count(), 0);
-      await page.locator('.fm-menu').getByRole('button', { name: 'Open', exact: true }).click();
+      assert.equal(await page.getByRole('menuitem', { name: 'Preview', exact: true }).count(), 1);
+      await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
       await dialog.getByText('Preview is not available for this file type', { exact: true }).waitFor();
       assert.equal(previewRequests.length, beforeUnsupported); await close();
       pass(`${label}: failed and unsupported files retain Download; unsupported files not fetched`);

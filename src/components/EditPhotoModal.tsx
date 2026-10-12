@@ -44,7 +44,7 @@ export function EditPhotoModal({ photo, onClose, onSaved }: { photo: Photo; onCl
   };
 
   if (user?.id !== photo.owner_id) return null;
-  return <TaskModal className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="edit-photo-title">
+  return <TaskModal className="fixed inset-0 z-60 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="edit-photo-title">
     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
     <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
       <div className="flex items-center justify-between px-6 pt-6">

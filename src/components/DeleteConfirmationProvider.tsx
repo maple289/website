@@ -49,14 +49,14 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
   const value = useMemo(() => ({ requestDelete, isOpen: !!pending }), [requestDelete, pending]);
   return <DeleteConfirmationContext.Provider value={value}>
     {children}
-    {pending && createPortal(<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+    {pending && createPortal(<div className="fixed inset-0 z-1000 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
       onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}
       onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
       <div ref={panel} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby={heading} aria-describedby={description} aria-busy={busy}
         className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl outline-none sm:p-6">
         <AlertTriangle aria-hidden="true" className="mb-4 text-rose-600" size={28} />
         <h2 id={heading} className="text-lg font-semibold">{pending.title ?? 'Confirm deletion'}</h2>
-        <div id={description} className="mt-3 space-y-3 break-words text-sm leading-6 text-slate-600">
+        <div id={description} className="mt-3 space-y-3 wrap-break-word text-sm leading-6 text-slate-600">
           <p>{pending.message}</p>{pending.details && <p className="whitespace-pre-line">{pending.details}</p>}
         </div>
         {pending.choices && <fieldset className="mt-4 space-y-2">
@@ -66,7 +66,7 @@ export function DeleteConfirmationProvider({ children }: { children: ReactNode }
             <span><strong className="block">{option.label}</strong><span className="mt-1 block text-slate-600">{option.details}</span></span>
           </label>)}
         </fieldset>}
-        {error && <p role="alert" className="mt-4 break-words rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+        {error && <p role="alert" className="mt-4 wrap-break-word rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button ref={cancel} type="button" disabled={busy} onClick={() => { if (!running.current) finish(false); }}
             className="min-h-11 rounded-xl border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{pending.cancelLabel ?? 'Cancel'}</button>

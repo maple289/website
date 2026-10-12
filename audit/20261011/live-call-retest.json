@@ -1,0 +1,30 @@
+{
+  "credentialsRecorded": false,
+  "phone": "iPhone, user-described latest iOS, Firefox; exact versions not recorded",
+  "dates": "2026-10-11 to 2026-10-12",
+  "videoRetries": {
+    "attempts": 2,
+    "result": "desktop connected in-app browser NotAllowedError permission message",
+    "userSeparatelyReportedDesktopCameraWorks": true,
+    "userReportedPermissionEnabledBeforeSecondAttempt": true,
+    "liveVideoHardwareAndNetwork": "unverified"
+  },
+  "participants": "signed-in desktop account and dedicated phone test account",
+  "productionDataDeletion": false,
+  "firstVoice": {
+    "audio": "user explicitly confirmed audio worked both ways",
+    "durationSeconds": 31,
+    "signaling": "connected and active observed"
+  },
+  "repeatedVoice": {
+    "durationObservedSeconds": 24,
+    "actualSelectedMicrophoneTransmission": "unverified",
+    "signaling": "Active call observed",
+    "completedHistorySeconds": 29
+  },
+  "videoHistory": {
+    "screenshot": "live-call-history.png",
+    "evidence": "refreshed production conversation call event; media not visually verified",
+    "completedSeconds": 15
+  }
+}

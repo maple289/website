@@ -20,6 +20,9 @@ FROM caddy:2-alpine
 
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
+COPY docker/start-web.sh /usr/local/bin/start-web
+RUN chmod 755 /usr/local/bin/start-web
+CMD ["/usr/local/bin/start-web"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1/healthz || exit 1

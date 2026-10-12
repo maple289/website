@@ -57,12 +57,8 @@ Deno.serve(async (req: Request) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
-    const { data: profile, error: profileErr } = await adminClient
-      .from("profiles")
-      .select("role")
-      .eq("id", callerData.user.id)
-      .single();
-    if (profileErr || !profile || profile.role !== "admin") {
+    const { data: allowed, error: permissionError } = await callerClient.rpc("is_admin");
+    if (permissionError || !allowed) {
       return json({ error: "Admin access required" }, 403);
     }
 

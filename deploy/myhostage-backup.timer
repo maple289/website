@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily MyHostage encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Toronto
+Persistent=true
+RandomizedDelaySec=10m
+Unit=myhostage-backup.service
+
+[Install]
+WantedBy=timers.target

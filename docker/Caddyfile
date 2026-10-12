@@ -1,28 +1,45 @@
 {$APP_ADDRESS} {
-  encode zstd gzip
+	encode zstd gzip
 
-  @health path /healthz
-  handle @health {
-    respond "OK" 200
-  }
+	@health path /healthz
+	handle @health {
+		respond "OK" 200
+	}
 
-  @supabase path /auth/v1 /auth/v1/* /rest/v1 /rest/v1/* /storage/v1 /storage/v1/* /functions/v1 /functions/v1/* /realtime/v1 /realtime/v1/* /graphql/v1 /graphql/v1/*
-  handle @supabase {
-    reverse_proxy {$SUPABASE_API_UPSTREAM}
-  }
+	@supabase path /auth/v1 /auth/v1/* /rest/v1 /rest/v1/* /storage/v1 /storage/v1/* /functions/v1 /functions/v1/* /realtime/v1 /realtime/v1/* /graphql/v1 /graphql/v1/*
+	handle @supabase {
+		reverse_proxy {$SUPABASE_API_UPSTREAM}
+	}
 
-  @assets path /assets/*
-  header @assets Cache-Control "public, max-age=31536000, immutable"
+	@assets path /assets/*
+	handle @assets {
+		# Retain old hashed chunks for open tabs. Missing chunks must never get HTML.
+		root * /asset-cache
+		@present file {path}
+		handle @present {
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+		handle {
+			header Cache-Control "no-store"
+			respond "Asset not found" 404
+		}
+	}
 
-  handle {
-    root * /srv
-    try_files {path} /index.html
-    file_server
-  }
+	handle {
+		root * /srv
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
 
-  header {
-    X-Content-Type-Options nosniff
-    Referrer-Policy strict-origin-when-cross-origin
-    X-Frame-Options SAMEORIGIN
-  }
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		Strict-Transport-Security "max-age=31536000"
+		Permissions-Policy "camera=(self), microphone=(self), fullscreen=(self), speaker-selection=(self), geolocation=()"
+		# Configured media/connect hosts are supported; executable code is same-origin.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; frame-src 'self' blob: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+	}
 }

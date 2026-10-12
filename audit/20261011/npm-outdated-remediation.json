@@ -1,0 +1,135 @@
+{
+  "@eslint/js": {
+    "current": "9.12.0",
+    "wanted": "9.39.5",
+    "latest": "10.0.1",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\@eslint\\js"
+  },
+  "@supabase/supabase-js": {
+    "current": "2.57.4",
+    "wanted": "2.117.3",
+    "latest": "2.117.3",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\@supabase\\supabase-js"
+  },
+  "@types/react": {
+    "current": "18.3.11",
+    "wanted": "18.3.31",
+    "latest": "19.3.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\@types\\react"
+  },
+  "@types/react-dom": {
+    "current": "18.3.0",
+    "wanted": "18.3.7",
+    "latest": "19.3.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\@types\\react-dom"
+  },
+  "@vitejs/plugin-react": {
+    "current": "4.3.2",
+    "wanted": "4.7.0",
+    "latest": "6.1.2",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\@vitejs\\plugin-react"
+  },
+  "autoprefixer": {
+    "current": "10.4.20",
+    "wanted": "10.6.1",
+    "latest": "10.6.1",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\autoprefixer"
+  },
+  "eslint": {
+    "current": "9.12.0",
+    "wanted": "9.39.5",
+    "latest": "10.12.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\eslint"
+  },
+  "eslint-plugin-react-hooks": {
+    "current": "5.1.0-rc-fb9a90fa48-20240614",
+    "wanted": "5.2.0",
+    "latest": "7.1.1",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\eslint-plugin-react-hooks"
+  },
+  "eslint-plugin-react-refresh": {
+    "current": "0.4.12",
+    "wanted": "0.4.26",
+    "latest": "0.5.7",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\eslint-plugin-react-refresh"
+  },
+  "globals": {
+    "current": "15.11.0",
+    "wanted": "15.15.0",
+    "latest": "17.13.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\globals"
+  },
+  "lucide-react": {
+    "current": "0.446.0",
+    "wanted": "0.446.0",
+    "latest": "1.55.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\lucide-react"
+  },
+  "pdfjs-dist": {
+    "current": "6.3.289",
+    "wanted": "6.3.289",
+    "latest": "6.4.299",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\pdfjs-dist"
+  },
+  "postcss": {
+    "current": "8.4.47",
+    "wanted": "8.5.29",
+    "latest": "8.5.29",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\postcss"
+  },
+  "react": {
+    "current": "18.3.1",
+    "wanted": "18.3.1",
+    "latest": "19.3.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\react"
+  },
+  "react-dom": {
+    "current": "18.3.1",
+    "wanted": "18.3.1",
+    "latest": "19.3.0",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\react-dom"
+  },
+  "tailwindcss": {
+    "current": "3.4.17",
+    "wanted": "3.4.19",
+    "latest": "4.3.3",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\tailwindcss"
+  },
+  "typescript": {
+    "current": "5.6.3",
+    "wanted": "5.9.3",
+    "latest": "7.0.2",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\typescript"
+  },
+  "typescript-eslint": {
+    "current": "8.8.1",
+    "wanted": "8.71.1",
+    "latest": "8.71.1",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\typescript-eslint"
+  },
+  "vite": {
+    "current": "5.4.8",
+    "wanted": "5.4.21",
+    "latest": "8.3.4",
+    "dependent": "Project",
+    "location": "C:\\Users\\aleks\\OneDrive\\Desktop\\Bolt\\Project\\node_modules\\vite"
+  }
+}

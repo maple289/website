@@ -2,6 +2,7 @@
 .github
 .env
 .runtime
+audit
 backups
 dist
 node_modules

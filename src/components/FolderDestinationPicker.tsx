@@ -14,7 +14,7 @@ export function FolderDestinationPicker({ owner, value, onChange, sources, disab
     return () => { active = false; };
   }, [path, owner, offset]);
   const go = (next: string) => { setOffset(0); setFolders([]); onChange(next); };
-  return <div className="mt-3 rounded-xl border border-slate-200 p-3"><p className="break-words text-sm font-medium">Destination: My Files{value ? ` / ${value}` : ''}</p>
+  return <div className="mt-3 rounded-xl border border-slate-200 p-3"><p className="wrap-break-word text-sm font-medium">Destination: My Files{value ? ` / ${value}` : ''}</p>
     <button type="button" disabled={disabled || !value} className="my-2 rounded-lg border px-3 py-2 text-sm" onClick={() => go(value.split('/').slice(0, -1).join('/'))}>Parent folder</button>
     <div className="max-h-48 overflow-auto">{folders.map(item => <button type="button" key={item.path} disabled={disabled || sources.some(source => source.isFolder && (item.path === source.path || item.path.startsWith(`${source.path}/`)))} className="my-1 block w-full rounded-lg border px-3 py-2 text-left text-sm disabled:opacity-40" onClick={() => go(item.path.slice(owner.length + 1))}>📁 {item.name}</button>)}</div>
     {loading && <p role="status">Loading folders…</p>}{error && <p role="alert">{error}</p>}

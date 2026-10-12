@@ -1,0 +1,8 @@
+PASS self deletion excludes cards from every history/search/snapshot/pagination path; reply reference remains neutral
+PASS self events target only that account; other participant retains content, reactions and attachment access; no storage deletion
+PASS recipient, outsider and anonymous global deletions denied by the backend
+PASS global deletion persists across both participants, reload and pagination; reactions/attachments/stale replies cannot be accessed
+PASS private broadcasts reach every member; reactions removed; source and derived cleanup queued once; text-free tombstone retains reply ID
+PASS deleting the last visible message clears inbox preview and leaves no placeholder
+PASS historical partially deleted rows cannot render a card, inbox placeholder or reaction UI
+Messenger deletion: 7 checks passed

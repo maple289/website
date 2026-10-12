@@ -1,0 +1,2 @@
+PASS landscape-short: voice/video, safe PiP, native/fallback fullscreen, stable peers/media, ringtone cleanup
+1 responsive call layouts passed in Firefox (fixtures, not live network/media).

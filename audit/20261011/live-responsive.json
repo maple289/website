@@ -1,0 +1,272 @@
+[
+  {
+    "page": "messenger",
+    "profile": "desktop",
+    "requested": {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    },
+    "height": 900,
+    "horizontalOverflow": false,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "messenger",
+    "profile": "laptop",
+    "requested": {
+      "name": "laptop",
+      "width": 1280,
+      "height": 720
+    },
+    "height": 720,
+    "horizontalOverflow": false,
+    "scrollWidth": 1280,
+    "width": 1280
+  },
+  {
+    "page": "messenger",
+    "profile": "tablet-landscape",
+    "requested": {
+      "name": "tablet-landscape",
+      "width": 1024,
+      "height": 768
+    },
+    "height": 768,
+    "horizontalOverflow": false,
+    "scrollWidth": 1024,
+    "width": 1024
+  },
+  {
+    "page": "messenger",
+    "profile": "tablet-portrait",
+    "requested": {
+      "name": "tablet-portrait",
+      "width": 768,
+      "height": 1024
+    },
+    "height": 1024,
+    "horizontalOverflow": false,
+    "scrollWidth": 768,
+    "width": 768
+  },
+  {
+    "page": "messenger",
+    "profile": "phone-portrait",
+    "requested": {
+      "name": "phone-portrait",
+      "width": 390,
+      "height": 844
+    },
+    "height": 844,
+    "horizontalOverflow": false,
+    "scrollWidth": 390,
+    "width": 390
+  },
+  {
+    "page": "messenger",
+    "profile": "phone-landscape",
+    "requested": {
+      "name": "phone-landscape",
+      "width": 844,
+      "height": 390
+    },
+    "height": 390,
+    "horizontalOverflow": false,
+    "scrollWidth": 829,
+    "width": 844
+  },
+  {
+    "page": "photos",
+    "profile": "desktop",
+    "height": 900,
+    "horizontalOverflow": false,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "photos",
+    "profile": "laptop",
+    "height": 720,
+    "horizontalOverflow": false,
+    "scrollWidth": 1280,
+    "width": 1280
+  },
+  {
+    "page": "photos",
+    "profile": "tablet-landscape",
+    "height": 768,
+    "horizontalOverflow": false,
+    "scrollWidth": 1009,
+    "width": 1024
+  },
+  {
+    "page": "photos",
+    "profile": "tablet-portrait",
+    "height": 1024,
+    "horizontalOverflow": false,
+    "scrollWidth": 768,
+    "width": 768
+  },
+  {
+    "page": "photos",
+    "profile": "phone-portrait",
+    "height": 844,
+    "horizontalOverflow": false,
+    "scrollWidth": 375,
+    "width": 390
+  },
+  {
+    "page": "photos",
+    "profile": "phone-landscape",
+    "height": 390,
+    "horizontalOverflow": false,
+    "scrollWidth": 829,
+    "width": 844
+  },
+  {
+    "page": "public-files",
+    "profile": "desktop",
+    "height": 900,
+    "horizontalOverflow": false,
+    "scrollWidth": 1425,
+    "width": 1440
+  },
+  {
+    "page": "public-files",
+    "profile": "laptop",
+    "height": 720,
+    "horizontalOverflow": false,
+    "scrollWidth": 1265,
+    "width": 1280
+  },
+  {
+    "page": "public-files",
+    "profile": "tablet-landscape",
+    "height": 768,
+    "horizontalOverflow": false,
+    "scrollWidth": 1009,
+    "width": 1024
+  },
+  {
+    "page": "public-files",
+    "profile": "tablet-portrait",
+    "height": 1024,
+    "horizontalOverflow": false,
+    "scrollWidth": 753,
+    "width": 768
+  },
+  {
+    "page": "public-files",
+    "profile": "phone-portrait",
+    "height": 844,
+    "horizontalOverflow": false,
+    "scrollWidth": 375,
+    "width": 390
+  },
+  {
+    "page": "public-files",
+    "profile": "phone-landscape",
+    "height": 390,
+    "horizontalOverflow": false,
+    "scrollWidth": 829,
+    "width": 844
+  },
+  {
+    "page": "private-files",
+    "profile": "desktop",
+    "height": 900,
+    "horizontalOverflow": false,
+    "scrollWidth": 1425,
+    "width": 1440
+  },
+  {
+    "page": "private-files",
+    "profile": "laptop",
+    "height": 720,
+    "horizontalOverflow": false,
+    "scrollWidth": 1265,
+    "width": 1280
+  },
+  {
+    "page": "private-files",
+    "profile": "tablet-landscape",
+    "height": 768,
+    "horizontalOverflow": false,
+    "scrollWidth": 1009,
+    "width": 1024
+  },
+  {
+    "page": "private-files",
+    "profile": "tablet-portrait",
+    "height": 1024,
+    "horizontalOverflow": false,
+    "scrollWidth": 753,
+    "width": 768
+  },
+  {
+    "page": "private-files",
+    "profile": "phone-portrait",
+    "height": 844,
+    "horizontalOverflow": false,
+    "scrollWidth": 375,
+    "width": 390
+  },
+  {
+    "page": "private-files",
+    "profile": "phone-landscape",
+    "height": 390,
+    "horizontalOverflow": false,
+    "scrollWidth": 829,
+    "width": 844
+  },
+  {
+    "page": "videos",
+    "profile": "desktop",
+    "height": 900,
+    "horizontalOverflow": false,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "videos",
+    "profile": "laptop",
+    "height": 720,
+    "horizontalOverflow": false,
+    "scrollWidth": 1280,
+    "width": 1280
+  },
+  {
+    "page": "videos",
+    "profile": "tablet-landscape",
+    "height": 768,
+    "horizontalOverflow": false,
+    "scrollWidth": 1024,
+    "width": 1024
+  },
+  {
+    "page": "videos",
+    "profile": "tablet-portrait",
+    "height": 1024,
+    "horizontalOverflow": false,
+    "scrollWidth": 768,
+    "width": 768
+  },
+  {
+    "page": "videos",
+    "profile": "phone-portrait",
+    "height": 844,
+    "horizontalOverflow": false,
+    "scrollWidth": 375,
+    "width": 390
+  },
+  {
+    "page": "videos",
+    "profile": "phone-landscape",
+    "height": 390,
+    "horizontalOverflow": false,
+    "scrollWidth": 829,
+    "width": 844
+  }
+]

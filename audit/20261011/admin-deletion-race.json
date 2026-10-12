@@ -1,0 +1,9 @@
+{
+  "check": "two administrators concurrently delete each other",
+  "responseStatuses": [
+    200,
+    200
+  ],
+  "remainingAdministrators": 0,
+  "scope": "real Edge branch with mocked Auth; repository migration review found no last-admin DELETE guard; live account deletion not attempted"
+}

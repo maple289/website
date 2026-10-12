@@ -1,0 +1,7 @@
+PASS migration applies to PostgreSQL with required existing tables
+PASS hash-only storage, exact 24 hours, one active link, confirmed replacement race check
+PASS non-owner creation, revocation and operations denied; anonymous RPC access denied
+PASS folder capability lists only its subtree; rejects traversal and expired links
+PASS server checks destination ownership/existence, cycles, conflicts and full recursive plans
+PASS moved identity follows metadata; deleted videos/files cascade to capability deletion
+6 PostgreSQL checks passed

@@ -1,0 +1,1 @@
+PASS folder ZIP opens in standard unzip reader with empty folders, nested payloads, Unicode names and valid checksums

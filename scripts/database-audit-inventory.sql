@@ -59,7 +59,7 @@ SELECT jsonb_build_object(
   'objects', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'bucket',bucket_id,'name',name,
     'version',version,'size',metadata->>'size','updated_at',updated_at,
     'preview_version',coalesce(version,'')||':'||updated_at::text)), '[]') FROM storage.objects
-    WHERE bucket_id IN ('user-videos','user-images','user-files','media-staging','file-previews')),
+    WHERE bucket_id IN ('user-videos','user-images','user-files','media-staging','file-previews','messenger-attachments')),
   'videos', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'owner',owner_id,'name',file_name,
     'storage_path',storage_path,'processed_storage_path',processed_storage_path,'preview_path',preview_path,
     'status',processing_status,'created_at',created_at)), '[]') FROM public.videos),
@@ -73,9 +73,20 @@ SELECT jsonb_build_object(
     'path',object_path,'source_version',source_version,'preview_path',preview_path,'status',status,
     'started_at',started_at)), '[]') FROM public.file_preview_jobs),
   'users', (SELECT coalesce(jsonb_agg(id), '[]') FROM auth.users),
+  'messenger_attachments', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'source_id',source_id,
+    'path',object_path,'message_id',message_id,'conversation_id',conversation_id)), '[]') FROM public.messenger_attachments),
+  'messenger_cleanup', (SELECT coalesce(jsonb_agg(object_path), '[]') FROM public.messenger_storage_cleanup),
+  'preview_cleanup', (SELECT coalesce(jsonb_agg(path), '[]') FROM public.file_preview_cleanup),
+  'messenger_messages', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'deleted',deleted_at IS NOT NULL,
+    'deleting',deletion_started_at IS NOT NULL,'conversation_id',conversation_id)), '[]') FROM public.messenger_messages),
+  'temporary_shares', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'type',content_type,'content',CASE WHEN content_type IN ('file','folder') THEN file_path ELSE content_id END,
+    'owner',owner_id,'expires_at',expires_at,'revoked_at',revoked_at)), '[]') FROM public.temporary_content_shares),
   'storage_settings', (SELECT jsonb_build_object('videos_base_path',videos_base_path,'images_base_path',images_base_path)
     FROM public.storage_settings WHERE id=1),
   'checks', jsonb_build_object(
+    'duplicate_direct_pairs',(SELECT count(*) FROM(SELECT direct_key FROM public.messenger_conversations WHERE kind='direct' GROUP BY direct_key HAVING count(*)>1) t),
+    'reactions_on_deleted_messages',(SELECT count(*) FROM public.messenger_reactions r JOIN public.messenger_messages m ON m.id=r.message_id WHERE m.deleted_at IS NOT NULL OR m.deletion_started_at IS NOT NULL),
+    'unfinished_file_transfers',(SELECT count(*) FROM public.file_operation_receipts WHERE started_at IS NOT NULL AND completed_at IS NULL AND cancelled_at IS NULL),
     'duplicate_auth_emails',(SELECT count(*) FROM (SELECT lower(email) FROM auth.users
       WHERE email IS NOT NULL AND NOT is_sso_user GROUP BY lower(email) HAVING count(*)>1) t),
     'profile_email_mismatches',(SELECT count(*) FROM public.profiles p JOIN auth.users u ON u.id=p.id

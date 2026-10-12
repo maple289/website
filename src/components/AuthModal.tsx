@@ -96,7 +96,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
   };
 
   return (
-    <TaskModal aria-label="Sign in or register" className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <TaskModal aria-label="Sign in or register" className="fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#2e2e2e] bg-[#181818] shadow-2xl">
         <div className="relative px-7 pt-8">
@@ -154,7 +154,7 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <p className="mt-2 text-xs leading-5 text-[#999]">First login after approval? Leave the password blank to set it up. Existing accounts require their password.</p>
+              <p className="mt-2 text-xs leading-5 text-[#999]">First login after approval? Leave the password blank to receive an email verification code and create your password. Existing accounts require their password.</p>
             </>
           )}
 

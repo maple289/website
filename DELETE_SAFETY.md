@@ -5,6 +5,14 @@ not add deletion controls, deletion history or another caller of a delete helper
 The existing sharing Save RPC now preserves unchanged grants; actual saved removals
 still use the same owner check and confirmed UI operation.
 
+Audit remediation adds database guards for Auth deletion, administrator demotion
+and disablement: the last active administrator cannot be removed. Account deletion
+still does not automatically remove uploaded storage bytes. No new user-delete
+caller is added. Unfinished Move/Copy/Restore operations use owner-bound durable
+receipts; their Resume mutation runs only inside the shared confirmation's
+`onConfirm`. Saved source versions/destination identities are checked before
+continuation. An uncertain copy destination stops for review, never overwrite.
+
 All destructive UI operations use the application-level confirmation provider.
 
 Files/Folders Delete still marks the owned tree as Trash inside `onConfirm`.
@@ -136,3 +144,7 @@ Unsent attachment cancellation targets only newly reserved uncommitted objects;
 derived-cache/reservation cleanup is internal and cannot delete library content.
 Message reaction removal uses the existing immediate reversible-toggle exception,
 with a pending guard and one database reaction per user/message.
+
+- File Manager unfinished-transfer **Stop tracking** is confirmed through the shared provider.
+  The owner-only RPC discards recovery tracking, retains completed files and moves,
+  and performs no physical deletion or rollback.

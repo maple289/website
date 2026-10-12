@@ -1,0 +1,25 @@
+services:
+  email-dispatcher:
+    image: ${MEDIA_WORKER_IMAGE:-supabase-media-worker}
+    command: [python, /app/email-dispatcher.py]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp:size=8m,mode=1777]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    cpus: 0.25
+    volumes:
+      - ${STREAMLY_PROJECT_ROOT:?Set the absolute project checkout path}/services/email-dispatcher/dispatcher.py:/app/email-dispatcher.py:ro
+    environment:
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      RESEND_FROM_NAME: ${RESEND_FROM_NAME:-}
+      CUSTOMER_EMAILS_ENABLED: ${CUSTOMER_EMAILS_ENABLED:-false}
+    healthcheck:
+      test: [CMD, python, -c, "import os,time; assert time.time()-os.path.getmtime('/tmp/email-heartbeat') < 180"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

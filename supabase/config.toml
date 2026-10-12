@@ -2,7 +2,9 @@
 verify_jwt = true
 
 [functions.serve-media]
-verify_jwt = true
+# The handler verifies either Auth identity or the hashed playback capability on
+# every request. Video elements cannot attach an Authorization header.
+verify_jwt = false
 
 [functions.approve-registration]
 verify_jwt = true

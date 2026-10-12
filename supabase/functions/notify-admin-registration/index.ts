@@ -1,5 +1,6 @@
 import { deliverEmail, escapeHtml } from "../_shared/email.ts";
 import { registrationTemplate } from "../_shared/registration-templates.ts";
+import { readSmallJson, InputError } from "../_shared/http-input.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
@@ -20,13 +21,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
-    const body = await req.json();
+    const body = await readSmallJson(req);
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     if (email.length > 254 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(email)) return json({ error: "Valid email is required" }, 400);
     for (const key of ["first_name", "last_name"]) {
       if (body[key] != null && (typeof body[key] !== "string" || [...body[key].trim()].length > 100)) return json({ error: "Names must be text, up to 100 characters" }, 400);
     }
     const client = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+    for (const [period, maximum] of [[60, 20], [3600, 200]]) {
+      const { data: allowed, error } = await client.rpc('claim_public_request', { p_bucket: `registration/${period}`, p_seconds: period, p_limit: maximum });
+      if (error) return json({ error: 'Registration is temporarily unavailable.' }, 503);
+      if (!allowed) return json({ error: 'Too many registration requests. Please try again later.' }, 429);
+    }
     const { data: existingAccount, error: accountError } = await client.rpc("registration_email_exists", { p_email: email });
     if (accountError) return json({ error: "Could not submit your request. Please try again." }, 500);
     if (existingAccount) {
@@ -85,7 +91,8 @@ Deno.serve(async (req: Request) => {
     if (insertError) return json({ error: "A registration request for this email is already awaiting administrator approval. Please wait for approval, or enter another email address.", code: "REGISTRATION_ALREADY_PENDING" }, 409);
     // Mail failure does not undo a successfully saved registration.
     return json({ success: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof InputError) return json({ error: error.message }, error.status);
     console.error(JSON.stringify({ operation: "registration", type: "request_error" }));
     return json({ error: "Could not submit your request. Please try again." }, 500);
   }

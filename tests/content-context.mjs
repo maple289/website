@@ -15,7 +15,7 @@ try {
     const objects = new Map(['note.txt','Src/.folder','Src/a.txt','Src/Sub/.folder','Src/Sub/b.txt','Dest/.folder','Archive/.folder','Archive/note.txt'].map(path => [`${owner}/${path}`, { id: path, size: 7, mimetype: 'text/plain' }]));
     const trashed = new Set();
     let activeLink = null, revoked = 0, sharePosts = 0, failOnce = true;
-    const copies = [];
+    const copies = [], receipts = new Map();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     const metadata = () => [...objects].map(([path, object]) => ({ owner_id: owner, object_path: path.replace(/\/(\.folder|\.keep)$/, ''), is_folder: /\/(\.folder|\.keep)$/.test(path), is_favorite: false, file_size: object.size, mime_type: object.mimetype, trashed_at: trashed.has(path) ? now : null, created_at: now, updated_at: now }));
@@ -28,10 +28,15 @@ try {
       if (rpc === 'get_temporary_share') return route.fulfill({ json: activeLink });
       if (rpc === 'revoke_temporary_share') { revoked++; activeLink = null; return route.fulfill({ body: '' }); }
       if (url.pathname.endsWith('/functions/v1/temporary-share')) { sharePosts++; activeLink = { id: '55555555-5555-4555-8555-555555555555', expires_at: new Date(Date.now() + 86400000).toISOString() }; return route.fulfill({ json: { ...activeLink, token: 'a'.repeat(64) } }); }
-      if (rpc === 'plan_file_operation') {
+      if (rpc === 'unfinished_file_operations') return route.fulfill({ json: [...receipts.values()].filter(r => !r.complete && (r.objectsDone.length || r.metadataDone.length)) });
+      if (rpc === 'file_operation_step') { const receipt=receipts.get(body.p_id), done=body.p_metadata?receipt.metadataDone:receipt.objectsDone; if(body.p_commit && !done.includes(body.p_source))done.push(body.p_source); return route.fulfill({json:done.includes(body.p_source)}); }
+      if (rpc === 'finish_file_operation') { receipts.get(body.p_id).complete=true; return route.fulfill({json:null}); }
+      if (rpc === 'begin_file_operation') {
         const keys = [...objects.keys()];
         const conflict = keys.some(path => path === body.p_destination || path.startsWith(body.p_destination + '/'));
-        return route.fulfill({ json: conflict ? { conflict: true } : { conflict: false, objects: keys.filter(path => path === body.p_source || path.startsWith(body.p_source + '/')), metadata: metadata().filter(row => row.object_path === body.p_source || row.object_path.startsWith(body.p_source + '/')) } });
+        const plan = { conflict: false, operationId:body.p_id, source:body.p_source,destination:body.p_destination,copy:body.p_copy,objectsDone:[],metadataDone:[], objects: keys.filter(path => path === body.p_source || path.startsWith(body.p_source + '/')), metadata: metadata().filter(row => row.object_path === body.p_source || row.object_path.startsWith(body.p_source + '/')) };
+        if(!conflict)receipts.set(body.p_id,plan);
+        return route.fulfill({json:conflict?{conflict:true}:plan});
       }
       if (url.pathname.endsWith('/object/copy') || url.pathname.endsWith('/object/move')) {
         const copy = url.pathname.endsWith('/copy');
@@ -112,6 +117,7 @@ try {
     await action.getByRole('alert').waitFor();
     assert.ok((await action.getByRole('alert').innerText()).includes('Fixture transfer failure'));
     await action.getByRole('button', { name: 'Continue', exact: true }).click();
+    await action.waitFor({state:'hidden'});
     await page.getByRole('button', { name: 'Actions for Src', exact: true }).waitFor();
     assert.ok(objects.has(owner + '/Dest/Src/Sub/b.txt')); assert.ok(objects.has(owner + '/Src/Sub/b.txt'));
     assert.equal(copies.filter(path => path === owner + '/Dest/Src/a.txt').length, 1);

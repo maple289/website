@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { sendEmail, escapeHtml } from "../_shared/email.ts";
+import { readSmallJson, InputError } from "../_shared/http-input.ts";
 
 const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Apikey, X-Client-Info", "Cache-Control": "no-store" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
@@ -10,9 +12,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
-    const text = await req.text();
-    if (text.length > 8192) return json({ error: "Request too large" }, 413);
-    const body = JSON.parse(text);
+    const body = await readSmallJson(req);
     const url = Deno.env.get("SUPABASE_URL") ?? "";
     const options = { auth: { persistSession: false, autoRefreshToken: false },
       global: { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, signal: AbortSignal.timeout(15000) }) } };
@@ -47,11 +47,20 @@ Deno.serve(async (req: Request) => {
     if (body.action !== "login" || typeof body.identifier !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.identifier.trim()) || body.identifier.length > 254 || typeof body.password !== "string" || body.password.length > 1024) return json({ error: "Enter your email and password." }, 400);
     const identifier = body.identifier.trim().toLowerCase();
     if (body.password === "") {
+      const { data: budget, error: budgetError } = await service.rpc("claim_public_request", { p_bucket: "initial-password", p_seconds: 3600, p_limit: 100 });
+      if (budgetError) return json({ error: "Sign-in is temporarily unavailable." }, 503);
+      if (!budget) return json({ error: "Too many setup requests. Please try again later." }, 429);
       const token = hex(crypto.getRandomValues(new Uint8Array(32)));
-      const { data: allowed, error } = await service.rpc("start_initial_login", { p_identifier: identifier, p_token_hash: await hash(token) });
+      const { data: allowed, error } = await service.rpc("issue_initial_password_email", { p_identifier: identifier, p_token_hash: await hash(token) });
       if (error) return json({ error: "Sign-in is temporarily unavailable." }, 503);
       if (!allowed) return json({ error: "Unable to sign in. Check your credentials and approval status." }, 401);
-      return json({ requires_password_setup: true, setup_token: token, expires_in: 900 });
+      // This capability leaves the server ONLY through the approved mailbox.
+      const delivered = await sendEmail({ to: identifier, subject: "Verify your MyHostage account",
+        html: `<p>Paste this code into MyHostage to create your first password:</p><pre>${escapeHtml(token)}</pre><p>It expires in 15 minutes. If you did not request it, ignore this email.</p>`,
+        text: `Paste this code into MyHostage to create your first password:\n${token}\n\nIt expires in 15 minutes. If you did not request it, ignore this email.`,
+        operation: "initial_password_verification", key: `initial-password/${await hash(token)}` });
+      if (!delivered.accepted) return json({ error: "The verification email could not be sent. Wait one minute and try again, or contact an administrator." }, 503);
+      return json({ requires_password_setup: true, email_verification_required: true, expires_in: 900 });
     }
     const { data: email, error } = await service.rpc("resolve_login_email", { p_identifier: identifier });
     if (error) return json({ error: "Sign-in is temporarily unavailable." }, 503);
@@ -60,7 +69,8 @@ Deno.serve(async (req: Request) => {
     const { data, error: loginError } = await auth.auth.signInWithPassword({ email: email || "unknown-account@invalid.example", password: body.password });
     if (loginError || !data.session || !email) return json({ error: "Email or password is incorrect." }, loginError?.status === 429 ? 429 : 401);
     return json({ session: { access_token: data.session.access_token, refresh_token: data.session.refresh_token } });
-  } catch {
+  } catch (error) {
+    if (error instanceof InputError) return json({ error: error.message }, error.status);
     // Never include request bodies, credentials, or provider errors in logs.
     return json({ error: "Could not complete the request. Please try again." }, 400);
   }
