@@ -88,7 +88,9 @@ jobs:
           CADDY_BIN="$PWD/.runtime/caddy-ci" node tests/serving-security.mjs
 
       - name: Validate Compose configuration
-        run: docker compose --env-file .env.example -f compose.yml config --quiet
+        run: |
+          docker compose --env-file .env.example -f compose.yml config --quiet
+          node tests/deployment-compose.mjs
 
   media-validation:
     runs-on: ubuntu-latest
