@@ -25,7 +25,9 @@ if code == 0:
         state = container.get('State', {})
         report['containers'].append({'name': container['Name'].lstrip('/'), 'state': state.get('Status'),
             'health': state.get('Health', {}).get('Status', 'not_configured'),
-            'restarts': container.get('RestartCount'), 'exit_code': state.get('ExitCode')})
+            'restarts': container.get('RestartCount'), 'exit_code': state.get('ExitCode'),
+            'created_at': container.get('Created'), 'started_at': state.get('StartedAt'),
+            'finished_at': state.get('FinishedAt'), 'oom_killed': state.get('OOMKilled')})
 
 metric_format = '{"name":"{{.Name}}","cpu":"{{.CPUPerc}}","memory":"{{.MemUsage}}","memory_percent":"{{.MemPerc}}","pids":"{{.PIDs}}"}'
 code, output = capture(['docker', 'stats', '--no-stream', '--format', metric_format, *names]) if names else (-1, '')
