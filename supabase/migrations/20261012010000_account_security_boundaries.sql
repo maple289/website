@@ -17,9 +17,12 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
 $$;
 
 -- Existing bearer tokens must not bypass disablement through older owner policies.
+-- storage.objects is the supported application policy surface. Supabase owns
+-- internal Storage tables (including migrations); do not change their policies.
 DO $$ DECLARE item record; BEGIN
   FOR item IN SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname IN ('public','storage') AND c.relkind IN ('r','p') AND c.relrowsecurity LOOP
+    WHERE (n.nspname='public' OR (n.nspname='storage' AND c.relname='objects'))
+      AND c.relkind IN ('r','p') AND c.relrowsecurity LOOP
     EXECUTE format('CREATE POLICY active_account_required ON %I.%I AS RESTRICTIVE FOR ALL TO authenticated USING (public.active_account(auth.uid())) WITH CHECK (public.active_account(auth.uid()))',item.nspname,item.relname);
   END LOOP;
 END $$;
