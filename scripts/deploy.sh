@@ -31,6 +31,8 @@ runtime_stack() {
     -f "$project_root/deploy/email-dispatcher.compose.yml" \
     -f "$project_root/deploy/messenger.compose.yml" "$@"
 }
+# Kong can retain a Docker DNS address after an upstream is recreated.
+api_containers_before=$(runtime_stack ps -q rest auth storage functions realtime | sort)
 # Realtime owns its internal tenant table. Keep this deployment-only change on
 # its administrative connection; postgres migrations and API roles need no
 # additional UPDATE permission on _realtime.tenants.
@@ -85,6 +87,15 @@ enforce_private_realtime
 runtime_stack up -d
 runtime_stack restart functions realtime
 runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector email-dispatcher
+api_containers_after=$(runtime_stack ps -q rest auth storage functions realtime | sort)
+if [ "$api_containers_before" != "$api_containers_after" ]; then
+  echo "Refreshing the API gateway after backend container replacement."
+  runtime_stack restart kong
+  runtime_stack up -d --wait --wait-timeout 180 kong
+fi
+# A static /healthz alone cannot detect failed REST routing or database access.
+# The credential stays inside the worker; the probe requests no user records.
+runtime_stack exec -T media-worker python - < "$project_root/scripts/check-runtime-api.py"
 
 # Seed the currently running build before the first cache-volume cutover.
 # -m gives extracted chunks a fresh retention period, regardless of image age.

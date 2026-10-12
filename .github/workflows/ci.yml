@@ -63,6 +63,7 @@ jobs:
           python tests/email-dispatcher.py
           python tests/storage-integrity.py
           python tests/production-diagnostics.py
+          python tests/runtime-api-health.py
           sh -n scripts/backup-full.sh
           sh -n scripts/backup-database.sh
           sh -n scripts/deploy.sh
