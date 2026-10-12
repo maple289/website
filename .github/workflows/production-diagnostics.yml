@@ -14,5 +14,5 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Read container health and sanitized REST errors
-        run: python3 scripts/production-health-diagnostics.py
+      - name: Read server service, resource, TURN and database health
+        run: python3 scripts/verify-server-operation.py
