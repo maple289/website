@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 const suites = [
   'tests/audit-account-security.mjs', 'tests/audit-media-security.mjs', 'tests/audit-client-resilience.mjs',
+  'tests/public-preview-access.mjs',
   'scripts/test-registration-email.mjs', 'tests/video-bitrate-settings.mjs',
   'tests/messenger-message-deletion.mjs', 'tests/messenger-people.mjs', 'tests/messenger-calls.mjs',
   'tests/messenger-call-relay.mjs', 'tests/messenger-call-engine.mjs', 'tests/messenger-call-audio-output.mjs',

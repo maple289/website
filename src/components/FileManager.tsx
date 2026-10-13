@@ -149,9 +149,10 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     return () => window.removeEventListener('keydown', onBackspace);
   }, [dialog, preview, uploadOpen, shareEntry, details]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     const version = ++listingState.current.version;
-    setLoading(true); setError(''); setRootHasMore(false); setRootPaging(false);
+    if (!quiet) setLoading(true);
+    setError(''); setRootHasMore(false); setRootPaging(false);
     try {
       if (!user) {
         const page = await loadPublicFiles(publicFolder?.path);
@@ -270,7 +271,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     return fromMetadata(item);
   }
 
-  useEffect(() => { const state = listingState.current; void load(); return () => { state.version++; }; }, [load]);
+  useEffect(() => { const state = listingState.current; void load(publicOnly); return () => { state.version++; }; }, [load, publicOnly, authenticatedUser?.id]);
   useEffect(() => { latestSearchTerm.current = searchTerm; }, [searchTerm]);
   useEffect(() => {
     const query = searchTerm.trim();
@@ -806,17 +807,26 @@ function FileCard({ entry, actions, location, shareMode, layout, selected, onSel
 }
 
 function AuthenticatedThumbnail({ entry }: { entry: Entry }) {
-  const [url, setUrl] = useState('');
+  const { user, session } = useAuth();
+  const key = `${entry.path}:${entry.updatedAt}:${entry.id ? 'public' : user?.id ?? 'guest'}`;
+  const cached = useRef<{ key: string; url: string } | null>(null);
+  const [image, setImage] = useState<{ key: string; url: string } | null>(null);
+  useEffect(() => () => {
+    if (cached.current?.key === key) { URL.revokeObjectURL(cached.current.url); cached.current = null; }
+  }, [key]);
   useEffect(() => {
+    if (cached.current?.key === key) { setImage(cached.current); return; }
     let active = true;
-    let objectUrl = '';
-    setUrl('');
+    setImage(null);
     downloadFile(entry).then(({ data }) => {
-      if (active && data) { objectUrl = URL.createObjectURL(data); setUrl(objectUrl); }
+      if (active && data) { cached.current = { key, url: URL.createObjectURL(data) }; setImage(cached.current); }
     });
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [entry]);
-  return url ? <img src={url} alt={entry.name} className="h-full w-full rounded-xl object-cover" /> : <FileTypeIcon entry={entry} size={38} />;
+    return () => { active = false; };
+  }, [entry, key, session?.access_token]);
+  return image?.key === key ? <img src={image.url} alt={entry.name} className="h-full w-full rounded-xl object-cover" onError={() => {
+    if (cached.current?.url === image.url) { URL.revokeObjectURL(cached.current.url); cached.current = null; }
+    setImage(current => current?.url === image.url ? null : current);
+  }} /> : <FileTypeIcon entry={entry} size={38} />;
 }
 
 async function uploadLargeFile(file: File, path: string, onProgress: (percent: number) => void): Promise<void> {

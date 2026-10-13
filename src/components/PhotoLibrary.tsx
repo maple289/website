@@ -85,7 +85,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
             <article key={photo.id} className="mg-card">
               <MediaContentMenu kind="photo" item={photo} onPreview={() => openPhoto(index)} onEdit={() => { setSuccess(''); setError(null); setEditingPhoto(photo); }} onDelete={() => remove(photo)} onChanged={() => void load()} />
               <button onClick={() => openPhoto(index)} className="mg-thumbnail" aria-label={`Open ${photo.file_name}`}>
-                <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
+                <StorageImage publicAccess={photo.visibility === 'public'} storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<ImageIcon className="mx-auto text-[#555]" />} />
                 <span className={`mg-badge mg-privacy ${photo.visibility}`}>{photo.visibility === 'public' ? <Globe size={11} /> : <Lock size={11} />}{photo.visibility === 'public' ? 'Public' : 'Private'}</span>
               </button>
               <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{formatBytes(photo.file_size)} · {timeAgo(photo.created_at)}</p>

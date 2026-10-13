@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
+import { AuthContext } from '@/context/AuthContext';
 import { Download, FileText, LoaderCircle, X } from 'lucide-react';
 import { TaskModal } from '@/components/TaskModal';
 import { FileTypeIcon } from '@/components/FileTypeIcon';
@@ -14,6 +15,7 @@ export function FilePreview({ entry, onClose, onDownload, requestPreview = reque
   entry: FileEntry; onClose: () => void; onDownload: () => void;
   requestPreview?: typeof requestFilePreview; loadVideo?: (entry: FileEntry, signal: AbortSignal) => Promise<Blob>; trackViews?: boolean;
 }) {
+  const auth = useContext(AuthContext);
   const [state, setState] = useState<State>({ status: 'loading' });
   const previewEvent = useRef({ path: entry.path, requestId: analyticsRequestId(), sent: false });
   const readySource = useRef('');
@@ -90,7 +92,7 @@ export function FilePreview({ entry, onClose, onDownload, requestPreview = reque
     };
     void load();
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [entry, requestPreview, loadVideo]);
+  }, [entry, requestPreview, loadVideo, auth?.user?.id, auth?.session?.access_token]);
   const loading = state.status === 'loading' || state.status === 'generating';
   return <TaskModal aria-label="File preview" className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/80 p-2 sm:p-6">
     <section className="flex h-[90dvh] max-h-full w-full max-w-6xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">

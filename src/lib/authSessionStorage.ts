@@ -94,6 +94,11 @@ window.addEventListener('storage', event => {
 // Preserve SDK locking across tabs; never bypass a held authentication lock.
 export async function sessionFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  // These requests return session-dependent metadata/tokens. Do not reuse an
+  // authorization failure after sign-in; valid thumbnail bytes keep their cache.
+  if (requestUrl.startsWith(`${url.replace(/\/$/, '')}/rest/v1/rpc/get_storage_base_path`) ||
+      requestUrl.startsWith(`${url.replace(/\/$/, '')}/storage/v1/object/sign/`))
+    return fetch(input, { ...init, cache: 'no-store' });
   if (!requestUrl.startsWith(`${url.replace(/\/$/, '')}/auth/v1/`)) return fetch(input, init);
   const generation = revision;
   const controller = new AbortController();

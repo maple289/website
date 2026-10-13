@@ -45,7 +45,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ci-placeholder-key
 
       - name: Install browser test runtime
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
 
       - name: Browser and transfer regressions
         env:
@@ -56,6 +56,11 @@ jobs:
           node tests/file-trash.mjs
           node tests/mobile-auth.mjs
           node tests/temporary-share-hosting.mjs
+
+      - name: Firefox public preview regressions
+        env:
+          BROWSER_ENGINE: firefox
+        run: node scripts/run-ui-regressions.mjs public-previews
 
       - name: Email and reconciliation regressions
         run: |
@@ -88,6 +93,7 @@ jobs:
           docker rm caddy-ci
           chmod 755 .runtime/caddy-ci
           CADDY_BIN="$PWD/.runtime/caddy-ci" node tests/serving-security.mjs
+          CADDY_BIN="$PWD/.runtime/caddy-ci" node tests/public-preview-caching.mjs
 
       - name: Validate Compose configuration
         run: |

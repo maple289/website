@@ -7,7 +7,15 @@
 	}
 
 	@supabase path /auth/v1 /auth/v1/* /rest/v1 /rest/v1/* /storage/v1 /storage/v1/* /functions/v1 /functions/v1/* /realtime/v1 /realtime/v1/* /graphql/v1 /graphql/v1/*
+	@preview_credentials {
+		method POST
+		path /rest/v1/rpc/get_storage_base_path /storage/v1/object/sign/*
+	}
 	handle @supabase {
+		# Cache image bytes normally; credential/permission responses must never
+		# preserve a failed anonymous lookup across a subsequent sign-in.
+		header @preview_credentials Cache-Control "private, no-store"
+		header @preview_credentials +Vary Authorization
 		reverse_proxy {$SUPABASE_API_UPSTREAM}
 	}
 

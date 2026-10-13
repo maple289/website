@@ -1,6 +1,7 @@
 import { useModalLayer } from '@/hooks/useModalLayer';
 import { MediaReactions } from './MediaReactions';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AuthContext } from '@/context/AuthContext';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { Photo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
@@ -11,12 +12,13 @@ type PhotoViewerProps = { photos: Photo[]; startIndex: number; onClose: () => vo
 const controls = 'input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="menu"], [role="combobox"], [data-reaction-control]';
 
 function ViewerPhoto({ photo, current }: { photo: Photo; current: boolean }) {
+  const auth = useContext(AuthContext);
   const [failed, setFailed] = useState(false);
   const [usePreview, setUsePreview] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => { setFailed(false); setUsePreview(false); }, [photo.storage_path]);
+  useEffect(() => { setFailed(false); setUsePreview(false); }, [photo.storage_path, photo.preview_path, photo.visibility, auth?.user?.id, auth?.session?.access_token]);
   const fallback = <div className="pv-loading"><p>Unable to load photo.</p>{current && <button className="pv-retry" onClick={() => { setFailed(false); setUsePreview(false); setAttempt(value => value + 1); }}>Retry</button>}</div>;
-  return failed ? fallback : <StorageImage key={attempt} storagePath={usePreview ? photo.preview_path : photo.storage_path} alt={current ? photo.file_name : ''}
+  return failed ? fallback : <StorageImage key={attempt} publicAccess={photo.visibility === 'public'} storagePath={usePreview ? photo.preview_path : photo.storage_path} alt={current ? photo.file_name : ''}
     draggable={false} className="pv-photo" onError={() => {
       // HEIC/TIFF and other valid originals may not have a browser decoder.
       if (!usePreview && photo.preview_path) setUsePreview(true);

@@ -1,16 +1,14 @@
 import { MediaReactions } from './MediaReactions';
 import { MediaContentMenu } from './MediaContentMenu';
-import { useState } from 'react';
 import { AlertCircle, CheckCircle2, Film, Globe, LoaderCircle, Lock, Play } from 'lucide-react';
 import type { Video } from '@/lib/types';
 import { formatBytes, timeAgo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
 
 function VideoPoster({ video }: { video: Video }) {
-  const [failed, setFailed] = useState(false);
   const placeholder = <div className="mg-placeholder"><Film size={32} /></div>;
-  return failed ? placeholder : <StorageImage storagePath={video.preview_path} legacyUrl={video.preview_url} alt={video.file_name}
-    loading="lazy" className="mg-image" onError={() => setFailed(true)} fallback={placeholder} />;
+  return <StorageImage storagePath={video.preview_path} legacyUrl={video.preview_url} publicAccess={video.visibility === 'public'} alt={video.file_name}
+    loading="lazy" className="mg-image" fallback={placeholder} />;
 }
 
 export function MediaVideoCard({ video, onPlay, onEdit, onDelete, showOwner = false }: {

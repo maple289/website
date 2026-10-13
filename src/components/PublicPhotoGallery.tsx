@@ -10,16 +10,18 @@ import { timeAgo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
 import { PhotoViewer } from '@/components/PhotoViewer';
 import { GalleryError, GalleryToolbar } from '@/components/GalleryToolbar';
+import { useAuth } from '@/hooks/useAuth';
 
 export function PublicPhotoGallery({ searchTerm }: { searchTerm: string }) {
+  const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadVersion = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     const version = ++loadVersion.current;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     const { data, error } = await supabase.from('photos').select('*').eq('visibility', 'public').order('created_at', { ascending: false });
     if (version !== loadVersion.current) return;
     setError(error ? 'Could not load public photos. Please try again.' : null);
@@ -30,9 +32,9 @@ export function PublicPhotoGallery({ searchTerm }: { searchTerm: string }) {
   useEffect(() => {
     const versionRef = loadVersion;
     const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'photo') void load(); };
-    void load(); window.addEventListener('media-uploaded', refresh);
+    void load(true); window.addEventListener('media-uploaded', refresh);
     return () => { versionRef.current++; window.removeEventListener('media-uploaded', refresh); };
-  }, [load]);
+  }, [load, user?.id]);
 
   const view = useGalleryView(photos, searchTerm);
   const filteredPhotos = view.visible;
@@ -51,7 +53,7 @@ export function PublicPhotoGallery({ searchTerm }: { searchTerm: string }) {
             <article key={photo.id} className="mg-card text-left" onClick={() => openPhoto(index)}>
               <MediaContentMenu kind="photo" item={photo} onPreview={() => openPhoto(index)} />
               <button onClick={event => { event.stopPropagation(); openPhoto(index); }} className="mg-thumbnail" aria-label={`Open ${photo.file_name}`}>
-              <StorageImage storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /><span className="mg-badge mg-privacy public"><Globe size={11} />Public</span></button>
+              <StorageImage publicAccess={photo.visibility === 'public'} storagePath={photo.preview_path ?? photo.thumbnail_path ?? photo.storage_path} alt={photo.file_name} className="mg-image" loading="lazy" fallback={<div className="flex h-full items-center justify-center"><ImageIcon className="text-[#555]" /></div>} /><span className="mg-badge mg-privacy public"><Globe size={11} />Public</span></button>
               <div className="mg-card-body"><h3 className="mg-title" title={photo.file_name}>{photo.file_name}</h3><p className="mg-meta">{timeAgo(photo.created_at)}</p><MediaReactions mediaType="photo" mediaId={photo.id} mediaName={photo.file_name} /></div>
             </article>
           ))}

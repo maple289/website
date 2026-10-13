@@ -1,4 +1,5 @@
-import { useEffect, useState, type ImgHTMLAttributes, type ReactNode } from 'react';
+import { useContext, useEffect, useState, type ImgHTMLAttributes, type ReactNode } from 'react';
+import { AuthContext } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { resolveBucketPath } from '@/lib/storageSettings';
 
@@ -7,15 +8,27 @@ type StorageImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   legacyUrl?: string | null;
   fallback?: ReactNode;
   loadingFallback?: ReactNode;
+  publicAccess?: boolean;
 };
 
-export function StorageImage({ storagePath, legacyUrl, fallback = null, loadingFallback = fallback, ...imageProps }: StorageImageProps) {
-  const key = `${storagePath ?? ''}:${legacyUrl ?? ''}`;
+export function StorageImage({ storagePath, legacyUrl, publicAccess = false, fallback = null, loadingFallback = fallback, ...imageProps }: StorageImageProps) {
+  const auth = useContext(AuthContext);
+  const userId = auth?.user?.id ?? 'guest', token = auth?.session?.access_token;
+  const [revision, setRevision] = useState(0);
+  const key = `${storagePath ?? ''}:${legacyUrl ?? ''}:${publicAccess ? 'public' : userId}:${revision}`;
   const [image, setImage] = useState({ key, source: storagePath ? null : legacyUrl ?? null, loading: !!storagePath });
 
   useEffect(() => {
+    const retry = () => setRevision(value => value + 1);
+    window.addEventListener('storage-settings-changed', retry);
+    return () => window.removeEventListener('storage-settings-changed', retry);
+  }, []);
+
+  useEffect(() => {
     let active = true;
-    setImage({ key, source: storagePath ? null : legacyUrl ?? null, loading: !!storagePath });
+    // Keep a successfully loaded public image through auth transitions. Failed
+    // attempts retry once per changed session/path/settings, never in a loop.
+    setImage(current => current.key === key && current.source ? current : { key, source: storagePath ? null : legacyUrl ?? null, loading: !!storagePath });
     const load = async () => {
       if (!storagePath) return;
       try {
@@ -29,12 +42,12 @@ export function StorageImage({ storagePath, legacyUrl, fallback = null, loadingF
     void load();
 
     return () => { active = false; };
-  }, [storagePath, legacyUrl, key]);
+  }, [storagePath, legacyUrl, key, userId, token]);
 
   if (image.key !== key || image.loading) return <>{loadingFallback}</>;
   if (!image.source) return <>{fallback}</>;
   return <img {...imageProps} src={image.source} onError={event => {
-    setImage(current => ({ ...current, source: null }));
+    setImage(current => current.key === key && current.source === image.source ? { ...current, source: null } : current);
     imageProps.onError?.(event);
   }} />;
 }

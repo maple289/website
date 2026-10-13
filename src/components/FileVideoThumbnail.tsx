@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { AuthContext } from '@/context/AuthContext';
 import { Play } from 'lucide-react';
 import { FileTypeIcon } from './FileTypeIcon';
 import type { FileEntry } from '@/lib/fileTree';
@@ -18,9 +19,13 @@ function drain() {
 }
 
 export function FileVideoThumbnail({ entry }: { entry: FileEntry }) {
+  const auth = useContext(AuthContext);
   const tile = useRef<HTMLDivElement>(null);
-  const [poster, setPoster] = useState<string | null>(null);
+  const key = `${entry.path}:${entry.updatedAt}:${entry.size}:${entry.mimeType}:${entry.id ? 'public' : auth?.user?.id ?? 'guest'}`;
+  const cached = useRef<{ key: string; source: string } | null>(null);
+  const [poster, setPoster] = useState<{ key: string; source: string } | null>(null);
   useEffect(() => {
+    if (cached.current?.key === key) { setPoster(cached.current); return; }
     let active = true;
     setPoster(null);
     if (!tile.current || entry.size <= 0 || entry.size > 12 * 1024 * 1024) return;
@@ -30,7 +35,7 @@ export function FileVideoThumbnail({ entry }: { entry: FileEntry }) {
         const { data } = await downloadFile(entry);
         if (!data || !active) return;
         const image = await captureVideoPreview(new File([data], entry.name, { type: entry.mimeType }));
-        if (active) setPoster(image);
+        if (active && image) { cached.current = { key, source: image }; setPoster(cached.current); }
       } catch { /* Keep the video icon when permission/decoding is unavailable. */ }
     };
     const observer = new IntersectionObserver(([record]) => {
@@ -42,9 +47,9 @@ export function FileVideoThumbnail({ entry }: { entry: FileEntry }) {
       active = false; observer.disconnect();
       const index = pending.indexOf(job); if (index !== -1) pending.splice(index, 1);
     };
-  }, [entry]);
+  }, [entry, key, auth?.session?.access_token]);
   return <div ref={tile} className="fm-video-poster">
-    {poster ? <img src={poster} alt={entry.name} className="h-full w-full object-cover" /> : <FileTypeIcon entry={entry} size={28} />}
+    {poster?.key === key ? <img src={poster.source} alt={entry.name} className="h-full w-full object-cover" /> : <FileTypeIcon entry={entry} size={28} />}
     <span className="fm-play-badge" aria-hidden="true"><Play size={11} fill="currentColor" /></span>
   </div>;
 }

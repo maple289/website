@@ -7,6 +7,7 @@ import { VideoPlayer } from '@/components/VideoPlayer';
 import { MediaVideoCard } from '@/components/MediaVideoCard';
 import { PublicPhotoGallery } from '@/components/PublicPhotoGallery';
 import { GalleryError, GalleryToolbar } from '@/components/GalleryToolbar';
+import { useAuth } from '@/hooks/useAuth';
 
 type Tab = 'videos' | 'photos';
 
@@ -16,6 +17,7 @@ type HomePageProps = {
 };
 
 export function HomePage({ tab, searchTerm }: HomePageProps) {
+  const { user } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
@@ -37,7 +39,7 @@ export function HomePage({ tab, searchTerm }: HomePageProps) {
     setLoading(false);
   }, [tab]);
 
-  useEffect(() => { const versionRef = loadVersion; void load(); return () => { versionRef.current++; }; }, [load]);
+  useEffect(() => { const versionRef = loadVersion; void load(true); return () => { versionRef.current++; }; }, [load, user?.id]);
   useEffect(() => {
     const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'video') void load(); };
     window.addEventListener('media-uploaded', refresh);
