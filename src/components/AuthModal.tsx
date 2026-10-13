@@ -3,9 +3,10 @@ import { useGuardedClose } from '@/hooks/useGuardedClose';
 import { ProfileNameFields } from './ProfileNameFields';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mail, Lock, Eye, EyeOff, X, Clapperboard } from 'lucide-react';
+import { accountAction } from '@/lib/accountAuth';
 import { useAuth } from '@/hooks/useAuth';
 
-const approvalMessage = 'Your registration request has been submitted for administrator approval. Check your email for confirmation. After approval, sign in with your email and leave the password blank to create your password.';
+const approvalMessage = 'Your registration request has been submitted for administrator approval. Check your email for confirmation. After approval, you will receive a temporary password valid for one hour. Sign in with your email and that password, then choose your permanent password.';
 
 type AuthModalProps = {
   open: boolean;
@@ -139,11 +140,17 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
 
           {mode === 'signin' && (
             <>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Password</label>
+              <label htmlFor="login-password" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#9a9a9a]">Password</label>
               <div className="flex h-12 items-center overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212] transition focus-within:border-[#4b86ff]">
                 <Lock className="ml-3.5 text-[#888]" size={18} />
                 <input
+                  id="login-password"
+                  required
+                  disabled={submitting}
                   type={showPassword ? 'text' : 'password'}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={1024}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Your password"
@@ -154,7 +161,17 @@ export function AuthModal({ open, initialMode, onClose }: AuthModalProps) {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <p className="mt-2 text-xs leading-5 text-[#999]">First login after approval? Leave the password blank to receive an email verification code and create your password. Existing accounts require their password.</p>
+              <p className="mt-2 text-xs leading-5 text-[#999]">First login? Enter the temporary password from your approval email. It expires after one hour.</p>
+              <button type="button" disabled={submitting} className="mt-2 min-h-11 text-sm text-blue-400 disabled:opacity-60" onClick={async () => {
+                if (submission.current === 'pending') return;
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Enter your approved email address first.'); return; }
+                submission.current = 'pending'; setSubmitting(true); setError(null); setInfo(null);
+                try {
+                  await accountAction({ action: 'request-temporary-password', identifier: email.trim() });
+                  setInfo('If your approved account still needs password setup, a temporary password will be emailed. Check your inbox. Wait one minute before requesting another.');
+                } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not send the email. Please try again.'); }
+                finally { submission.current = 'idle'; setSubmitting(false); }
+              }}>Request temporary password</button>
             </>
           )}
 

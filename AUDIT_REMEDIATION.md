@@ -1,9 +1,11 @@
 # Audit remediation — 12 October 2026
 
-The application changes below are implemented locally and tested with synthetic
-accounts, an isolated PostgreSQL engine and browser fixtures. **Nothing in this
-remediation has been deployed to production.** No production records, uploads,
-accounts or messages were deleted. Router/ASA and TURN networking were unchanged.
+The audit remediation was deployed as release `47ee89e` on 12 October 2026.
+CI and deployment passed; read-only operational verification confirmed all
+17 application containers healthy, the account guards installed and TURN
+service/timer active. No production content was deleted and router/ASA/TURN
+networking was unchanged. The subsequent first-login improvement is documented
+in `INITIAL_REGISTRATION.md` and follows the same CI-gated deployment process.
 
 The original audit remains at `audit/20261011/REPORT.md`: **0 substantiated
 Critical, 6 High, 11 Medium, 7 Low and 2 Informational** findings. Those counts
@@ -16,7 +18,7 @@ and a successful recovery rehearsal exist.
 
 | ID | Severity | Correction and source | Validation / remaining work |
 |---|---|---|---|
-| A01 | High | `account-login`, Auth context and Initial Password page require a mailbox-delivered, single-use verification code. It is never returned in the public login response or saved in frontend setup state. Migration `20261012010000` invalidates old capabilities and retires the old issuer before deploying the new one. | Actual SQL/handler tests cover unauthorized code guessing, reuse, hash storage, old-issuer retirement and successful mailbox-code activation. Configure/verify Resend before rollout; missing mail configuration fails closed. |
+| A01 | High | First login now uses a mailbox-delivered 12-character temporary password, valid for one hour, in the ordinary sign-in form. Only verified credentials exchange for a memory-only setup capability; normal access requires a different permanent password. Migration `20261012050000` retires blank-password issuance. See `INITIAL_REGISTRATION.md`. | Actual SQL/handler tests cover unauthorized code guessing, reuse, hash storage, old-issuer retirement and successful temporary-password activation. Configure/verify Resend before rollout; missing mail configuration fails closed. |
 | A02 | High | The same migration adds active-account checks to existing authenticated RLS, redefines `is_admin`, and installs a PostgREST pre-request gate for privileged RPCs. Admin Edge handlers use the authenticated permission RPC. | Old bearer claims lose owner/admin access after disablement in actual SQL. Verify the Auth/REST/Storage integration and any existing pre-request hook on a staging clone. |
 | A03 | High | `docker/Caddyfile`, `docker/start-web.sh`, Compose and deployment script retain previous hashed assets for fourteen days, seed the running build at cutover, and return a non-cacheable 404 for missing assets. Page/Admin statistics error boundaries preserve navigation and the separate call provider/panel. | A failed Messenger chunk preserves incoming call controls and recovers on navigation in a browser fixture. Official Caddy 2.10.2 validates the configuration; its actual local routes pass missing/retained asset and cache tests. Docker/IIS cutover still needs staging. |
 | A04 | High | Storage UI/handler describe bucket-relative prefixes, normalize slashes, and reject settings that would strand existing media. Migration `20261012020000` serializes prefix changes with publication/catalog writes. Physical mounts require an operator storage migration. | Actual SQL rejects a changed populated prefix while allowing unchanged roots and bitrate saves. No media paths/bytes were migrated. |

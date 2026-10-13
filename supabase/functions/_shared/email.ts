@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
+import { approvalPassword, passwordHash, appendTemporaryPassword } from "./temporary-password.ts";
 
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -18,12 +19,17 @@ export function configuredSender(): string {
   // Preserve existing combined sending identities, or compose a configured name.
   return name && !email.includes("<") ? `${name} <${email}>` : email;
 }
-export async function sendEmail(message: { to: string; subject: string; html: string; text?: string; from?: string; operation: string; key: string }): Promise<EmailResult> {
+export async function sendEmail(message: { to: string; subject: string; html: string; text?: string; from?: string; operation: string; key: string; sensitiveValues?: string[] }): Promise<EmailResult> {
   const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
   // Sender identity is separate from the registered admin recipient list.
   const from = message.from ?? configuredSender();
   const fail = (status: number, type: string, error: unknown): EmailResult => {
-    const result = { accepted: false, status, type: safeEmailLog(type), message: safeEmailLog(error) };
+    const clean = (input: unknown) => {
+      let value = String(input ?? 'Unknown error');
+      for (const secret of message.sensitiveValues ?? []) if (secret) value = value.split(secret).join('[REDACTED]');
+      return safeEmailLog(value);
+    };
+    const result = { accepted: false, status, type: clean(type), message: clean(error) };
     console.error(JSON.stringify({ operation: message.operation, ...result }));
     return result;
   };
@@ -68,7 +74,23 @@ async function deliverEmailImpl(client: SupabaseClient, registrationId: string, 
   if (delivery.status === "sent") return true;
   const { data: claimed, error: claimError } = await client.rpc("claim_registration_email", { delivery_id: delivery.id });
   if (claimError || !claimed) { console.warn(JSON.stringify({ operation, delivery_id: delivery.id, result: "deferred", type: claimError ? "claim_error" : "retry_guard" })); return false; }
-  const result = await sendEmail({ to: delivery.recipient, subject: delivery.subject, html: delivery.html, text: delivery.plain_text, from: delivery.sender ?? undefined, operation, key: `registration/${delivery.id}` });
+  let content = { html: delivery.html, text: delivery.plain_text };
+  let password: string | undefined;
+  if (operation === 'registration_approved') {
+    password = await approvalPassword(delivery.id, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const { data: issued, error } = await client.rpc('issue_initial_temporary_password', {
+      p_identifier: delivery.recipient, p_password_hash: await passwordHash(password), p_delivery_id: delivery.id,
+    });
+    if (error || !issued?.expires_at) {
+      await client.from('registration_email_deliveries').update({ status: 'failed', error_type: 'temporary_password_unavailable', error_message: 'Request a replacement temporary password from Sign in.' }).eq('id', delivery.id);
+      return false;
+    }
+    content = appendTemporaryPassword(content.html, content.text, password, issued.expires_at);
+  }
+  // Credential content exists only in memory and the provider request, never in
+  // the durable email ledger. Stable per-delivery derivation preserves retries.
+  const result = await sendEmail({ to: delivery.recipient, subject: delivery.subject, ...content, from: delivery.sender ?? undefined, operation,
+    key: operation === 'registration_approved' ? `registration-initial/v1/${delivery.id}` : `registration/${delivery.id}`, sensitiveValues: password ? [password] : [] });
   const { error: saveError } = await client.from("registration_email_deliveries").update({
     status: result.accepted ? "sent" : "failed", message_id: result.id ?? null,
     ...(result.type === "configuration_error" && !delivery.first_attempt_at ? { attempts: 0, first_attempt_at: null } : {}),
@@ -81,7 +103,7 @@ async function deliverEmailImpl(client: SupabaseClient, registrationId: string, 
 export async function deliverEmail(client: SupabaseClient, registrationId: string, operation: string, to: string, subject: string, html: string, text?: string): Promise<boolean> {
   // Enable only the requested registration emails. Other customer/Auth emails
   // remain suppressed until explicitly configured separately.
-  if (!operation.startsWith("admin_") && (!customerEmailsEnabled() || !["registration_receipt", "registration_approved"].includes(operation))) {
+  if (!operation.startsWith("admin_") && operation !== 'registration_approved' && (!customerEmailsEnabled() || operation !== 'registration_receipt')) {
     console.info(JSON.stringify({ operation, result: "customer_email_temporarily_disabled" }));
     return true;
   }

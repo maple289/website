@@ -6,16 +6,10 @@ import { touchActivity } from '@/lib/analytics';
 import { installSession, prepareSignIn, signOutSession } from '@/lib/authSession';
 import { authSessionEvent, savedSession, sessionIsSignedOut, sessionRevision } from '@/lib/authSessionStorage';
 
-type PasswordSetup = { identifier: string; expiresAt: number };
+type PasswordSetup = { identifier: string; expiresAt: number; token: string };
 const setupStorageKey = 'streamly.initial-password-setup';
 function clearSavedPasswordSetup() {
   try { sessionStorage.removeItem(setupStorageKey); } catch { /* optional storage */ }
-}
-function readPasswordSetup(): PasswordSetup | null {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(setupStorageKey) || 'null');
-    return saved && !('token' in saved) && typeof saved.identifier === 'string' && saved.expiresAt > Date.now() ? saved : null;
-  } catch { return null; }
 }
 
 type AuthContextValue = {
@@ -29,7 +23,7 @@ type AuthContextValue = {
   requestRegistration: (email: string, firstName?: string, lastName?: string) => Promise<{ error: string | null }>;
   passwordSetup: PasswordSetup | null;
   cancelPasswordSetup: () => void;
-  completeInitialPassword: (password: string, confirmation: string, verificationCode?: string) => Promise<{ error: string | null }>;
+  completeInitialPassword: (password: string, confirmation: string) => Promise<{ error: string | null }>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -44,7 +38,7 @@ const readableError = (message: string): string => {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(savedSession);
   const [loading, setLoading] = useState(true);
-  const [passwordSetup, setPasswordSetup] = useState<PasswordSetup | null>(readPasswordSetup);
+  const [passwordSetup, setPasswordSetup] = useState<PasswordSetup | null>(null);
 
   useEffect(() => {
     if (!session?.user.id) return;
@@ -60,12 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener('pointerdown', active); window.removeEventListener('keydown', active); window.removeEventListener('hashchange', active); };
   }, [session?.user.id]);
 
-  useEffect(() => {
-    try {
-      if (passwordSetup) sessionStorage.setItem(setupStorageKey, JSON.stringify(passwordSetup));
-      else sessionStorage.removeItem(setupStorageKey);
-    } catch { /* Storage may be unavailable; the in-memory setup session still works. */ }
-  }, [passwordSetup]);
+  useEffect(clearSavedPasswordSetup, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -130,13 +119,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     configured: isSupabaseConfigured,
     passwordSetup,
     cancelPasswordSetup: () => setPasswordSetup(null),
-    completeInitialPassword: async (password, confirmation, verificationCode = '') => {
+    completeInitialPassword: async (password, confirmation) => {
       const revision = sessionRevision();
       if (!passwordSetup) return { error: 'Sign in again to start password setup.' };
       try {
         await prepareSignIn(revision);
-        if (!/^[a-f0-9]{64}$/.test(verificationCode.trim())) return { error: 'Paste the verification code sent to your email.' };
-        await accountAction({ action: 'set-password', setup_token: verificationCode.trim(), new_password: password, confirm_password: confirmation });
+        if (passwordSetup.expiresAt <= Date.now()) return { error: 'Password setup has expired. Return to sign in and use your temporary password, or request a replacement.' };
+        await accountAction({ action: 'set-password', setup_token: passwordSetup.token, new_password: password, confirm_password: confirmation });
         if (revision !== sessionRevision()) throw new Error('This session has ended. Please sign in again.');
         const result = await accountAction({ action: 'login', identifier: passwordSetup.identifier, password });
         if (!result.session) return { error: 'Your password was saved. Return to sign in and use your new password.' };
@@ -186,8 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await prepareSignIn(revision);
         const result = await accountAction({ action: 'login', identifier: email, password });
         if (revision !== sessionRevision()) throw new Error('Sign-in was cancelled. Please try again.');
-        if (result.requires_password_setup && result.email_verification_required) {
-          setPasswordSetup({ identifier: email, expiresAt: Date.now() + (result.expires_in ?? 900) * 1000 });
+        if (result.requires_password_setup && result.setup_token && /^[a-f0-9]{64}$/.test(result.setup_token)) {
+          setPasswordSetup({ identifier: email, token: result.setup_token, expiresAt: Date.now() + (result.expires_in ?? 900) * 1000 });
           window.location.hash = '#/setup-password';
           return { error: null };
         }

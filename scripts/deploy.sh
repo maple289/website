@@ -85,7 +85,7 @@ export STREAMLY_REALTIME_SEED=false
 # Enforce again on deploy, including recovery from an external tenant reseed.
 enforce_private_realtime
 runtime_stack up -d
-runtime_stack restart functions realtime
+runtime_stack restart functions realtime email-dispatcher
 runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector email-dispatcher
 api_containers_after=$(runtime_stack ps -q rest auth storage functions realtime | sort)
 if [ "$api_containers_before" != "$api_containers_after" ]; then
