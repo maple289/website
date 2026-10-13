@@ -38,7 +38,7 @@ try {
     assert.equal(await page.locator('.content-menu-trigger').count(), 0);
     await open();
     const galleryPosition = await page.evaluate(() => window.scrollY);
-    assert.equal(await page.locator('video').getAttribute('controlslist'), 'nodownload');
+    assert.ok((await page.locator('video').getAttribute('controlslist')).split(' ').includes('nodownload'));
     await page.locator('video').evaluate(v => { v.dispatchEvent(new Event('waiting')); v.dispatchEvent(new Event('stalled')); v.dispatchEvent(new Event('error')); });
     await page.waitForTimeout(150);
     assert.ok(await dialog.isVisible(), 'pause/buffering/stall/error must not close');

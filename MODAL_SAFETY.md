@@ -26,6 +26,19 @@ ended state or an already requested close, never a duration threshold. A delayed
 fullscreen exit completes the retained close request automatically. Manual exits,
 pause, buffering and direct seeks without natural completion leave the modal open.
 
+Gallery and video-file players use one application control bar while inline.
+Fullscreen and PiP requests run directly in their respective tap handlers, with
+separate operation guards and no queued entry effects. Actual browser/native
+events drive mode state; conflicting entry buttons require exiting the current
+mode first. Supported container fullscreen retains the header/Close and controls;
+iPhone native fullscreen uses the video-specific API and system controls. Close
+waits for an entry already in flight, then exits owned fullscreen and PiP before
+releasing the source. Failed cleanup retains the player; a later system exit
+finishes the retained close request. Native PiP recovery also requires actual
+ended state, never a duration timer. TaskModal retains focus, inertness and scroll
+ownership. Regression fixtures include real media, responsive layouts, API
+rejections and simulated iOS events; physical mobile devices were not available.
+
 TaskModal uses useModalLayer for focus containment, restoring focus, nested
 layer handling, background inertness and body/document scroll locking. Overlay
 clicks/taps never cancel. Escape never dismisses a task dialog. Background file

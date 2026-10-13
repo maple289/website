@@ -8,6 +8,7 @@ import { downloadFile } from '@/lib/publicFiles';
 import { boundedPreviewBlob, decodePreviewText, filePreviewKind, parsePreviewCsv, requestFilePreview, type PreviewKind, type PreviewStatus } from '@/lib/filePreviews';
 import { analyticsRequestId, recordFileEvent } from '@/lib/analytics';
 import { useVideoCompletion } from '@/hooks/useVideoCompletion';
+import { VideoPresentationControls } from './VideoPresentationControls';
 
 type State = { status: 'loading' | 'generating' | 'ready' | 'failed' | 'unsupported'; kind?: PreviewKind; url?: string; text?: string; csv?: ReturnType<typeof parsePreviewCsv>; message?: string };
 const PdfFilePreview = lazy(() => import('./PdfFilePreview').then(module => ({ default: module.PdfFilePreview })));
@@ -20,6 +21,7 @@ export function FilePreview({ entry, onClose, onDownload, allowDownload = true, 
   const [state, setState] = useState<State>({ status: 'loading' });
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLElement>(null);
   const { close, closing, closeError } = useVideoCompletion(videoRef, playerRef, state.kind === 'video' ? state.url : null, onClose);
   const previewEvent = useRef({ path: entry.path, requestId: analyticsRequestId(), sent: false });
   const readySource = useRef('');
@@ -100,23 +102,24 @@ export function FilePreview({ entry, onClose, onDownload, allowDownload = true, 
   const previewMessage = allowDownload ? state.message : state.message?.replace(/(?:You can still download|Download the original)[^.]*\.?/gi, '').trim();
   const loading = state.status === 'loading' || state.status === 'generating';
   return <TaskModal ref={playerRef} aria-label="File preview" className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/80 p-2 sm:p-6">
-    <section className="flex h-[90dvh] max-h-full w-full max-w-6xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-      <header className="flex shrink-0 items-center gap-2 border-b border-slate-100 px-3 py-2 sm:px-5 sm:py-3">
+    <section ref={surfaceRef} className="video-fullscreen-surface flex h-[90dvh] max-h-full w-full max-w-6xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <header className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 sm:px-5 sm:py-3">
         <FileTypeIcon entry={entry} size={24} />
         <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold text-slate-800" title={entry.name}>{entry.name}</h2><p className="text-xs text-slate-500">Read-only preview · Original file unchanged</p></div>
         {allowDownload && <button onClick={onDownload} aria-label="Download original file" title="Download original file" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><Download size={19} /></button>}
         <button disabled={closing} onClick={() => void close()} aria-label="Close preview" title="Close preview" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={20} /></button>
       </header>
       {closeError && <p role="alert" className="px-5 py-2 text-sm text-amber-700">{closeError}</p>}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-auto bg-slate-100 p-2 sm:p-4" aria-busy={loading}>
+      <div className="video-playback-area relative flex min-h-0 flex-1 flex-col overflow-auto bg-slate-100 p-2 sm:p-4" aria-busy={loading}>
         {loading ? <div role="status" className="m-auto px-4 text-center"><LoaderCircle size={32} className="mx-auto mb-3 animate-spin text-blue-600" /><p className="font-semibold text-slate-800">{state.status === 'generating' ? 'Generating preview…' : 'Loading preview…'}</p><p className="mt-2 text-sm text-slate-500">{state.message || 'You can close this window while the preview is prepared.'}</p></div>
           : state.status !== 'ready' ? <div role="status" className="m-auto max-w-md px-4 text-center"><FileText size={44} className="mx-auto mb-3 text-slate-400" /><h3 className="font-semibold text-slate-800">{state.status === 'unsupported' ? 'Preview is not available for this file type' : 'Preview could not be generated'}</h3><p className="mt-2 wrap-break-word text-sm text-slate-600">{previewMessage || (allowDownload ? `You can still download the original file (${(entry.size / 1048576).toFixed(2)} MB).` : 'A preview is currently unavailable.')}</p>{allowDownload && <button onClick={onDownload} className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700">Download original file</button>}</div>
           : state.kind === 'pdf' && state.url ? <Suspense fallback={<p role="status" className="m-auto text-sm text-slate-500">Loading PDF viewer…</p>}><PdfFilePreview url={state.url} name={entry.name} allowDownload={allowDownload} /></Suspense>
           : state.kind === 'image' ? <img src={state.url} alt={entry.name} onError={() => setState({ status: 'failed', message: 'This image could not be decoded. You can still download the original file.' })} className="m-auto max-h-full max-w-full object-contain" />
-          : state.kind === 'video' ? <video ref={videoRef} src={state.url} controls playsInline controlsList={allowDownload ? undefined : 'nodownload'} onError={() => setState({ status: 'failed', message: 'This video cannot be played by your browser. You can still download the original file.' })} className="m-auto max-h-full max-w-full" />
+          : state.kind === 'video' ? <video ref={videoRef} src={state.url} controls={false} playsInline controlsList={allowDownload ? 'nofullscreen' : 'nodownload nofullscreen'} onError={() => setState({ status: 'failed', message: 'This video cannot be played by your browser. You can still download the original file.' })} className="managed-video m-auto max-h-full max-w-full object-contain" />
           : state.kind === 'csv' && state.csv ? <><p className="mb-2 shrink-0 text-xs text-slate-500">{state.csv.truncated ? 'Showing up to 200 rows, 50 columns and 2,000 characters per cell.' + (allowDownload ? ' Download the original for all data.' : '') : `${state.csv.rows.length} rows · Read-only table`}</p><div className="min-h-0 overflow-auto rounded-lg border border-slate-200 bg-white"><table className="w-full border-collapse text-left text-sm text-slate-800"><tbody>{state.csv.rows.map((row, index) => <tr key={index} className={index % 2 ? 'bg-slate-50' : ''}>{row.map((cell, column) => <td key={column} className="min-w-[100px] max-w-xs whitespace-pre-wrap wrap-break-word border border-slate-100 px-3 py-2 align-top">{cell}</td>)}</tr>)}</tbody></table></div></>
           : <pre className="min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word rounded-xl bg-white p-4 font-mono text-sm text-slate-800">{state.text || '(Empty file)'}</pre>}
       </div>
+      {state.status === 'ready' && state.kind === 'video' && <VideoPresentationControls videoRef={videoRef} surfaceRef={surfaceRef} source={state.url} closing={closing} />}
       {state.status === 'ready' && state.kind === 'pdf' && <p className="shrink-0 border-t border-slate-100 px-4 py-2 text-xs text-slate-500">Scroll through pages or use the PDF controls.{filePreviewKind(entry) === 'office' ? ' Office previews show up to 200 pages.' : ''}</p>}
     </section>
   </TaskModal>;

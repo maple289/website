@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import { exitPlayerFullscreen, isNativeVideoFullscreen, updateNativePresentation, type NativeFullscreenState, type NativeVideo } from '@/lib/videoFullscreen';
+import { exitPlayerFullscreen, exitPlayerPictureInPicture, waitForVideoPresentation, isNativeVideoFullscreen, updateNativePresentation, type NativeFullscreenState, type NativeVideo } from '@/lib/videoFullscreen';
 
 type Lifetime = { controller: AbortController; fullscreen: NativeFullscreenState; closeRequested: boolean };
 
@@ -18,13 +18,21 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
     const video = videoRef.current as NativeVideo | null;
     const { signal } = current.controller;
     try {
+      // An entry already requested by a tap must finish before removing its video.
+      // This waits for that operation only; it never schedules a new mode entry.
+      if (video) await waitForVideoPresentation(video, signal);
+      if (signal.aborted) return;
       video?.pause();
       if (video) await exitPlayerFullscreen(video, rootRef.current, current.fullscreen, signal);
+      if (video) await exitPlayerPictureInPicture(video, current.fullscreen, signal);
       if (signal.aborted) return;
       if (video) { video.removeAttribute('src'); video.load(); }
       callback.current();
-    } catch {
-      if (!signal.aborted) setCloseError('Fullscreen could not be closed automatically. Exit fullscreen using the player controls to return to the gallery.');
+    } catch (error) {
+      if (!signal.aborted) {
+        if (import.meta.env.DEV) console.warn('Video presentation cleanup failed', error);
+        setCloseError('Fullscreen or picture-in-picture could not be closed automatically. Exit the active mode using the player controls to return to the gallery.');
+      }
     } finally {
       if (lifetime.current === current) {
         pending.current = false;
@@ -74,7 +82,8 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
     // AVKit may defer the DOM ended event. Recover only from its actual ended
     // state, never elapsed time or currentTime >= duration; scrubbing stays open.
     const nativeProgress = () => {
-      if (video && !current.closeRequested && isNativeVideoFullscreen(video, current.fullscreen) && video.ended) recoverCompletion();
+      if (video && !current.closeRequested && video.ended &&
+        (isNativeVideoFullscreen(video, current.fullscreen) || current.fullscreen.mode === 'picture-in-picture' || doc.pictureInPictureElement === video)) recoverCompletion();
     };
     const foreground = () => {
       if (!doc.hidden) {
@@ -86,6 +95,8 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
       ['seeking', seeking], ['seeked', seeked], ['playing', playing], ['ended', ended],
       ['webkitbeginfullscreen', nativeEntered], ['webkitendfullscreen', nativeExited],
       ['webkitpresentationmodechanged', presentationChanged], ['timeupdate', nativeProgress],
+      ['enterpictureinpicture', () => { current.fullscreen.mode = 'picture-in-picture'; }],
+      ['leavepictureinpicture', nativeExited],
     ];
     for (const [name, handler] of events) video?.addEventListener(name, handler);
     doc.addEventListener('fullscreenchange', recoverCompletion);

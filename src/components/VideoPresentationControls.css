@@ -1,0 +1,64 @@
+/* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
+@media (pointer: coarse) {
+  /* iOS volume uses device controls; mute remains available in the player. */
+  .video-volume-slider { display: none; }
+}
+
+.video-fullscreen-surface:fullscreen {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: black;
+}
+.video-fullscreen-surface:-webkit-full-screen {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: black;
+}
+.video-fullscreen-surface:fullscreen .video-playback-area {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+}
+.video-fullscreen-surface:-webkit-full-screen .video-playback-area {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+}
+.video-fullscreen-surface:fullscreen video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.video-fullscreen-surface:-webkit-full-screen video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.video-fullscreen-surface:fullscreen .video-reactions {
+  display: none;
+}
+.video-fullscreen-surface:-webkit-full-screen .video-reactions {
+  display: none;
+}

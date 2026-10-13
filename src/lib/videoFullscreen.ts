@@ -1,16 +1,43 @@
 export type NativeVideo = HTMLVideoElement & {
   webkitDisplayingFullscreen?: boolean;
   webkitPresentationMode?: 'inline' | 'fullscreen' | 'picture-in-picture';
-  webkitSetPresentationMode?: (mode: 'inline') => void;
+  webkitSetPresentationMode?: (mode: 'inline' | 'fullscreen' | 'picture-in-picture') => void;
+  webkitSupportsPresentationMode?: (mode: 'inline' | 'fullscreen' | 'picture-in-picture') => boolean;
+  webkitEnterFullscreen?: () => void;
+  webkitEnterFullScreen?: () => void;
   webkitExitFullscreen?: () => void;
   webkitExitFullScreen?: () => void;
 };
-type FullscreenDocument = Document & {
+export type FullscreenDocument = Document & {
+  webkitFullscreenEnabled?: boolean;
   webkitFullscreenElement?: Element | null;
   webkitExitFullscreen?: () => void | Promise<void>;
   webkitCancelFullScreen?: () => void;
 };
-export type NativeFullscreenState = { mode: 'unknown' | 'fullscreen' | 'inline' };
+export type NativeFullscreenState = { mode: 'unknown' | 'fullscreen' | 'inline' | 'picture-in-picture' };
+
+const pendingPresentation = new WeakMap<HTMLVideoElement, { promise: Promise<void>; settle: () => void }>();
+export function beginVideoPresentation(video: HTMLVideoElement) {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  const operation = { promise, settle: () => {
+    if (pendingPresentation.get(video) === operation) pendingPresentation.delete(video);
+    resolve();
+  } };
+  pendingPresentation.set(video, operation);
+  return operation;
+}
+
+export async function waitForVideoPresentation(video: HTMLVideoElement, signal: AbortSignal) {
+  const operation = pendingPresentation.get(video);
+  if (!operation) return;
+  await new Promise<void>((resolve, reject) => {
+    const aborted = () => reject(new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', aborted, { once: true });
+    if (signal.aborted) { signal.removeEventListener('abort', aborted); aborted(); return; }
+    void operation.promise.then(() => { signal.removeEventListener('abort', aborted); resolve(); });
+  });
+}
 
 export function isNativeVideoFullscreen(video: NativeVideo, state: NativeFullscreenState) {
   // An exit event is authoritative even if WebKit's readonly flags lag behind.
@@ -19,7 +46,41 @@ export function isNativeVideoFullscreen(video: NativeVideo, state: NativeFullscr
 }
 
 export function updateNativePresentation(video: NativeVideo, state: NativeFullscreenState) {
-  if (video.webkitPresentationMode) state.mode = video.webkitPresentationMode === 'fullscreen' ? 'fullscreen' : 'inline';
+  if (video.webkitPresentationMode) state.mode = video.webkitPresentationMode;
+}
+
+export async function exitPlayerPictureInPicture(video: NativeVideo, state: NativeFullscreenState, signal: AbortSignal) {
+  const doc = video.ownerDocument;
+  const active = () => doc.pictureInPictureElement === video || state.mode === 'picture-in-picture' ||
+    (state.mode === 'unknown' && video.webkitPresentationMode === 'picture-in-picture');
+  if (!active()) return;
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: unknown) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      video.removeEventListener('leavepictureinpicture', left);
+      video.removeEventListener('webkitpresentationmodechanged', changed);
+      signal.removeEventListener('abort', aborted);
+      if (error) reject(error); else resolve();
+    };
+    const changed = () => { updateNativePresentation(video, state); if (!active()) finish(); };
+    const left = () => { state.mode = 'inline'; if (!active()) finish(); };
+    const aborted = () => finish(new DOMException('Aborted', 'AbortError'));
+    // Bound cleanup failure; never schedule a new entry or estimate playback end.
+    const timer = setTimeout(() => active() ? finish(new Error('Picture-in-picture did not exit.')) : finish(), 2000);
+    video.addEventListener('leavepictureinpicture', left);
+    video.addEventListener('webkitpresentationmodechanged', changed);
+    signal.addEventListener('abort', aborted, { once: true });
+    if (signal.aborted) { aborted(); return; }
+    try {
+      const exit = doc.pictureInPictureElement === video && doc.exitPictureInPicture
+        ? doc.exitPictureInPicture()
+        : video.webkitSetPresentationMode ? video.webkitSetPresentationMode('inline')
+        : Promise.reject(new Error('Picture-in-picture exit is unavailable.'));
+      void Promise.resolve(exit).then(changed, finish);
+    } catch (error) { finish(error); }
+  });
 }
 
 export async function exitPlayerFullscreen(video: NativeVideo, root: HTMLElement | null, state: NativeFullscreenState, signal: AbortSignal) {
