@@ -8,7 +8,7 @@ import './PdfFilePreview.css';
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
-export function PdfFilePreview({ url, name }: { url: string; name: string }) {
+export function PdfFilePreview({ url, name, allowDownload = true }: { url: string; name: string; allowDownload?: boolean }) {
   const container = useRef<HTMLDivElement>(null), pages = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<PDFViewer | null>(null);
   const [page, setPage] = useState(1), [count, setCount] = useState(0), [zoom, setZoom] = useState(100);
@@ -67,7 +67,7 @@ export function PdfFilePreview({ url, name }: { url: string; name: string }) {
     <div className="relative min-h-0 flex-1">
       <div ref={container} tabIndex={0} aria-label={`PDF pages for ${name}`} className="fp-pdf-scroll absolute inset-0 overflow-auto bg-slate-200/70"><div ref={pages} className="pdfViewer" /></div>
       {loading && <div role="status" className="absolute inset-0 flex items-center justify-center bg-white/90"><LoaderCircle size={28} className="mr-2 animate-spin text-blue-600" />Rendering PDF…</div>}
-      {error && <div role="status" className="absolute inset-0 flex items-center justify-center bg-white p-6 text-center text-sm text-slate-600">{error}</div>}
+      {error && <div role="status" className="absolute inset-0 flex items-center justify-center bg-white p-6 text-center text-sm text-slate-600">{allowDownload ? error : error.replace(/ You can still download[^.]*\./g, '')}</div>}
     </div>
   </div>;
 }

@@ -11,6 +11,14 @@ floating call panel is nonmodal so users can continue browsing.
 
 ## Shared behavior
 
+VideoPlayer and video-file previews close on the media element's natural ended
+event. Seeking directly to the end, pause, buffering and errors do not close
+them. Closing pauses playback and awaits standard/vendor/native Safari fullscreen
+exit before removing the player. Exit failure retains the modal for an explicit
+retry. Unmount removes listeners and releases the media source; the shared modal
+layer restores focus, scrolling and the gallery position. Browser fixtures cover
+desktop, phone and tablet widths, including simulated native fullscreen exits.
+
 TaskModal uses useModalLayer for focus containment, restoring focus, nested
 layer handling, background inertness and body/document scroll locking. Overlay
 clicks/taps never cancel. Escape never dismisses a task dialog. Background file

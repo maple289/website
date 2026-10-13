@@ -13,10 +13,11 @@ const suites = {
   'audit-chunk-recovery': 'upload-test',
   'initial-password-ui': 'upload-test',
   'public-previews': 'public-preview-test',
+  'public-consumption': 'public-preview-test',
 };
 for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(suites)) {
   if (!suites[name]) throw Error('Unknown fixture suite: ' + name);
-  const server = name === 'public-previews' ? await createPublicPreviewServer() : await createServer({ configFile: false, root: process.cwd(), plugins: [react()], envPrefix: [],
+  const server = ['public-previews', 'public-consumption'].includes(name) ? await createPublicPreviewServer() : await createServer({ configFile: false, root: process.cwd(), plugins: [react()], envPrefix: [],
     resolve: { alias: { '@': path.resolve('src') } },
     define: { 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(`https://${suites[name]}.supabase.co`), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('isolated-fixture') },
     server: { host: '127.0.0.1', port: 0 },

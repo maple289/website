@@ -51,8 +51,8 @@ try {
         await trigger.click();
       }
       async function open(name) {
-        await menu(name);
-        await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
+        if (guest) await page.getByText(name, { exact: true }).click();
+        else { await menu(name); await page.getByRole('menuitem', { name: 'Preview', exact: true }).click(); }
         await dialog.waitFor();
       }
       async function close() {
@@ -98,14 +98,15 @@ try {
       await close();
       pass(`${label}: overlay/Escape protected, focus trapped, HTML displayed as text`);
       await open('corrupt.docx'); await dialog.getByText('Preview could not be generated', { exact: true }).waitFor();
-      assert.ok(await dialog.getByRole('button', { name: 'Download original file', exact: true }).last().isVisible()); await close();
+      if (guest) assert.equal(await dialog.getByRole('button', { name: 'Download original file', exact: true }).count(), 0);
+      else assert.ok(await dialog.getByRole('button', { name: 'Download original file', exact: true }).last().isVisible());
+      await close();
       const beforeUnsupported = previewRequests.length;
-      await menu('sample.bin');
-      assert.equal(await page.getByRole('menuitem', { name: 'Preview', exact: true }).count(), 1);
-      await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
-      await dialog.getByText('Preview is not available for this file type', { exact: true }).waitFor();
-      assert.equal(previewRequests.length, beforeUnsupported); await close();
-      pass(`${label}: failed and unsupported files retain Download; unsupported files not fetched`);
+      await page.getByText('sample.bin', { exact: true }).click();
+      if (guest) assert.equal(await dialog.count(), 0);
+      else { await dialog.getByText('Preview is not available for this file type', { exact: true }).waitFor(); await close(); }
+      assert.equal(previewRequests.length, beforeUnsupported);
+      pass(`${label}: anonymous files use direct previews/icon fallback; downloads retained only when signed in; unsupported files not fetched`);
       await open('queued.docx'); await dialog.getByText('Generating preview…', { exact: true }).waitFor(); await close();
       const before = previewRequests.filter(n => n === 'queued.docx').length; await page.waitForTimeout(2200);
       assert.equal(previewRequests.filter(n => n === 'queued.docx').length, before);

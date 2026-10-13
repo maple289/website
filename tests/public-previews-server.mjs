@@ -12,6 +12,7 @@ let pdf='%PDF-1.4\n',offsets=[0];for(let i=0;i<objects.length;i++){offsets.push(
 export async function createPublicPreviewServer() {
 return createServer({configFile:false,root:process.cwd(),plugins:[{name:'preview-fixtures',configureServer(s){s.middlewares.use((req,res,next)=>{
   const u=new URL(req.url,'http://127.0.0.1');
+  if(u.pathname==='/functions/v1/serve-media'){res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');return res.end(JSON.stringify({url:'/tests/fixtures/playback-ended.webm'}));}
   if(u.pathname.startsWith('/storage/v1/object/sign/')){res.setHeader('Cache-Control',u.searchParams.has('fail')?'no-store':'public, max-age=3600');res.statusCode=u.searchParams.has('fail')?403:200;res.setHeader('Content-Type',u.searchParams.has('fail')?'application/json':'image/png');return res.end(u.searchParams.has('fail')?'{}':png);}
   if(u.pathname==='/functions/v1/serve-public-file'){res.setHeader('Content-Type','application/octet-stream');res.setHeader('Cache-Control','no-store');return res.end(png);}
   if(u.pathname==='/functions/v1/file-preview'){res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',u.searchParams.has('content')?'application/pdf':'application/json');return res.end(u.searchParams.has('content')?pdf:JSON.stringify({status:'available',kind:'pdf',mime:'application/pdf'}));}

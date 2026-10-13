@@ -14,8 +14,9 @@ export function ContentContextMenu({ name, actions, className = '', anchor, onCl
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
-  const visible = open || !!anchor;
+  const visible = actions.length > 0 && (open || !!anchor);
   const close = () => { setOpen(false); onClose?.(); };
+  useEffect(() => { if (!actions.length) setOpen(false); }, [actions.length]);
   useLayoutEffect(() => {
     if (!visible || !panel.current) return;
     const place = () => {
@@ -49,6 +50,7 @@ export function ContentContextMenu({ name, actions, className = '', anchor, onCl
     document.addEventListener('pointerdown', dismiss);
     return () => { document.removeEventListener('pointerdown', dismiss); };
   }, [visible, onClose]);
+  if (!actions.length) return null;
   return <>
     {!anchor && <button ref={trigger} type="button" className={`content-menu-trigger ${className}`} aria-label={`Actions for ${name}`} aria-haspopup="menu" aria-expanded={visible} aria-controls={visible ? id : undefined}
       onClick={event => { event.stopPropagation(); setOpen(value => !value); }} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); } }}><MoreVertical size={18} /></button>}

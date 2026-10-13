@@ -59,18 +59,19 @@ export function MediaContentMenu({ kind, item, onPreview, onEdit, onDelete, onCh
       details: kind === 'video' ? 'The video, stored versions, preview and reactions will be permanently deleted.' : 'The photo, preview, thumbnail and reactions will be permanently deleted.',
       onConfirm: async () => { await deleteMedia(kind, item, user!.id); changed(); } });
   };
-  const actions: ContentAction[] = [{ id: 'preview', label: kind === 'video' ? 'Play' : 'Preview', icon: <Eye size={16} />, disabled: !ready || busy, run: onPreview }];
+  const actions: ContentAction[] = ready ? [{ id: 'preview', label: kind === 'video' ? 'Play' : 'Preview', icon: <Eye size={16} />, disabled: busy, run: onPreview }] : [];
   if (owned) actions.push(
     { id: 'edit', label: 'Edit', icon: <Pencil size={16} />, disabled: busy, run: () => onEdit ? onEdit() : setDialog('edit') },
     { id: 'rename', label: 'Rename', icon: <Pencil size={16} />, disabled: busy, run: () => setDialog('rename') },
     { id: 'share', label: 'Share', icon: <Share2 size={16} />, disabled: busy, run: () => setDialog('share') },
-    { id: 'temporary', label: 'Create 24-hour share link', icon: <Link size={16} />, disabled: !ready || busy, run: () => setDialog('temporary') },
     { id: 'visibility', label: item.visibility === 'public' ? 'Make private' : 'Make public', icon: item.visibility === 'public' ? <Lock size={16} /> : <Globe size={16} />, disabled: busy, run: () => {
       if (item.visibility === 'public') void requestDelete({ title: 'Remove public access', message: `Make "${item.file_name}" private?`, details: 'This item will leave the public library. Temporary links remain valid until revoked or expired.', confirmLabel: 'Make private', onConfirm: visibility });
       else void run(visibility);
     } });
-  actions.push({ id: 'download', label: 'Download', icon: <Download size={16} />, disabled: !ready || busy, run: () => void run(download) });
+  if (owned && ready) actions.push({ id: 'temporary', label: 'Create 24-hour share link', icon: <Link size={16} />, disabled: busy, run: () => setDialog('temporary') });
+  if (ready) actions.push({ id: 'download', label: 'Download', icon: <Download size={16} />, disabled: busy, run: () => void run(download) });
   if (owned) actions.push({ id: 'delete', label: 'Delete', icon: <Trash2 size={16} />, danger: true, disabled: busy, run: remove });
+  if (!user) return null;
   return <>
     <ContentContextMenu name={item.file_name} actions={actions} className="content-menu-card" />
     {error && <TaskModal aria-label="Content action failed" className="fixed inset-0 z-80 flex items-center justify-center bg-slate-950/50 p-4"><div className="content-task-panel"><h2>Action failed</h2><p role="alert">{error}</p><button onClick={() => setError('')}>Close</button></div></TaskModal>}

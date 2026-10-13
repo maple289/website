@@ -1,11 +1,13 @@
 import { TaskModal } from '@/components/TaskModal';
 import { MediaReactions } from './MediaReactions';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { AuthContext } from '@/context/AuthContext';
 import { Loader2, Play, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { getPlayableUrl } from '@/lib/types';
 import { useVideoVolume } from '@/hooks/useVideoVolume';
+import { useVideoCompletion } from '@/hooks/useVideoCompletion';
 import { analyticsRequestId, recordMediaView } from '@/lib/analytics';
 
 type VideoPlayerProps = {
@@ -14,14 +16,17 @@ type VideoPlayerProps = {
 };
 
 export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
+  const user = useContext(AuthContext)?.user;
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
   const [attempt, setAttempt] = useState(0);
   const viewEvent = useRef({ id: video.id, requestId: analyticsRequestId(), sent: false });
 
   useVideoVolume(videoRef, url);
+  const { close, closing, closeError } = useVideoCompletion(videoRef, playerRef, url, onClose);
 
   useEffect(() => {
     let active = true;
@@ -55,13 +60,14 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
 
 
   return (
-    <TaskModal aria-label="Video player" className="fixed inset-0 z-70 flex items-center justify-center p-4">
+    <TaskModal ref={playerRef} aria-label="Video player" className="fixed inset-0 z-70 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div className="video-player-surface relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border bg-[#0a0a0a] shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4">
           <h3 className="truncate text-base font-semibold tracking-[-0.02em]">{video.file_name}</h3>
-          <button aria-label="Close video player" onClick={onClose} className="min-h-11 min-w-11 shrink-0 rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={20} /></button>
+          <button aria-label="Close video player" disabled={closing} onClick={() => void close()} className="min-h-11 min-w-11 shrink-0 rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={20} /></button>
         </div>
+        {closeError && <p role="alert" className="px-5 py-2 text-sm text-amber-300">{closeError}</p>}
         <div className="aspect-video w-full bg-black">
           {loading ? (
             <div className="flex h-full items-center justify-center"><Loader2 size={32} className="animate-spin text-blue-400" /></div>
@@ -72,7 +78,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
               <button onClick={() => setAttempt(value => value + 1)} className="min-h-11 rounded-xl border border-slate-600 px-5 text-sm text-white">Retry</button>
             </div>
           ) : (
-            <video ref={videoRef} src={url ?? undefined} controls autoPlay className="h-full w-full" onPlaying={() => {
+            <video ref={videoRef} src={url ?? undefined} controls playsInline controlsList={user ? undefined : 'nodownload'} autoPlay className="h-full w-full" onPlaying={() => {
               if (viewEvent.current.id !== video.id) viewEvent.current = { id: video.id, requestId: analyticsRequestId(), sent: false };
               if (!viewEvent.current.sent) { viewEvent.current.sent = true; recordMediaView('video', video.id, viewEvent.current.requestId); }
             }} />

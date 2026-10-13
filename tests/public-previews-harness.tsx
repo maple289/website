@@ -16,11 +16,13 @@ import '@/components/FluentTheme.css';
 
 const owner='11111111-1111-4111-8111-111111111111';
 const person={id:owner,email:'preview-fixture@example.test'} as User;
+const consumption = new URLSearchParams(location.search).has('consumption');
 let session:Session|null=null, failed=false, nonce=0;
 const video={id:'22222222-2222-4222-8222-222222222222',owner_id:owner,file_name:'Public video',visibility:'public',preview_path:`${owner}/video-previews/poster.webp`,processing_status:'ready',file_size:1024,created_at:new Date().toISOString(),duration_seconds:12} as Video;
 const photo={id:'33333333-3333-4333-8333-333333333333',owner_id:owner,file_name:'Public photo',visibility:'public',storage_path:`${owner}/photos/original.png`,preview_path:`${owner}/photos/preview.webp`,thumbnail_path:`${owner}/photos/thumbnail.webp`,file_size:100,created_at:new Date().toISOString()} as Photo;
 const files=[{id:'44444444-4444-4444-8444-444444444444',name:'public-image.png',path:'public-image.png',isFolder:false,size:100,mimeType:'image/png',updatedAt:'2026-10-13',favorite:false,trashedAt:null},
-  {id:'55555555-5555-4555-8555-555555555555',name:'public-document.docx',path:'public-document.docx',isFolder:false,size:100,mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',updatedAt:'2026-10-13',favorite:false,trashedAt:null}];
+  {id:'55555555-5555-4555-8555-555555555555',name:'public-document.docx',path:'public-document.docx',isFolder:false,size:100,mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',updatedAt:'2026-10-13',favorite:false,trashedAt:null},
+  {id:'66666666-6666-4666-8666-666666666666',name:'public-archive.zip',path:'public-archive.zip',isFolder:false,size:100,mimeType:'application/zip',updatedAt:'2026-10-13',favorite:false,trashedAt:null}];
 supabase.auth.getSession=async()=>({data:{session},error:null});
 const originalFetch=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
@@ -28,7 +30,7 @@ window.fetch=async(input,init)=>{
   if(url.pathname.startsWith('/rest/v1/')){
     let value:unknown=[];
     if(url.pathname.endsWith('/get_storage_base_path'))value='';
-    if(url.pathname.endsWith('/videos'))value=[{...video}];
+    if(url.pathname.endsWith('/videos'))value=[{...video}, ...(consumption ? [{...video,id:'77777777-7777-4777-8777-777777777777',owner_id:'another-owner',file_name:'Another public video'}, {...video,id:'88888888-8888-4888-8888-888888888888',owner_id:'another-owner',file_name:'Processing public video',processing_status:'processing'}] : [])];
     if(url.pathname.endsWith('/photos'))value=url.searchParams.has('owner_id')?(session?[{...photo,file_name:'Owned photo',visibility:'private'}]:[]):[{...photo}];
     if(url.pathname.endsWith('/list_public_user_files'))value=files;
     if(url.pathname.endsWith('/get_media_reactions'))value=[];
@@ -45,12 +47,13 @@ function Harness(){
   const [signedIn,setSignedIn]=useState(false),[route,setRoute]=useState(()=>location.hash.startsWith('#/public-files')?'files':location.hash.startsWith('#/public-photos')?'photos':'videos'),[search,setSearch]=useState('');
   const change=(signed:boolean)=>{session=signed?{user:person,access_token:'fixture-token-'+Date.now()} as Session:null;setSignedIn(signed);};
   const auth={session,user:signedIn?person:null,loading:false,configured:true,passwordSetup:null,signIn:okay,signUp:okay,signOut:async()=>change(false),requestRegistration:okay,completeInitialPassword:okay,cancelPasswordSetup:()=>{}};
-  return <div className="fluent-app"><AuthContext.Provider value={auth}><DeleteConfirmationProvider><ReactionProvider><nav style={{display:'flex',gap:12,padding:16,flexWrap:'wrap'}}>
+  return <div className="fluent-app media-page"><AuthContext.Provider value={auth}><DeleteConfirmationProvider><ReactionProvider><nav style={{display:'flex',gap:12,padding:16,flexWrap:'wrap'}}>
     <button onClick={()=>change(!signedIn)}>{signedIn?'Fixture sign out':'Fixture sign in'}</button>
     {['videos','photos','files','owned'].map(r=><button key={r} onClick={()=>{setRoute(r);window.location.hash=r==='files'?'#/public-files':r==='photos'?'#/public-photos':'#/public-videos';}}>{r}</button>)}
     <button onClick={()=>{failed=true;video.preview_path=`${owner}/video-previews/retry-${Date.now()}.webp`;window.dispatchEvent(new CustomEvent('media-uploaded',{detail:'video'}));}}>Simulate failed video image</button>
     <output>{signedIn?'Authenticated fixture':'Anonymous fixture'}</output>
   </nav>
+  {consumption && <div style={{height:500}} aria-hidden="true"/>}
   {route==='videos'||route==='photos'?<HomePage tab={route} searchTerm=""/>:route==='files'?<FileManager publicOnly searchTerm={search} onSearchTermChange={setSearch}/>:signedIn?<PhotoLibrary searchTerm=""/>:<p>Private content hidden</p>}
   </ReactionProvider></DeleteConfirmationProvider></AuthContext.Provider></div>;
 }

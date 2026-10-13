@@ -100,7 +100,7 @@ try {
     pass(`${width}px: secure URL displayed, revoke confirmed, task dialog ignores Escape`);
     await page.getByRole('button', { name: 'Actions for note.txt', exact: true }).click();
     const panel = await menu.boundingBox(); assert.ok(panel.y >= 0 && panel.y + panel.height <= 900);
-    assert.equal(await menu.getByRole('menuitem', { name: 'Paste here' }).isEnabled(), false);
+    assert.equal(await menu.getByRole('menuitem', { name: 'Paste here' }).count(), 0);
     await menu.getByRole('menuitem', { name: 'Copy', exact: true }).click();
     assert.equal(await menu.count(), 0); assert.ok(objects.has(owner + '/note.txt'));
     await page.getByRole('button', { name: 'Paste', exact: true }).click();
