@@ -14,8 +14,8 @@ export function registrationTemplate(kind: "receipt" | "approved", firstName?: s
   const greeting = firstName?.trim() ? `Hello ${firstName.trim()},` : "Hello,";
   const paragraphs = approved ? [
     `Your registration request for ${siteName} has been approved. Your account is now active.`,
-    "For your first login, enter the email address you registered with and leave the password field blank. The website will immediately ask you to create and confirm your password before you can continue.",
-    "After setting your password, use your email and new password for future logins. Blank-password login will no longer work.",
+    "For your first login, enter your registered email and the temporary password included below in the normal sign-in form. It is valid for one hour. The website will ask you to create and confirm your permanent password before you can continue.",
+    "After setting your password, use your email and permanent password for future logins. If the temporary password expires, choose Request temporary password on the sign-in screen.",
   ] : [
     `We have successfully received your registration request for ${siteName}. Your account is pending administrator approval.`,
     "We will send you another notification once an administrator approves your request. You do not need to submit another registration request.",

@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { sendEmail, escapeHtml } from "../_shared/email.ts";
+import { sendEmail } from "../_shared/email.ts";
 import { readSmallJson, InputError } from "../_shared/http-input.ts";
+import { temporaryPassword, passwordHash, appendTemporaryPassword } from "../_shared/temporary-password.ts";
 
 const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Apikey, X-Client-Info", "Cache-Control": "no-store" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
@@ -27,6 +28,12 @@ Deno.serve(async (req: Request) => {
       const { data: accountId, error: claimError } = await service.rpc("claim_initial_password", { p_token_hash: tokenHash });
       if (claimError) return json({ error: "Password setup is temporarily unavailable." }, 503);
       if (!accountId) return json({ error: "Password setup has expired or was already completed. Sign in again." }, 401);
+      const { data: pending, error: pendingError } = await service.from('account_activation').select('temporary_password_hash').eq('user_id', accountId).single();
+      if (pendingError || !pending) return json({ error: 'Password setup is temporarily unavailable.' }, 503);
+      if (pending.temporary_password_hash === await passwordHash(body.new_password)) {
+        await service.rpc('release_initial_password', { p_token_hash: tokenHash });
+        return json({ error: 'Choose a permanent password different from your temporary password.' }, 400);
+      }
       // Account ID comes ONLY from the server-side capability. Browser-supplied
       // user IDs, roles and emails are deliberately never forwarded.
       const { error: updateError } = await service.auth.admin.updateUserById(accountId, { password: body.new_password });
@@ -44,23 +51,32 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, must_change_password: false });
     }
 
-    if (body.action !== "login" || typeof body.identifier !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.identifier.trim()) || body.identifier.length > 254 || typeof body.password !== "string" || body.password.length > 1024) return json({ error: "Enter your email and password." }, 400);
+    if (!['login','request-temporary-password'].includes(String(body.action)) || typeof body.identifier !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.identifier.trim()) || body.identifier.length > 254) return json({ error: "Enter your email and password." }, 400);
     const identifier = body.identifier.trim().toLowerCase();
-    if (body.password === "") {
+    if (body.action === 'request-temporary-password') {
       const { data: budget, error: budgetError } = await service.rpc("claim_public_request", { p_bucket: "initial-password", p_seconds: 3600, p_limit: 100 });
       if (budgetError) return json({ error: "Sign-in is temporarily unavailable." }, 503);
       if (!budget) return json({ error: "Too many setup requests. Please try again later." }, 429);
-      const token = hex(crypto.getRandomValues(new Uint8Array(32)));
-      const { data: allowed, error } = await service.rpc("issue_initial_password_email", { p_identifier: identifier, p_token_hash: await hash(token) });
+      const password = temporaryPassword();
+      const { data: issued, error } = await service.rpc('issue_initial_temporary_password', { p_identifier: identifier, p_password_hash: await passwordHash(password), p_delivery_id: null });
       if (error) return json({ error: "Sign-in is temporarily unavailable." }, 503);
-      if (!allowed) return json({ error: "Unable to sign in. Check your credentials and approval status." }, 401);
-      // This capability leaves the server ONLY through the approved mailbox.
-      const delivered = await sendEmail({ to: identifier, subject: "Verify your MyHostage account",
-        html: `<p>Paste this code into MyHostage to create your first password:</p><pre>${escapeHtml(token)}</pre><p>It expires in 15 minutes. If you did not request it, ignore this email.</p>`,
-        text: `Paste this code into MyHostage to create your first password:\n${token}\n\nIt expires in 15 minutes. If you did not request it, ignore this email.`,
-        operation: "initial_password_verification", key: `initial-password/${await hash(token)}` });
-      if (!delivered.accepted) return json({ error: "The verification email could not be sent. Wait one minute and try again, or contact an administrator." }, 503);
-      return json({ requires_password_setup: true, email_verification_required: true, expires_in: 900 });
+      if (issued?.expires_at) {
+        const content = appendTemporaryPassword('<p>Your replacement first-login password is below.</p>', 'Your replacement first-login password is below.', password, issued.expires_at);
+        const delivered = await sendEmail({ to: identifier, subject: 'Your MyHostage temporary password', ...content,
+          operation: 'initial_temporary_password', key: `initial-password/${await passwordHash(password)}`, sensitiveValues: [password] });
+        if (!delivered.accepted) return json({ error: 'The email could not be sent. Wait one minute and try again, or contact an administrator.' }, 503);
+      }
+      // Do not reveal whether an address belongs to an approved/pending account.
+      return json({ success: true });
+    }
+    if (typeof body.password !== 'string' || !body.password || body.password.length > 1024) return json({ error: 'Enter your email and password.' }, 400);
+    if (/^[A-Za-z0-9_-]{12}$/.test(body.password)) {
+      const setup = hex(crypto.getRandomValues(new Uint8Array(32)));
+      const { data: seconds, error } = await service.rpc('redeem_initial_temporary_password', {
+        p_identifier: identifier, p_password_hash: await passwordHash(body.password), p_setup_hash: await hash(setup),
+      });
+      if (error) return json({ error: 'Sign-in is temporarily unavailable.' }, 503);
+      if (seconds > 0) return json({ requires_password_setup: true, setup_token: setup, expires_in: seconds });
     }
     const { data: email, error } = await service.rpc("resolve_login_email", { p_identifier: identifier });
     if (error) return json({ error: "Sign-in is temporarily unavailable." }, 503);

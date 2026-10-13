@@ -87,3 +87,14 @@ Scoped message deletion, Clear Messages and Delete Chat use the same confirmatio
 provider with explicit radio choices and a scope-labelled confirmation button.
 Choosing a scope alone does not mutate data. Cancel/outside/Escape/pending behavior,
 focus containment and scroll locking remain in the existing shared modal layer.
+
+
+## First-login temporary password
+
+The normal AuthModal retains TaskModal and guarded close. Request temporary
+password uses the same synchronous pending guard and disables form actions.
+The initial-password page now contains only New Password and Confirm New
+Password; Return to sign in protects both draft fields and Keep Editing retains
+them. A synchronous guard prevents duplicate saves. Browser fixtures cover
+desktop, tablet, portrait and landscape, draft preservation, expiration errors,
+resend and completion; no live applicant emails are sent by tests.

@@ -92,7 +92,6 @@ Deno.serve(async (req: Request) => {
       // activation record. Retries never recreate an account or lose the email
       // recipient when the pending request has already been removed.
       const notify = async () => {
-        if (!customerEmailsEnabled()) return;
         try {
           const mail = registrationTemplate("approved", account.first_name);
           await deliverEmail(adminClient, registrationId, "registration_approved", account.email, mail.subject, mail.html, mail.text);

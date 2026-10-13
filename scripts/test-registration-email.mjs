@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 const { PGlite } = await import(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
-const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>'], ['CUSTOMER_EMAILS_ENABLED', 'true'], ['SITE_URL', 'https://myhostage.ca/video/'], ['SITE_NAME', 'Streamly']]);
+const env = new Map([['RESEND_API_KEY', 're_test_secret_not_real'], ['RESEND_FROM_EMAIL', 'Streamly <mail@example.test>'], ['CUSTOMER_EMAILS_ENABLED', 'true'], ['SITE_URL', 'https://myhostage.ca/video/'], ['SITE_NAME', 'Streamly'], ['SUPABASE_SERVICE_ROLE_KEY','fixture-service-key']]);
 const logs = [], sent = [];
 const originalLog = console.log, originalInfo = console.info, originalError = console.error, originalWarn = console.warn;
 console.info = console.error = console.warn = (...args) => logs.push(args.join(' '));
@@ -61,7 +61,19 @@ const client = {
     };
     return builder;
   },
-  async rpc(name, args = {}) { if (name === 'claim_public_request') return {data:true,error:null}; if (name === 'is_admin') return {data: callerId === adminId,error:null}; try { const { rows } = await db.query(`SELECT ${name}($1) AS result`, [args.delivery_id ?? args.p_registration_id ?? args.p_email]); return { data: rows[0].result, error: null }; } catch (error) { return { data: null, error }; } },
+  async rpc(name, args = {}) {
+    if (name === 'claim_public_request') return {data:true,error:null};
+    if (name === 'issue_initial_temporary_password') {
+      const row=(await db.query('SELECT * FROM account_activation WHERE email=$1',[args.p_identifier])).rows[0];
+      if (!row) return {data:null,error:null};
+      if (!row.temporary_password_hash) await db.query("UPDATE account_activation SET temporary_password_hash=$1,temporary_password_expires_at=now()+interval '1 hour' WHERE email=$2",[args.p_password_hash,args.p_identifier]);
+      const current=(await db.query('SELECT temporary_password_expires_at FROM account_activation WHERE email=$1',[args.p_identifier])).rows[0];
+      return {data:{expires_at:current.temporary_password_expires_at.toISOString()},error:null};
+    }
+    if (name === 'is_admin') return {data:callerId===adminId,error:null};
+    try { const {rows}=await db.query(`SELECT ${name}($1) AS result`,[args.delivery_id??args.p_registration_id??args.p_email]);return {data:rows[0].result,error:null}; }
+    catch(error){return {data:null,error};}
+  },
 };
 globalThis.__emailTestClient = client;
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString('base64');
@@ -76,7 +88,7 @@ try {
   await db.exec(await readFile(new URL('../supabase/migrations/20260924050000_registration_email_delivery.sql', import.meta.url), 'utf8'));
   await db.exec(`ALTER TABLE registration_email_deliveries DROP CONSTRAINT registration_email_deliveries_registration_id_fkey;
     ALTER TABLE registration_email_deliveries ADD COLUMN plain_text text; ALTER TABLE registration_email_deliveries ADD COLUMN sender text;
-    CREATE TABLE account_activation(registration_id uuid UNIQUE,user_id uuid, email text,first_name text,must_change_password boolean DEFAULT true);
+    CREATE TABLE account_activation(registration_id uuid UNIQUE,user_id uuid, email text,first_name text,must_change_password boolean DEFAULT true,temporary_password_hash text,temporary_password_expires_at timestamptz);
     CREATE FUNCTION approve_pending_account(request_id uuid) RETURNS jsonb LANGUAGE plpgsql AS $$
     DECLARE r pending_registrations%ROWTYPE; a account_activation%ROWTYPE;
     BEGIN
@@ -91,7 +103,8 @@ try {
       DELETE FROM pending_registrations WHERE id=r.id; RETURN to_jsonb(a);
     END; $$;`);
   const inputUrl = moduleUrl(await readFile(new URL('../supabase/functions/_shared/http-input.ts', import.meta.url), 'utf8'));
-  const sharedUrl = moduleUrl(await readFile(new URL('../supabase/functions/_shared/email.ts', import.meta.url), 'utf8'));
+  const temporaryUrl = moduleUrl(await readFile(new URL('../supabase/functions/_shared/temporary-password.ts', import.meta.url), 'utf8'));
+  const sharedUrl = moduleUrl((await readFile(new URL('../supabase/functions/_shared/email.ts', import.meta.url), 'utf8')).replace('"./temporary-password.ts"', JSON.stringify(temporaryUrl)));
   const shared = await import(sharedUrl);
   const templatesUrl = moduleUrl((await readFile(new URL('../supabase/functions/_shared/registration-templates.ts', import.meta.url), 'utf8')).replace('"./email.ts"', JSON.stringify(sharedUrl)));
   let endpoint = await readFile(new URL('../supabase/functions/notify-admin-registration/index.ts', import.meta.url), 'utf8');
@@ -189,7 +202,11 @@ try {
   check(sent.length - beforeApproval, 1, 'approval sends one customer email');
   check(sent.at(-1).body.from, 'MyHostage <noreply@myhostage.ca>', 'sender name and domain address are independently configurable');
   check(sent.at(-1).body.subject, 'Your Account Has Been Approved', 'approval uses requested subject');
-  check(sent.at(-1).body.text.includes('https://myhostage.ca/video/#/login') && sent.at(-1).body.text.includes('leave the password field blank'), true, 'approval has direct login link and accurate initial setup instructions');
+  check(sent.at(-1).body.text.includes('https://myhostage.ca/video/#/login') && sent.at(-1).body.text.includes('normal sign-in form') && /Temporary password: [A-Za-z0-9_-]{12}\n/.test(sent.at(-1).body.text), true, 'approval has direct login link and accurate initial setup instructions');
+  const credential=sent.at(-1).body.text.match(/Temporary password: ([A-Za-z0-9_-]{12})/)[1];
+  const approvalLedger=(await db.query("SELECT html,plain_text FROM registration_email_deliveries WHERE registration_id=$1 AND operation='registration_approved'",[registrationId])).rows[0];
+  check(approvalLedger.html.includes(credential)||approvalLedger.plain_text.includes(credential),false,'approval credential is not persisted in email bodies');
+  check((await db.query('SELECT temporary_password_hash FROM account_activation WHERE registration_id=$1',[registrationId])).rows[0].temporary_password_hash===credential,false,'only the approval credential hash is saved');
   check((await db.query('SELECT count(*)::int AS n FROM pending_registrations WHERE id=$1', [registrationId])).rows[0].n, 0, 'approved pending row removed');
   check((await approve(registrationId)).status, 200, 'approval retry succeeds after pending row removal');
   check(sent.length, beforeApproval + 1, 'approval retry does not duplicate email');

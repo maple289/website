@@ -10,6 +10,7 @@ const suites = {
   'settings-navigation': 'settings-test', 'file-previews': 'preview-test',
   'file-integrity': 'upload-test', 'video-bitrate-settings-browser': 'upload-test',
   'audit-chunk-recovery': 'upload-test',
+  'initial-password-ui': 'upload-test',
 };
 for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(suites)) {
   if (!suites[name]) throw Error('Unknown fixture suite: ' + name);
