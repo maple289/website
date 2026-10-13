@@ -68,9 +68,12 @@ SELECT json_build_object(
  'active_administrators',(SELECT count(*) FROM public.profiles WHERE role='admin' AND public.active_account(id)),
  'account_guard_on_storage',(SELECT count(*)=1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='active_account_required'),
  'rest_account_hook',(SELECT EXISTS(SELECT 1 FROM pg_db_role_setting s,unnest(s.setconfig) setting WHERE s.setrole='authenticator'::regrole AND setting='pgrst.db_pre_request=public.enforce_active_account')),
+ 'temporary_password_issuer_installed',(SELECT to_regprocedure('public.issue_initial_temporary_password(text,text,uuid)') IS NOT NULL),
+ 'temporary_password_service_only',(SELECT NOT has_function_privilege('anon','public.issue_initial_temporary_password(text,text,uuid)','EXECUTE') AND NOT has_function_privilege('authenticated','public.issue_initial_temporary_password(text,text,uuid)','EXECUTE')),
  'new_migrations_recorded',(SELECT count(*) FROM streamly_internal.schema_migrations WHERE version IN (
   '20261012010000_account_security_boundaries.sql','20261012020000_guard_storage_prefix_changes.sql',
-  '20261012030000_reauthorized_video_playback.sql','20261012040000_durable_file_transfers.sql')));
+  '20261012030000_reauthorized_video_playback.sql','20261012040000_durable_file_transfers.sql',
+  '20261012050000_initial_temporary_password.sql')));
 COMMIT;'''
 code, output = capture(['docker', 'exec', '-i', 'supabase-db', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-qAt'], query)
 try:
