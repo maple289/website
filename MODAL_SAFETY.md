@@ -18,6 +18,13 @@ exit before removing the player. Exit failure retains the modal for an explicit
 retry. Unmount removes listeners and releases the media source; the shared modal
 layer restores focus, scrolling and the gallery position. Browser fixtures cover
 desktop, phone and tablet widths, including simulated native fullscreen exits.
+The iPhone completion follow-up tracks native begin/end and presentation-mode
+events, tries inline presentation and legacy API aliases, and accepts native exit
+events when readonly fullscreen flags lag. Actual ended events remain the primary
+completion signal; native time/fullscreen/foreground events recover only an actual
+ended state or an already requested close, never a duration threshold. A delayed
+fullscreen exit completes the retained close request automatically. Manual exits,
+pause, buffering and direct seeks without natural completion leave the modal open.
 
 TaskModal uses useModalLayer for focus containment, restoring focus, nested
 layer handling, background inertness and body/document scroll locking. Overlay

@@ -1,93 +1,104 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { exitPlayerFullscreen, isNativeVideoFullscreen, updateNativePresentation, type NativeFullscreenState, type NativeVideo } from '@/lib/videoFullscreen';
 
-type NativeVideo = HTMLVideoElement & { webkitDisplayingFullscreen?: boolean; webkitExitFullscreen?: () => void };
-type FullscreenDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void | Promise<void> };
-
-// Wait for native Safari's asynchronous exit as well as the standard API. The
-// timeout only bounds fullscreen cleanup; playback completion never uses a timer.
-async function exitPlayerFullscreen(video: NativeVideo, root: HTMLElement | null, signal: AbortSignal) {
-  const doc = video.ownerDocument as FullscreenDocument;
-  const element = () => doc.fullscreenElement ?? doc.webkitFullscreenElement;
-  const ownsFullscreen = () => !!element() && (!!root?.contains(element()!) || !!element()?.contains(video));
-  const active = () => ownsFullscreen() || !!video.webkitDisplayingFullscreen;
-  if (!active()) return;
-  await new Promise<void>((resolve, reject) => {
-    const finish = (error?: Error) => {
-      clearTimeout(timer);
-      doc.removeEventListener('fullscreenchange', changed);
-      doc.removeEventListener('webkitfullscreenchange', changed);
-      video.removeEventListener('webkitendfullscreen', changed);
-      signal.removeEventListener('abort', aborted);
-      if (error) reject(error); else resolve();
-    };
-    const changed = () => { if (!active()) finish(); };
-    const aborted = () => finish(new DOMException('Aborted', 'AbortError'));
-    const timer = window.setTimeout(() => active() ? finish(new Error('Fullscreen did not exit.')) : finish(), 2000);
-    doc.addEventListener('fullscreenchange', changed);
-    doc.addEventListener('webkitfullscreenchange', changed);
-    video.addEventListener('webkitendfullscreen', changed);
-    signal.addEventListener('abort', aborted, { once: true });
-    try {
-      if (signal.aborted) { aborted(); return; }
-      const exits: Promise<unknown>[] = [];
-      if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) video.webkitExitFullscreen();
-      if (ownsFullscreen()) {
-        const exit = doc.exitFullscreen ?? doc.webkitExitFullscreen;
-        if (!exit) throw new Error('Fullscreen exit is unavailable.');
-        exits.push(Promise.resolve(exit.call(doc)));
-      }
-      void Promise.all(exits).then(changed, finish);
-    } catch (error) { finish(error instanceof Error ? error : new Error('Fullscreen did not exit.')); }
-  });
-}
+type Lifetime = { controller: AbortController; fullscreen: NativeFullscreenState; closeRequested: boolean };
 
 export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRef: RefObject<HTMLElement>, source: string | null | undefined, onClose: () => void) {
   const callback = useRef(onClose);
   callback.current = onClose;
-  const lifetime = useRef<AbortController | null>(null);
+  const lifetime = useRef<Lifetime | null>(null);
   const pending = useRef(false);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState('');
   const close = useCallback(async () => {
-    if (pending.current || lifetime.current?.signal.aborted) return;
+    const current = lifetime.current;
+    if (!current || pending.current || current.controller.signal.aborted) return;
+    current.closeRequested = true;
     pending.current = true; setClosing(true); setCloseError('');
-    const video = videoRef.current;
-    const signal = lifetime.current?.signal;
+    const video = videoRef.current as NativeVideo | null;
+    const { signal } = current.controller;
     try {
       video?.pause();
-      if (video && signal) await exitPlayerFullscreen(video, rootRef.current, signal);
-      if (signal?.aborted) return;
+      if (video) await exitPlayerFullscreen(video, rootRef.current, current.fullscreen, signal);
+      if (signal.aborted) return;
       if (video) { video.removeAttribute('src'); video.load(); }
       callback.current();
     } catch {
-      if (!signal?.aborted) setCloseError('Exit fullscreen using the player controls, then close the video.');
+      if (!signal.aborted) setCloseError('Fullscreen could not be closed automatically. Exit fullscreen using the player controls to return to the gallery.');
     } finally {
-      if (lifetime.current?.signal === signal) {
+      if (lifetime.current === current) {
         pending.current = false;
-        if (!signal?.aborted) setClosing(false);
+        if (!signal.aborted) setClosing(false);
       }
     }
   }, [videoRef, rootRef]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    lifetime.current = controller;
+    const current: Lifetime = { controller: new AbortController(), fullscreen: { mode: 'unknown' }, closeRequested: false };
+    lifetime.current = current;
     pending.current = false; setClosing(false); setCloseError('');
-    const video = videoRef.current;
+    const video = videoRef.current as NativeVideo | null;
+    const doc = video?.ownerDocument ?? document;
     // Restore the source after a development StrictMode effect cleanup.
     if (video && source && !video.getAttribute('src')) video.src = source;
-    let seekedToEnd = false;
-    const seeking = () => { seekedToEnd = !!video && Number.isFinite(video.duration) && video.currentTime >= video.duration; };
-    const playing = () => { if (video && video.currentTime < video.duration) seekedToEnd = false; };
-    const ended = () => { if (video?.ended && !video.seeking && !video.loop && !seekedToEnd) void close(); };
-    video?.addEventListener('seeking', seeking);
-    video?.addEventListener('playing', playing);
-    video?.addEventListener('ended', ended);
+    let seekedToEnd = false, seekingNow = false, completionSignalled = false;
+    const finishPlayback = () => {
+      if (video && !current.closeRequested && !video.loop && !seekedToEnd && !seekingNow && (!video.seeking || completionSignalled) && !video.error) void close();
+    };
+    const seeking = () => {
+      seekingNow = true; completionSignalled = false;
+      seekedToEnd = !!video && Number.isFinite(video.duration) && video.currentTime >= video.duration;
+    };
+    const seeked = () => { seekingNow = false; if (completionSignalled) finishPlayback(); };
+    const playing = () => {
+      completionSignalled = false;
+      if (video && video.currentTime < video.duration) {
+        seekedToEnd = false;
+        if (!pending.current) { current.closeRequested = false; setCloseError(''); }
+      }
+    };
+    // The event is the completion signal. Native iPhone controllers can deliver
+    // it before the DOM's ended/seeking properties have caught up.
+    const ended = () => { completionSignalled = true; finishPlayback(); };
+    const recoverCompletion = () => {
+      if (current.controller.signal.aborted) return;
+      if (current.closeRequested) { void close(); return; }
+      if (completionSignalled || video?.ended) finishPlayback();
+    };
+    const nativeEntered = () => { current.fullscreen.mode = 'fullscreen'; };
+    const nativeExited = () => { current.fullscreen.mode = 'inline'; recoverCompletion(); };
+    const presentationChanged = () => {
+      if (video) updateNativePresentation(video, current.fullscreen);
+      recoverCompletion();
+    };
+    // AVKit may defer the DOM ended event. Recover only from its actual ended
+    // state, never elapsed time or currentTime >= duration; scrubbing stays open.
+    const nativeProgress = () => {
+      if (video && !current.closeRequested && isNativeVideoFullscreen(video, current.fullscreen) && video.ended) recoverCompletion();
+    };
+    const foreground = () => {
+      if (!doc.hidden) {
+        if (video) updateNativePresentation(video, current.fullscreen);
+        recoverCompletion();
+      }
+    };
+    const events: Array<[string, () => void]> = [
+      ['seeking', seeking], ['seeked', seeked], ['playing', playing], ['ended', ended],
+      ['webkitbeginfullscreen', nativeEntered], ['webkitendfullscreen', nativeExited],
+      ['webkitpresentationmodechanged', presentationChanged], ['timeupdate', nativeProgress],
+    ];
+    for (const [name, handler] of events) video?.addEventListener(name, handler);
+    doc.addEventListener('fullscreenchange', recoverCompletion);
+    doc.addEventListener('webkitfullscreenchange', recoverCompletion);
+    doc.addEventListener('visibilitychange', foreground);
+    doc.defaultView?.addEventListener('pageshow', foreground);
     return () => {
-      controller.abort();
-      video?.removeEventListener('seeking', seeking);
-      video?.removeEventListener('playing', playing);
-      video?.removeEventListener('ended', ended);
+      current.controller.abort();
+      for (const [name, handler] of events) video?.removeEventListener(name, handler);
+      doc.removeEventListener('fullscreenchange', recoverCompletion);
+      doc.removeEventListener('webkitfullscreenchange', recoverCompletion);
+      doc.removeEventListener('visibilitychange', foreground);
+      doc.defaultView?.removeEventListener('pageshow', foreground);
       if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
     };
   }, [source, videoRef, close]);

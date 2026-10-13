@@ -147,8 +147,8 @@ try {
     await runToEnd(); await dialog.getByRole('alert').waitFor();
     assert.ok(await dialog.isVisible(), 'rejected exit must retain a visible player');
     await page.evaluate(() => { window.fullscreenExited = true; document.dispatchEvent(new Event('fullscreenchange')); });
-    await click('Close video player'); await closed();
-    console.log(`PASS ${engine} ${width}px: asynchronous standard and native Safari exits before close; rejection retains player and allows explicit retry`);
+    await closed();
+    console.log(`PASS ${engine} ${width}px: asynchronous standard and native Safari exits before close; rejected exit retains player and finishes closing when fullscreen exits`);
     assert.deepEqual(errors, []);
     await page.close();
   }
