@@ -190,6 +190,34 @@ try {
       await page.close();
     }
   } else if (phase === 'fullscreen' || phase === 'pip') {
+    if (phase === 'fullscreen') {
+      // Mobile WebKit can expose container and legacy methods while native
+      // video presentation is the supported path. It must work on the first tap.
+      const page = await fixture(); await open(page); await modes(page, 'native');
+      await page.locator('video').evaluate(v => {
+        // Windows WebKit touch emulation does not expose iPhone touch hardware.
+        Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+        Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+        document.querySelector('.video-player-surface').requestFullscreen = () => {
+          window.modeCalls.push({ name: 'container-noop', next: 'inline', activation: navigator.userActivation?.isActive ?? true });
+          return Promise.resolve();
+        };
+        v.webkitEnterFullscreen = () => { throw new Error('legacy native entry unavailable before presentation'); };
+        v.dispatchEvent(new Event('loadedmetadata'));
+      });
+      const button = name => page.getByRole('button', { name, exact: true });
+      await button('Enter fullscreen').click();
+      assert.deepEqual(await page.evaluate(() => window.modeCalls.map(c => c.name)), ['native-presentation']);
+      await button('Exit fullscreen').waitFor();
+      assert.equal(await page.locator('video').evaluate(v => v.webkitPresentationMode), 'fullscreen');
+      assert.ok(await page.evaluate(() => window.modeCalls.every(c => c.activation)));
+      await button('Exit fullscreen').click(); await button('Enter fullscreen').waitFor();
+      await button('Enter fullscreen').click(); await button('Exit fullscreen').waitFor();
+      assert.deepEqual(await page.evaluate(() => window.modeCalls.map(c => c.next)), ['fullscreen', 'inline', 'fullscreen']);
+      await button('Close video player').click(); await closed(page);
+      console.log(`PASS ${engine} mobile Fullscreen: native video API on first tap, no PiP prerequisite, exit/re-entry`);
+      await page.close();
+    }
     for (const api of ['standard', 'native']) {
       const page = await fixture(); await open(page); await modes(page, api);
       const mode = phase === 'fullscreen' ? 'fullscreen' : 'picture-in-picture';

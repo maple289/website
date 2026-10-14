@@ -79,6 +79,10 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
         else if ((doc.fullscreenElement ?? doc.webkitFullscreenElement) && exit) result = exit.call(doc);
         else if (video.webkitSetPresentationMode) result = video.webkitSetPresentationMode('inline');
         else throw new Error('Unsupported fullscreen exit');
+      } else if (cap.presentation && (doc.defaultView?.navigator.maxTouchPoints ?? 0) > 0) {
+        // Prefer the supported native-video API on touch WebKit. Invoke it
+        // directly on this tap, independently of PiP and container/legacy entry.
+        result = video.webkitSetPresentationMode!('fullscreen');
       } else if (cap.standard) result = surface.requestFullscreen();
       else if (cap.vendor) result = surface.webkitRequestFullscreen!();
       else if (cap.native) result = (video.webkitEnterFullscreen ?? video.webkitEnterFullScreen)!.call(video);
