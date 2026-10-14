@@ -21,8 +21,11 @@ double tap, and the photo stage already allowed `pan-y pinch-zoom`.
 ## Implementation
 
 - Video gestures call the same `toggleFullscreen` used by the Fullscreen button.
-  Capability detection, native WebKit entry/exit and PiP behavior remain in that
-  existing function. Gesture entry executes directly in the second touchend.
+  Touch WebKit uses the page fullscreen viewer and attempts container fullscreen
+  where supported. Missing, ineffective or rejected container APIs retain a fixed
+  viewport fallback. The same video, native inline playback controls and source
+  remain mounted in a stable body portal. Non-touch native API compatibility remains.
+  Gesture entry executes directly in the second touchend; PiP stays independent.
 - The shared touch recognizer uses a 300-ms interval, 12-pixel movement tolerance
   and 32-pixel proximity limit. It rejects multiple touches, swipes, cancellation
   and long presses. Video native control strips and the paused central play button
@@ -68,8 +71,8 @@ and the final production build passed.
 These are Windows browser-engine tests, with mobile/tablet viewport and touch
 emulation. Native-video WebKit APIs are simulated. Physical iPhone Safari, mobile
 Firefox, Android Chrome and iPad/tablet testing was unavailable. In particular,
-the real Safari retest must verify gesture delivery while the system video player
-is fullscreen; a mocked WebKit API cannot verify that input path. Remote Linux CI
+the real Safari retest must verify both taps in the new page fullscreen viewer;
+mocked WebKit APIs cannot verify physical-device input. Remote Linux CI
 and deployed-device results are separate checks.
 
 ## CI follow-up for 8e2267e
@@ -98,3 +101,47 @@ after the fix in Chromium, Firefox and WebKit. TypeScript, full ESLint, syntax a
 whitespace checks, and the production build also pass. The remote Linux CI result
 requires a new pushed revision; rerunning the original commit would still exercise
 the old hook.
+
+## iPhone second double-tap follow-up
+
+The user confirmed that photo toggles work and the remaining failure is video on
+iPhone Safari. The `efefd4b` CI and deployment succeeded; the reported failure was
+therefore a device input behavior that the simulated native API checks did not cover.
+The previous touch-WebKit action called `webkitSetPresentationMode('fullscreen')`,
+transferring video presentation to Safari's system player. Native video presentation
+replaces custom page UI with system controls, as described in the
+[Video.js fullscreen guide](https://videojs.org/docs/framework/html/guides/fullscreen#availability-and-constraints).
+Simulating touches on the DOM video after that call does not prove that taps in the
+real system player reach the webpage. This explains the gap in the previous coverage.
+
+For reliable double-tap entry and exit, touch WebKit now stays in the page-controlled
+viewer. The button and gesture still invoke one action. Supported container fullscreen
+uses the browser API; otherwise the fallback fills Safari's visible viewport with
+`position: fixed`, `inset: 0`, `100vw/100dvh` and top-level stacking. Safari browser
+bars may remain visible. Player and file-preview roots portal to the body from their
+first render, retaining the same video node, source and playback position. Close,
+rotation, native/browser exit, PiP events and natural completion clean up mode styles.
+Photo behavior is unchanged in this follow-up.
+
+A separate event-state defect was also reproduced: `webkitbeginfullscreen` changed
+the button label while the next toggle still read stale inline properties and requested
+entry again. The shared snapshot now remembers native mode events for both the UI and
+action, and chooses the matching native exit when no owned container is fullscreen.
+
+New fixtures reject any native video fullscreen call in the iPhone-like touch path.
+They exercise three enter/exit cycles, rotation, mixed button/gesture use, unchanged
+video identity/playback position, ineffective/rejected container APIs, independent
+PiP, Close and natural completion. A delayed container request cannot restore
+fullscreen after the second double tap exits; a late entry after Close is also
+released. Native API compatibility tests use a non-touch
+capability snapshot, and the event-only native case failed before the state fix.
+
+The final gesture suite passed in Chromium, Firefox and WebKit, including delayed
+video entry/exit and the existing photo regressions. The video recovery suite also
+passed in all three engines. Chromium public-consumption checks passed at desktop,
+phone and tablet widths, and file-preview regressions passed all 32 groups across
+13 formats. TypeScript, full ESLint, syntax/whitespace checks and the production
+build passed. These changes are local and have not been committed or deployed.
+
+Physical iPhone testing remains required after deploying this revision; the local
+browser fixtures are not an iPhone system player.

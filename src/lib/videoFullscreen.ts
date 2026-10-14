@@ -17,12 +17,19 @@ export type FullscreenDocument = Document & {
 };
 export type FullscreenSurface = HTMLElement & { webkitRequestFullscreen?: () => void | Promise<void> };
 
+export function setVideoPageFullscreen(surface: HTMLElement, fullscreen: boolean) {
+  surface.classList.toggle('video-page-fullscreen', fullscreen);
+  surface.closest('[data-task-modal]')?.classList.toggle('video-page-fullscreen-layer', fullscreen);
+}
+
 function attemptCleanup(action: () => unknown) {
   try { void Promise.resolve(action()).catch(() => { /* Browser cleanup must never block closing the player. */ }); }
   catch { /* Try the remaining independent cleanup operations. */ }
 }
 
 export function closeVideoPresentation(video: NativeVideo, root: HTMLElement | null) {
+  const surface = video.closest<HTMLElement>('.video-fullscreen-surface');
+  if (surface) setVideoPageFullscreen(surface, false);
   const doc = video.ownerDocument as FullscreenDocument;
   if (doc.pictureInPictureElement === video && doc.exitPictureInPicture) attemptCleanup(() => doc.exitPictureInPicture());
   const element = doc.fullscreenElement ?? doc.webkitFullscreenElement;

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AuthContext } from '@/context/AuthContext';
 import { Download, FileText, LoaderCircle, X } from 'lucide-react';
 import { TaskModal } from '@/components/TaskModal';
@@ -101,7 +102,7 @@ export function FilePreview({ entry, onClose, onDownload, allowDownload = true, 
   }, [entry, requestPreview, loadVideo, auth?.user?.id, auth?.session?.access_token]);
   const previewMessage = allowDownload ? state.message : state.message?.replace(/(?:You can still download|Download the original)[^.]*\.?/gi, '').trim();
   const loading = state.status === 'loading' || state.status === 'generating';
-  return <TaskModal ref={playerRef} aria-label="File preview" className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/80 p-2 sm:p-6">
+  return createPortal(<TaskModal ref={playerRef} aria-label="File preview" className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/80 p-2 sm:p-6">
     <section ref={surfaceRef} className="video-fullscreen-surface flex h-[90dvh] max-h-full w-full max-w-6xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
       <header className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 sm:px-5 sm:py-3">
         <FileTypeIcon entry={entry} size={24} />
@@ -121,5 +122,5 @@ export function FilePreview({ entry, onClose, onDownload, allowDownload = true, 
       {state.status === 'ready' && state.kind === 'video' && <VideoPresentationControls videoRef={videoRef} surfaceRef={surfaceRef} source={state.url} />}
       {state.status === 'ready' && state.kind === 'pdf' && <p className="shrink-0 border-t border-slate-100 px-4 py-2 text-xs text-slate-500">Scroll through pages or use the PDF controls.{filePreviewKind(entry) === 'office' ? ' Office previews show up to 200 pages.' : ''}</p>}
     </section>
-  </TaskModal>;
+  </TaskModal>, document.body);
 }

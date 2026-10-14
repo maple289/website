@@ -52,28 +52,39 @@ async function gesture(page, selector, kind, point = [.25, .25]) {
     return false;
   }, { kind, point });
 }
-async function modes(page, api) {
-  await page.locator('video').evaluate((v, api) => {
+async function modes(page, api, touchPoints = 0) {
+  await page.locator('video').evaluate((v, { api, touchPoints }) => {
     const surface = document.querySelector('.video-player-surface');
     let mode = 'inline'; window.modeCalls = [];
     const define = (object, name, value) => Object.defineProperty(object, name, { configurable: true, writable: true, value });
-    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: touchPoints });
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => api === 'standard' && mode === 'fullscreen' ? surface : null });
     Object.defineProperty(document, 'webkitFullscreenElement', { configurable: true, get: () => api === 'vendor' && mode === 'fullscreen' ? surface : null });
     Object.defineProperty(document, 'pictureInPictureElement', { configurable: true, get: () => api === 'standard' && mode === 'picture-in-picture' ? v : null });
     define(document, 'fullscreenEnabled', api === 'standard'); define(document, 'webkitFullscreenEnabled', api === 'vendor');
     define(document, 'pictureInPictureEnabled', api === 'standard');
-    Object.defineProperty(v, 'webkitPresentationMode', { configurable: true, get: () => api === 'presentation' ? mode : undefined });
+    Object.defineProperty(v, 'webkitPresentationMode', { configurable: true, get: () => api === 'presentation' ? mode : api === 'native-events' ? 'inline' : undefined });
     Object.defineProperty(v, 'webkitDisplayingFullscreen', { configurable: true, get: () => api === 'legacy' && mode === 'fullscreen' });
-    define(v, 'webkitSupportsFullscreen', api === 'legacy');
+    define(v, 'webkitSupportsFullscreen', api === 'legacy' || api === 'native-events');
     define(v, 'webkitSupportsPresentationMode', () => api === 'presentation');
     const change = next => {
+      const old = mode;
       mode = next;
+      if (api === 'native-events') {
+        // iOS native events can prove the mode before presentation properties
+        // report it. The next toggle must use the same observed mode as the UI.
+        v.dispatchEvent(new Event(next === 'fullscreen' ? 'webkitbeginfullscreen' : 'webkitendfullscreen'));
+        return;
+      }
       document.dispatchEvent(new Event('fullscreenchange'));
       document.dispatchEvent(new Event('webkitfullscreenchange'));
-      v.dispatchEvent(new Event('webkitpresentationmodechanged'));
-      v.dispatchEvent(new Event(next === 'fullscreen' ? 'webkitbeginfullscreen' : 'webkitendfullscreen'));
-      v.dispatchEvent(new Event(next === 'picture-in-picture' ? 'enterpictureinpicture' : 'leavepictureinpicture'));
+      if (api === 'presentation' || api === 'legacy') {
+        if (next === 'fullscreen' && old !== 'fullscreen') v.dispatchEvent(new Event('webkitbeginfullscreen'));
+        if (old === 'fullscreen' && next !== 'fullscreen') v.dispatchEvent(new Event('webkitendfullscreen'));
+        v.dispatchEvent(new Event('webkitpresentationmodechanged'));
+      }
+      if (next === 'picture-in-picture' && old !== 'picture-in-picture') v.dispatchEvent(new Event('enterpictureinpicture'));
+      if (old === 'picture-in-picture' && next !== 'picture-in-picture') v.dispatchEvent(new Event('leavepictureinpicture'));
     };
     const request = (name, next) => { window.modeCalls.push({ name, next }); change(next); };
     surface.requestFullscreen = () => { request('standard', 'fullscreen'); return Promise.resolve(); };
@@ -83,13 +94,28 @@ async function modes(page, api) {
     // Remove standard exit in the prefixed fixture.
     if (api === 'vendor') define(document, 'exitFullscreen', undefined);
     define(v, 'webkitSetPresentationMode', api === 'presentation' ? next => request('presentation', next) : undefined);
-    define(v, 'webkitEnterFullscreen', api === 'legacy' ? () => request('legacy', 'fullscreen') : undefined);
-    define(v, 'webkitExitFullscreen', api === 'legacy' ? () => request('legacy-exit', 'inline') : undefined);
+    define(v, 'webkitEnterFullscreen', api === 'legacy' || api === 'native-events' ? () => request('legacy', 'fullscreen') : undefined);
+    define(v, 'webkitExitFullscreen', api === 'legacy' || api === 'native-events' ? () => request('legacy-exit', 'inline') : undefined);
     define(v, 'webkitEnterFullScreen', undefined); define(v, 'webkitExitFullScreen', undefined);
     v.requestPictureInPicture = () => { request('pip', 'picture-in-picture'); return Promise.resolve(); };
     document.exitPictureInPicture = () => { request('pip-exit', 'inline'); return Promise.resolve(); };
     v.dispatchEvent(new Event('loadedmetadata'));
-  }, api);
+  }, { api, touchPoints });
+}
+
+async function videoPageGeometry(page) {
+  const g = await page.locator('.video-player-surface').evaluate(surface => {
+    const r = surface.getBoundingClientRect(), v = surface.querySelector('video');
+    return { width: r.width, height: r.height, x: r.x, y: r.y, vw: innerWidth, vh: innerHeight,
+      fit: getComputedStyle(v).objectFit, portal: surface.closest('[data-task-modal]')?.parentElement === document.body };
+  });
+  for (const [actual, expected] of [[g.x, 0], [g.y, 0], [g.width, g.vw], [g.height, g.vh]]) assert.ok(Math.abs(actual - expected) < 1, JSON.stringify(g));
+  assert.equal(g.fit, 'contain'); assert.equal(g.portal, true);
+  for (const name of ['Close video player', 'Exit fullscreen']) {
+    assert.equal(await page.getByRole('button', { name, exact: true }).evaluate(b => {
+      const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    }), true, name + ' receives taps in the page fullscreen viewer');
+  }
 }
 async function geometry(page) {
   await page.waitForFunction(selector => document.querySelector(selector)?.naturalWidth > 0, currentPhoto);
@@ -109,7 +135,7 @@ async function geometry(page) {
   }
 }
 try {
-  for (const api of ['standard', 'presentation', 'legacy', 'vendor']) {
+  for (const api of ['native-events', 'standard', 'presentation', 'legacy', 'vendor']) {
     const page = await fixture(); await openVideo(page); await modes(page, api);
     for (let i = 0; i < 3; i++) {
       assert.equal(await gesture(page, 'video', 'double'), true);
@@ -120,6 +146,7 @@ try {
         assert.equal(await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).count(), 1, 'synthetic touch double-click must not toggle again');
       }
       assert.equal(await gesture(page, 'video', 'double'), true);
+      assert.equal(await page.evaluate(() => window.modeCalls.at(-1)?.next), 'inline', 'second double tap must exit, including event-confirmed native mode');
       await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
     }
     const gestureCalls = await page.evaluate(() => window.modeCalls.map(c => c.next));
@@ -145,6 +172,72 @@ try {
     await click(page, 'Close video player');
     assert.deepEqual(page.fixtureErrors, []); await page.close();
     console.log(`PASS ${engine} video ${api}: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP`);
+  }
+  for (const api of ['presentation', 'legacy', 'container-noop', 'container-rejection']) {
+    const page = await fixture(); await openVideo(page); await modes(page, api === 'legacy' ? 'legacy' : 'presentation', 5);
+    await page.locator('video').evaluate(v => { window.pageFullscreenVideo = v; v.currentTime = .5; });
+    if (api.startsWith('container-')) await page.evaluate(api => {
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+      document.querySelector('.video-player-surface').requestFullscreen = () => {
+        window.modeCalls.push({ name: api, next: 'fullscreen' });
+        return api === 'container-rejection' ? Promise.reject(new Error('fixture unsupported container')) : Promise.resolve();
+      };
+      document.querySelector('video').dispatchEvent(new Event('loadedmetadata'));
+    }, api);
+    for (let i = 0; i < 3; i++) {
+      await gesture(page, 'video', 'double'); await videoPageGeometry(page);
+      assert.equal(await page.locator('video').evaluate(v => v === window.pageFullscreenVideo && v.currentTime >= .5), true, 'fullscreen retains the same video and playback position');
+      assert.equal(await page.locator('.video-page-fullscreen').count(), 1);
+      if (process.env.CAPTURE_MEDIA_GESTURES && i === 0) await page.screenshot({ path: `.runtime/video-page-fullscreen-${engine}-${api}.png` });
+      await page.setViewportSize({ width: 844, height: 390 }); await videoPageGeometry(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await gesture(page, 'video', 'double');
+      assert.equal(await page.locator('.video-page-fullscreen, .video-page-fullscreen-layer').count(), 0, 'second double tap removes fullscreen and its layer');
+      await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
+    }
+    assert.ok((await page.evaluate(() => window.modeCalls)).every(c => c.name === api), 'iPhone viewer must never transfer media touches to native video fullscreen');
+    assert.equal(await page.getByRole('alert').count(), 0, 'unsupported container fullscreen retains the working viewport fallback');
+    await click(page, 'Enter fullscreen'); await gesture(page, 'video', 'double');
+    await gesture(page, 'video', 'double'); await click(page, 'Exit fullscreen');
+    if (api !== 'legacy') {
+      await click(page, 'Enter picture-in-picture');
+      assert.equal(await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).isDisabled(), true);
+      await click(page, 'Exit picture-in-picture');
+    }
+    await click(page, 'Enter fullscreen'); await click(page, 'Close video player');
+    assert.equal(await page.locator('.video-page-fullscreen-layer').count(), 0);
+    assert.equal(await page.locator('[inert]').count(), 0);
+    assert.equal(await page.evaluate(() => document.body.style.overflow), '');
+    await openVideo(page); await modes(page, api === 'legacy' ? 'legacy' : 'presentation', 5);
+    await gesture(page, 'video', 'double');
+    await page.locator('video').evaluate(async (v, rate) => { v.playbackRate = rate; await v.play(); }, engine === 'webkit' ? 1 : 4);
+    await page.getByRole('dialog', { name: 'Video player', exact: true }).waitFor({ state: 'hidden', timeout: 6000 });
+    assert.equal(await page.locator('.video-page-fullscreen-layer, [inert]').count(), 0, 'natural completion releases the fullscreen viewer and background lock');
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} iPhone-like ${api}: page owns both double taps, rotation, shared button, no native video takeover, PiP/Close cleanup`);
+  }
+  {
+    const page = await fixture(); await openVideo(page); await modes(page, 'presentation', 5);
+    await page.evaluate(() => {
+      const surface = document.querySelector('.video-player-surface');
+      let full = null;
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => full });
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+      surface.requestFullscreen = () => new Promise(resolve => { window.completeVideoEntry = () => {
+        full = surface; document.dispatchEvent(new Event('fullscreenchange')); resolve();
+      }; });
+      document.exitFullscreen = () => { full = null; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
+      document.querySelector('video').dispatchEvent(new Event('loadedmetadata'));
+    });
+    await gesture(page, 'video', 'double'); await videoPageGeometry(page);
+    await gesture(page, 'video', 'double'); await page.evaluate(() => window.completeVideoEntry());
+    await page.waitForFunction(() => !document.fullscreenElement);
+    await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
+    assert.equal(await page.locator('.video-page-fullscreen, .video-page-fullscreen-layer').count(), 0, 'late native entry must respect the second double-tap exit');
+    await click(page, 'Enter fullscreen'); await click(page, 'Close video player');
+    await page.evaluate(() => window.completeVideoEntry()); await page.waitForFunction(() => !document.fullscreenElement);
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} delayed video container: second double tap cancels pending entry, late Close cleanup`);
   }
   for (const width of [390, 768]) {
     const page = await fixture(width); await openPhoto(page);

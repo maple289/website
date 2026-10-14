@@ -54,6 +54,9 @@ async function modes(page, api) {
     const surface = document.querySelector('.video-player-surface');
     let mode = 'inline'; window.modeCalls = []; window.rejectMode = false;
     const define = (object, name, value) => Object.defineProperty(object, name, { configurable: true, writable: true, value });
+    // These cases test native API compatibility without the touch-WebKit page
+    // fallback. The dedicated iPhone case below enables touch hardware.
+    define(navigator, 'maxTouchPoints', 0);
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => api === 'standard' && mode === 'fullscreen' ? surface : null });
     Object.defineProperty(document, 'webkitFullscreenElement', { configurable: true, get: () => null });
     Object.defineProperty(document, 'pictureInPictureElement', { configurable: true, get: () => api === 'standard' && mode === 'picture-in-picture' ? v : null });
@@ -240,8 +243,8 @@ try {
     }
   } else if (phase === 'fullscreen' || phase === 'pip') {
     if (phase === 'fullscreen') {
-      // Mobile WebKit can expose container and legacy methods while native
-      // video presentation is the supported path. It must work on the first tap.
+      // Mobile WebKit can expose an ineffective container API. The page viewer
+      // must fill the viewport immediately and retain ownership of both taps.
       const page = await fixture(); await open(page); await modes(page, 'native');
       await page.locator('video').evaluate(v => {
         // Windows WebKit touch emulation does not expose iPhone touch hardware.
@@ -256,15 +259,17 @@ try {
       });
       const button = name => page.getByRole('button', { name, exact: true });
       await button('Enter fullscreen').click();
-      assert.deepEqual(await page.evaluate(() => window.modeCalls.map(c => c.name)), ['native-presentation']);
+      assert.deepEqual(await page.evaluate(() => window.modeCalls.map(c => c.name)), ['container-noop']);
       await button('Exit fullscreen').waitFor();
-      assert.equal(await page.locator('video').evaluate(v => v.webkitPresentationMode), 'fullscreen');
+      assert.equal(await page.locator('.video-page-fullscreen').count(), 1);
+      assert.equal(await page.locator('video').evaluate(v => v.webkitPresentationMode), 'inline');
       assert.ok(await page.evaluate(() => window.modeCalls.every(c => c.activation)));
       await button('Exit fullscreen').click(); await button('Enter fullscreen').waitFor();
+      assert.equal(await page.locator('.video-page-fullscreen, .video-page-fullscreen-layer').count(), 0);
       await button('Enter fullscreen').click(); await button('Exit fullscreen').waitFor();
-      assert.deepEqual(await page.evaluate(() => window.modeCalls.map(c => c.next)), ['fullscreen', 'inline', 'fullscreen']);
+      assert.deepEqual(await page.evaluate(() => window.modeCalls.map(c => c.name)), ['container-noop', 'container-noop']);
       await button('Close video player').click(); await closed(page);
-      console.log(`PASS ${engine} mobile Fullscreen: native video API on first tap, no PiP prerequisite, exit/re-entry`);
+      console.log(`PASS ${engine} mobile Fullscreen: viewport fallback on first tap, no native takeover/PiP prerequisite, exit/re-entry`);
       await page.close();
     }
     for (const api of ['standard', 'native']) {

@@ -30,8 +30,15 @@ application bar for optional fullscreen and PiP actions.
 Fullscreen and PiP requests run directly in their respective tap handlers, with
 no queued entry effects or pending operation state. Actual browser/native
 events drive mode state; conflicting entry buttons require exiting the current
-mode first. Supported container fullscreen retains the header/Close and controls;
-iPhone native fullscreen uses the video-specific API and system controls. Native
+mode first. Supported container fullscreen retains the header/Close and controls.
+Touch WebKit keeps the same video in a page-controlled fullscreen viewer, with a
+fixed viewport fallback when container fullscreen is unavailable or ineffective.
+This preserves both double taps on iPhone; its native system player owns the taps
+and cannot provide the page's custom exit gesture. Player/preview modal roots use
+stable body portals so ancestor layout cannot constrain that fallback. Button and
+gesture share the existing presentation action and state; Close and natural end
+remove the fallback and retain the shared focus/inert/scroll cleanup. Non-touch
+native fullscreen compatibility and native mode event observation remain. Native
 void APIs rely on browser events for mode confirmation without creating an
 application wait. Unsupported programmatic PiP is hidden. TaskModal retains focus,
 inertness and scroll ownership. Regression fixtures include real media, API
@@ -92,7 +99,7 @@ fullscreen, explicit Exit returns to the normal viewer, and Close/unmount releas
 owned fullscreen without waiting for browser operations. Outside taps and Escape
 do not dismiss the viewer; useModalLayer still owns focus, inertness and scroll locks.
 Video media double tap invokes the existing presentation button action, including
-its WebKit/native fallbacks. See MOBILE_MEDIA_FULLSCREEN.md for validation limits.
+the touch-WebKit page fallback. See MOBILE_MEDIA_FULLSCREEN.md for validation limits.
 
 Dropdowns, context menus, informational sidebars, tooltips and reaction hover bars
 are not task dialogs and keep their lightweight dismissal. Route/browser navigation

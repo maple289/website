@@ -1,6 +1,7 @@
 import { TaskModal } from '@/components/TaskModal';
 import { MediaReactions } from './MediaReactions';
 import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AuthContext } from '@/context/AuthContext';
 import { Loader2, Play, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -61,7 +62,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
 
 
 
-  return (
+  return createPortal(
     <TaskModal ref={playerRef} aria-label="Video player" className="fixed inset-0 z-70 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div ref={surfaceRef} className="video-fullscreen-surface video-player-surface relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border bg-[#0a0a0a] shadow-2xl">
@@ -89,6 +90,6 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
         {!loading && !error && <VideoPresentationControls videoRef={videoRef} surfaceRef={surfaceRef} source={url} />}
         <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} /></div>
       </div>
-    </TaskModal>
+    </TaskModal>, document.body
   );
 }
