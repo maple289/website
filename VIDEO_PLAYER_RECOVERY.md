@@ -89,3 +89,29 @@ automatic closure from that event; the page Close path remains unconditional.
 Device retest order: Open/Close; Open/play to end; Fullscreen/Exit/Close; supported
 PiP/Exit/Close; then repeats, orientation changes, system exit and natural end
 while in each mode. Verify the gallery is usable and another video reopens.
+
+## CI follow-up for db2e4f9
+
+The user's pushed candidate failed in the WebKit step of
+[CI run 38497715201](https://github.com/maple289/website/actions/runs/38497715201).
+Chromium and Firefox browser steps, typecheck, lint, core regressions, build and
+media validation passed. Deployment was skipped, so that run did not publish the
+player candidate.
+
+The failure occurred in `public-consumption.mjs` before `play()` was called:
+the test scrubbed a paused video to the end, rewound it and waited for the rewind
+to finish. Natural-end testing now opens a fresh video after explicitly checking
+Close following the direct-to-end seek. Both playback helpers start real playback
+without an unnecessary setup seek and explicitly assert playback rejection errors.
+No ended event is synthesized and no production player code changes in this follow-up.
+
+Local validation also exposed a timing race in the old 90-ms simulated fullscreen
+exit. The test now holds the exit unresolved until after asserting modal removal,
+then explicitly completes it. This deterministically verifies that Close does not
+wait for an exit promise/event. The Linux CI rerun and physical Safari device
+retest remain separate release checks.
+
+The corrected public-consumption and full player-recovery suites pass locally in
+Windows WebKit, Firefox and Chromium. ESLint, JavaScript syntax and whitespace
+checks pass. These follow-up changes are uncommitted and have not been pushed;
+the remote Linux CI result cannot be confirmed until the new revision runs there.

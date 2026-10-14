@@ -20,9 +20,18 @@ try {
       await page.waitForFunction(() => { const v = document.querySelector('video'); if (!v || v.readyState < 2) return false; v.pause(); return true; });
     };
     const runToEnd = async () => {
-      await page.locator('video').evaluate(v => { v.currentTime = 0; });
-      await page.waitForFunction(() => { const v = document.querySelector('video'); return v && !v.seeking && v.currentTime < v.duration; });
-      await page.locator('video').evaluate((v, rate) => { v.playbackRate = rate; void v.play().catch(error => { window.playbackError = error.message; }); }, engine === 'webkit' ? 1 : 4);
+      // Each completion case starts with a fresh player. Rewinding an already
+      // exhausted decoder here couples seeking tests to natural-end tests.
+      await page.locator('video').evaluate((v, rate) => {
+        window.playbackError = null;
+        v.playbackRate = rate;
+        void v.play().catch(error => { window.playbackError = error.message; });
+      }, engine === 'webkit' ? 1 : 4);
+      await page.waitForFunction(() => {
+        const v = document.querySelector('video');
+        return window.playbackError || !v || (!v.paused && !v.seeking && v.currentTime < v.duration);
+      });
+      assert.equal(await page.evaluate(() => window.playbackError), null, 'fixture playback must start successfully');
     };
     const closed = async () => {
       await dialog.waitFor({ state: 'hidden' });
@@ -51,6 +60,9 @@ try {
     // Seeking itself must leave the paused player open.
     await page.waitForTimeout(150);
     assert.ok(await dialog.isVisible(), 'seeking directly to the end must not close');
+    // Prove explicit Close still works after scrubbing to the end, then test
+    // natural completion independently on a newly opened video element.
+    await click('Close video player'); await closed(); await open();
     await page.locator('video').evaluate(v => {
       window.completedVideo = v; window.naturalEnds = 0;
       v.addEventListener('ended', () => window.naturalEnds++);
@@ -120,22 +132,24 @@ try {
       console.log('PASS actual desktop fullscreen: natural end exits fullscreen and restores gallery');
     }
 
-    // Deterministic asynchronous standard/fullscreen and native iOS API exits.
+    // Hold exit completion until after modal removal. A wall-clock delay would
+    // race WebKit rendering instead of proving Close is independent of the exit.
     for (const native of [false, true]) {
       await open();
       await page.locator('video').evaluate((v, native) => {
         window.exitCalls = 0; window.fullscreenExited = false; window.presentDuringExit = false;
         if (native) {
           Object.defineProperty(v, 'webkitDisplayingFullscreen', { configurable: true, writable: true, value: true });
-          v.webkitExitFullscreen = () => { window.exitCalls++; setTimeout(() => { window.presentDuringExit = v.isConnected; v.webkitDisplayingFullscreen = false; window.fullscreenExited = true; v.dispatchEvent(new Event('webkitendfullscreen')); }, 90); };
+          v.webkitExitFullscreen = () => { window.exitCalls++; window.completeFixtureExit = () => { window.presentDuringExit = v.isConnected; v.webkitDisplayingFullscreen = false; window.fullscreenExited = true; v.dispatchEvent(new Event('webkitendfullscreen')); }; };
         } else {
           Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => window.fullscreenExited ? null : v });
-          document.exitFullscreen = () => { window.exitCalls++; return new Promise(resolve => setTimeout(() => { window.presentDuringExit = v.isConnected; window.fullscreenExited = true; document.dispatchEvent(new Event('fullscreenchange')); resolve(); }, 90)); };
+          document.exitFullscreen = () => { window.exitCalls++; return new Promise(resolve => { window.completeFixtureExit = () => { window.presentDuringExit = v.isConnected; window.fullscreenExited = true; document.dispatchEvent(new Event('fullscreenchange')); resolve(); }; }); };
         }
       }, native);
       await runToEnd(); await closed();
       assert.equal(await page.evaluate(() => window.exitCalls), 1);
-      await page.waitForFunction(() => window.fullscreenExited);
+      assert.equal(await page.evaluate(() => window.fullscreenExited), false, 'player closes before exit completes');
+      await page.evaluate(() => window.completeFixtureExit());
       assert.equal(await page.evaluate(() => window.fullscreenExited), true);
       assert.equal(await page.evaluate(() => window.presentDuringExit), false, 'delayed exit cannot hold the player open');
     }

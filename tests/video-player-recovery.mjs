@@ -29,9 +29,17 @@ async function closed(page) {
   assert.equal(await page.evaluate(() => window.recoveryVideo.getAttribute('src')), null);
 }
 async function playToEnd(page) {
-  await page.locator('video').evaluate(v => { v.currentTime = 0; });
-  await page.waitForFunction(() => !document.querySelector('video').seeking);
-  await page.locator('video').evaluate((v, rate) => { v.playbackRate = rate; void v.play(); }, engine === 'webkit' ? 1 : 4);
+  // These cases open a fresh player; play its real media without a setup seek.
+  await page.locator('video').evaluate((v, rate) => {
+    window.playbackError = null;
+    v.playbackRate = rate;
+    void v.play().catch(error => { window.playbackError = error.message; });
+  }, engine === 'webkit' ? 1 : 4);
+  await page.waitForFunction(() => {
+    const v = document.querySelector('video');
+    return window.playbackError || !v || (!v.paused && !v.seeking && v.currentTime < v.duration);
+  });
+  assert.equal(await page.evaluate(() => window.playbackError), null, 'fixture playback must start successfully');
 }
 async function modes(page, api) {
   await page.locator('video').evaluate((v, api) => {
