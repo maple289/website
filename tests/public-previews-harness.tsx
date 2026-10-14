@@ -17,6 +17,7 @@ import '@/components/FluentTheme.css';
 const owner='11111111-1111-4111-8111-111111111111';
 const person={id:owner,email:'preview-fixture@example.test'} as User;
 const consumption = new URLSearchParams(location.search).has('consumption');
+const mediaGestures = new URLSearchParams(location.search).has('mediaGestures');
 let session:Session|null=null, failed=false, nonce=0;
 const video={id:'22222222-2222-4222-8222-222222222222',owner_id:owner,file_name:'Public video',visibility:'public',preview_path:`${owner}/video-previews/poster.webp`,processing_status:'ready',file_size:1024,created_at:new Date().toISOString(),duration_seconds:12} as Video;
 const photo={id:'33333333-3333-4333-8333-333333333333',owner_id:owner,file_name:'Public photo',visibility:'public',storage_path:`${owner}/photos/original.png`,preview_path:`${owner}/photos/preview.webp`,thumbnail_path:`${owner}/photos/thumbnail.webp`,file_size:100,created_at:new Date().toISOString()} as Photo;
@@ -31,7 +32,7 @@ window.fetch=async(input,init)=>{
     let value:unknown=[];
     if(url.pathname.endsWith('/get_storage_base_path'))value='';
     if(url.pathname.endsWith('/videos'))value=[{...video}, ...(consumption ? [{...video,id:'77777777-7777-4777-8777-777777777777',owner_id:'another-owner',file_name:'Another public video'}, {...video,id:'88888888-8888-4888-8888-888888888888',owner_id:'another-owner',file_name:'Processing public video',processing_status:'processing'}] : [])];
-    if(url.pathname.endsWith('/photos'))value=url.searchParams.has('owner_id')?(session?[{...photo,file_name:'Owned photo',visibility:'private'}]:[]):[{...photo}];
+    if(url.pathname.endsWith('/photos'))value=url.searchParams.has('owner_id')?(session?[{...photo,file_name:'Owned photo',visibility:'private'}]:[]):[{...photo}, ...(mediaGestures ? [{...photo,id:'99999999-9999-4999-8999-999999999999',file_name:'Another public photo'}] : [])];
     if(url.pathname.endsWith('/list_public_user_files'))value=files;
     if(url.pathname.endsWith('/get_media_reactions'))value=[];
     return Response.json(value,{headers:{'Cache-Control':'no-store'}});

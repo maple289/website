@@ -60,12 +60,12 @@ jobs:
       - name: Firefox public preview and player regressions
         env:
           BROWSER_ENGINE: firefox
-        run: node scripts/run-ui-regressions.mjs public-previews public-consumption video-player-recovery
+        run: node scripts/run-ui-regressions.mjs public-previews public-consumption video-player-recovery media-double-tap
 
       - name: WebKit player recovery regressions
         env:
           BROWSER_ENGINE: webkit
-        run: node scripts/run-ui-regressions.mjs public-consumption video-player-recovery
+        run: node scripts/run-ui-regressions.mjs public-consumption video-player-recovery media-double-tap
 
       - name: Email and reconciliation regressions
         run: |

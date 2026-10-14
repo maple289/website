@@ -1,4 +1,5 @@
 /* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
+.managed-video { touch-action: manipulation; }
 .video-fullscreen-surface:fullscreen {
   display: flex;
   flex-direction: column;

@@ -1,12 +1,15 @@
 import { useModalLayer } from '@/hooks/useModalLayer';
 import { MediaReactions } from './MediaReactions';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AuthContext } from '@/context/AuthContext';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize, Minimize, X } from 'lucide-react';
 import type { Photo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
 import './PhotoViewer.css';
 import { analyticsRequestId, recordMediaView } from '@/lib/analytics';
+import { usePhotoFullscreen } from '@/hooks/usePhotoFullscreen';
+import { listenForMediaDoubleTap } from '@/lib/mediaDoubleTap';
 
 type PhotoViewerProps = { photos: Photo[]; startIndex: number; onClose: () => void; onPhotoChange?: (id: string) => void };
 const controls = 'input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"], [role="menu"], [role="combobox"], [data-reaction-control]';
@@ -37,11 +40,11 @@ export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: Phot
   useModalLayer(root, !!photo);
   const [offset, setOffset] = useState(0);
   const [animating, setAnimating] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const { fullscreen, toggleFullscreen } = usePhotoFullscreen(root);
+  const fullscreenAction = useRef(toggleFullscreen); fullscreenAction.current = toggleFullscreen;
   const busy = useRef(false);
   const timer = useRef<number>();
-  const gesture = useRef<{ x: number; y: number; dx: number; horizontal: boolean; cancelled: boolean; startedAt: number; moved: boolean; onPhoto: boolean } | null>(null);
-  const lastTap = useRef<{ x: number; y: number; time: number } | null>(null);
+  const gesture = useRef<{ x: number; y: number; dx: number; horizontal: boolean; cancelled: boolean } | null>(null);
   const suppressClick = useRef(false);
   const viewedPhoto = useRef<string>();
 
@@ -50,11 +53,6 @@ export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: Phot
       viewedPhoto.current = photo.id;
       recordMediaView('photo', photo.id, analyticsRequestId());
     }
-  }, [photo?.id]);
-
-  useEffect(() => {
-    setExpanded(false);
-    lastTap.current = null;
   }, [photo?.id]);
 
   const navigate = useCallback((direction: number) => {
@@ -114,60 +112,50 @@ export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: Phot
   useEffect(() => {
     const element = stage.current;
     if (!element) return;
+    const removeDoubleTap = listenForMediaDoubleTap(root.current ?? element, () => {
+      suppressClick.current = true;
+      fullscreenAction.current();
+    }, event => !busy.current && event.target instanceof Element && event.target.matches('.pv-slide:not([aria-hidden="true"]) .pv-photo'));
     const start = (event: TouchEvent) => {
       suppressClick.current = false;
-      if (busy.current || event.touches.length !== 1 || (event.target instanceof Element && event.target.closest(controls))) { gesture.current = null; lastTap.current = null; return; }
+      if (busy.current || event.touches.length !== 1 || (event.target instanceof Element && event.target.closest(controls))) { gesture.current = null; return; }
       const touch = event.touches[0];
-      gesture.current = { x: touch.clientX, y: touch.clientY, dx: 0, horizontal: false, cancelled: false,
-        startedAt: performance.now(), moved: false, onPhoto: event.target instanceof Element && event.target.matches('.pv-photo') };
+      gesture.current = { x: touch.clientX, y: touch.clientY, dx: 0, horizontal: false, cancelled: false };
     };
     const move = (event: TouchEvent) => {
       const swipe = gesture.current;
       if (!swipe) return;
-      if (event.touches.length !== 1) { swipe.cancelled = true; lastTap.current = null; setOffset(0); return; }
+      if (event.touches.length !== 1) { swipe.cancelled = true; setOffset(0); return; }
       if (swipe.cancelled) return;
       const dx = event.touches[0].clientX - swipe.x, dy = event.touches[0].clientY - swipe.y;
-      if (Math.hypot(dx, dy) > 12) { swipe.moved = true; lastTap.current = null; }
       if (!swipe.horizontal && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { swipe.cancelled = true; return; }
       if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) swipe.horizontal = true;
       if (!swipe.horizontal) return;
       event.preventDefault(); suppressClick.current = true; swipe.dx = dx;
       setOffset(Math.max(-element.clientWidth, Math.min(element.clientWidth, dx)));
     };
-    const end = (event: TouchEvent) => {
+    const end = () => {
       const swipe = gesture.current; gesture.current = null;
-      const touch = event.changedTouches[0];
-      const now = performance.now();
-      if (swipe && !swipe.cancelled && !swipe.horizontal && !swipe.moved && swipe.onPhoto && touch && event.touches.length === 0 &&
-          now - swipe.startedAt <= 300 && Math.hypot(touch.clientX - swipe.x, touch.clientY - swipe.y) <= 12) {
-        const previous = lastTap.current;
-        if (previous && now - previous.time <= 300 && Math.hypot(touch.clientX - previous.x, touch.clientY - previous.y) <= 32) {
-          event.preventDefault(); // Suppress native double-tap page zoom and the synthetic click.
-          suppressClick.current = true;
-          lastTap.current = null;
-          setExpanded((value) => !value);
-        } else lastTap.current = { x: touch.clientX, y: touch.clientY, time: now };
-        setOffset(0);
-        return;
-      }
-      lastTap.current = null;
       if (!swipe || swipe.cancelled || !swipe.horizontal) { setOffset(0); return; }
       const threshold = Math.max(45, Math.min(100, element.clientWidth * .15));
       if (Math.abs(swipe.dx) >= threshold && hasMultiple) navigateRef.current(swipe.dx < 0 ? 1 : -1);
       else { setAnimating(true); setOffset(0); timer.current = window.setTimeout(() => setAnimating(false), 190); }
     };
-    const cancel = () => { gesture.current = null; lastTap.current = null; setOffset(0); };
+    const cancel = () => { gesture.current = null; setOffset(0); };
     element.addEventListener('touchstart', start, { passive: true });
     element.addEventListener('touchmove', move, { passive: false });
     element.addEventListener('touchend', end, { passive: false });
     element.addEventListener('touchcancel', cancel);
-    return () => { element.removeEventListener('touchstart', start); element.removeEventListener('touchmove', move); element.removeEventListener('touchend', end); element.removeEventListener('touchcancel', cancel); };
-  }, [hasMultiple]);
+    return () => { removeDoubleTap(); gesture.current = null; element.removeEventListener('touchstart', start); element.removeEventListener('touchmove', move); element.removeEventListener('touchend', end); element.removeEventListener('touchcancel', cancel); };
+  }, [hasMultiple, photo?.id]);
 
   if (!photo) return null;
   const slides = hasMultiple ? [-1, 0, 1] : [0];
-  return <div ref={root} tabIndex={-1} className={`photo-viewer${expanded ? ' pv-expanded' : ''}`} onClick={(event) => event.stopPropagation()} onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); }} role="dialog" data-focus-viewer data-task-modal aria-modal="true" aria-label="Photo viewer">
+  return createPortal(<div ref={root} tabIndex={-1} className={`photo-viewer${fullscreen ? ' pv-fullscreen' : ''}`} onClick={(event) => event.stopPropagation()} onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); }} role="dialog" data-focus-viewer data-task-modal aria-modal="true" aria-label="Photo viewer">
     <button aria-label="Close" onClick={onClose} className="pv-close pv-control"><X size={22} /></button>
+    <button aria-label={fullscreen ? 'Exit photo fullscreen' : 'Enter photo fullscreen'} onClick={toggleFullscreen} className="pv-fullscreen-toggle pv-control">
+      {fullscreen ? <Minimize size={22} /> : <Maximize size={22} />}
+    </button>
     {hasMultiple && <>
       <button aria-label="Previous photo" onClick={() => navigate(-1)} className="pv-prev pv-control"><ChevronLeft size={26} /></button>
       <button aria-label="Next photo" onClick={() => navigate(1)} className="pv-next pv-control"><ChevronRight size={26} /></button>
@@ -184,5 +172,5 @@ export function PhotoViewer({ photos, startIndex, onClose, onPhotoChange }: Phot
     </div>
     <div className="pv-info" aria-live="polite" aria-atomic="true"><p title={photo.file_name}>{photo.file_name}</p>{hasMultiple && <span>{index + 1} of {photos.length}</span>}</div>
     <div className="pv-reactions" data-reaction-control><MediaReactions mediaType="photo" mediaId={photo.id} mediaName={photo.file_name} /></div>
-  </div>;
+  </div>, document.body);
 }

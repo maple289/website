@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { closeVideoPresentation, type FullscreenDocument, type FullscreenSurface, type NativeVideo } from '@/lib/videoFullscreen';
+import { listenForMediaDoubleTap } from '@/lib/mediaDoubleTap';
 
 const empty = { fullscreen: false, pip: false, canFullscreen: false, canPip: false };
 type Snapshot = typeof empty;
@@ -20,6 +21,7 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
   const [state, setState] = useState(empty);
   const [error, setError] = useState('');
   const sync = useRef<() => Snapshot>(() => empty);
+  const fullscreenAction = useRef(() => {});
   useEffect(() => {
     const video = videoRef.current as NativeVideo | null, surface = surfaceRef.current as FullscreenSurface | null;
     setError('');
@@ -45,12 +47,35 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
     for (const [name, handler] of events) video.addEventListener(name, handler);
     doc.addEventListener('fullscreenchange', read); doc.addEventListener('webkitfullscreenchange', read);
     doc.addEventListener('fullscreenerror', failed); doc.addEventListener('webkitfullscreenerror', failed);
+    // Native controls live in an opaque browser shadow tree. Reserve their
+    // bottom strip and paused central play button as well as explicit controls.
+    const mediaPoint = (target: EventTarget | null, x: number, y: number) => {
+      if (target !== video) return false;
+      const rect = video.getBoundingClientRect();
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom - (video.controls ? 64 : 0)) return false;
+      return !video.controls || !video.paused || Math.abs(x - (rect.left + rect.width / 2)) > 32 || Math.abs(y - (rect.top + rect.height / 2)) > 32;
+    };
+    let lastTouch = -Infinity;
+    const touched = () => { lastTouch = performance.now(); };
+    const removeDoubleTap = listenForMediaDoubleTap(surface, () => fullscreenAction.current(),
+      (event, touch) => mediaPoint(event.target, touch.clientX, touch.clientY));
+    const doubleClick = (event: MouseEvent) => {
+      if (performance.now() - lastTouch < 750 || !mediaPoint(event.target, event.clientX, event.clientY)) return;
+      event.preventDefault();
+      event.stopPropagation(); // Do not also run the browser's native double-click action.
+      fullscreenAction.current();
+    };
+    surface.addEventListener('touchstart', touched, { passive: true, capture: true });
+    surface.addEventListener('dblclick', doubleClick, true);
     read();
     return () => {
       sync.current = () => empty;
       for (const [name, handler] of events) video.removeEventListener(name, handler);
       doc.removeEventListener('fullscreenchange', read); doc.removeEventListener('webkitfullscreenchange', read);
       doc.removeEventListener('fullscreenerror', failed); doc.removeEventListener('webkitfullscreenerror', failed);
+      removeDoubleTap();
+      surface.removeEventListener('touchstart', touched, true);
+      surface.removeEventListener('dblclick', doubleClick, true);
     };
   }, [source, videoRef, surfaceRef]);
 
@@ -91,6 +116,7 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
       observe(result, video, surface, message);
     } catch { sync.current(); setError(message); }
   };
+  fullscreenAction.current = toggleFullscreen;
   const togglePip = () => {
     const video = videoRef.current as NativeVideo | null, surface = surfaceRef.current;
     if (!video || !surface) return;

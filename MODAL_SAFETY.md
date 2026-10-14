@@ -78,6 +78,17 @@ PhotoViewer uses the shared hook directly to retain keyboard, wheel and swipe
 navigation. Reaction detail popovers portal into their active modal so their
 controls remain inside the focus boundary.
 
+PhotoViewer portals its stable modal root to document.body so ancestor transforms,
+overflow and gallery sizing cannot constrain fullscreen. Its fullscreen button and
+touch double tap share usePhotoFullscreen and one mode state. Supported container
+fullscreen uses browser events to synchronize exit; unsupported/rejected entry
+retains a fixed viewport fallback with contain-fit images. Navigation retains
+fullscreen, explicit Exit returns to the normal viewer, and Close/unmount releases
+owned fullscreen without waiting for browser operations. Outside taps and Escape
+do not dismiss the viewer; useModalLayer still owns focus, inertness and scroll locks.
+Video media double tap invokes the existing presentation button action, including
+its WebKit/native fallbacks. See MOBILE_MEDIA_FULLSCREEN.md for validation limits.
+
 Dropdowns, context menus, informational sidebars, tooltips and reaction hover bars
 are not task dialogs and keep their lightweight dismissal. Route/browser navigation
 is not globally intercepted by this modal policy. Settings additionally registers a
