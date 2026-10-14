@@ -115,3 +115,25 @@ The corrected public-consumption and full player-recovery suites pass locally in
 Windows WebKit, Firefox and Chromium. ESLint, JavaScript syntax and whitespace
 checks pass. These follow-up changes are uncommitted and have not been pushed;
 the remote Linux CI result cannot be confirmed until the new revision runs there.
+
+## Native WebKit completion follow-up
+
+Touch devices exposing `webkitSetPresentationMode` accept the real `ended` event
+even after a `seeking` event at the end of the media. They also check `video.ended`
+on `seeked`, `webkitendfullscreen` and `webkitpresentationmodechanged` when the direct
+completion event has not reached the handler. These checks exclude looping,
+active seeking and media errors; a presentation change before completion does
+not close the player. Listeners are removed on source changes and unmount.
+
+Browsers without this native touch presentation retain the existing seek-to-end
+guard, including desktop Safari. Native WebKit seeking directly to the end may
+close the player if it emits `ended` or
+reports actual completion during a presentation change. No timer, user-agent
+check or asynchronous closing state was added.
+
+The recovery suite now includes a real ended event preceded by a simulated
+native seek, both native mode events recovering actual completion after a
+withheld ended event, stale listener cleanup and non-native seek-to-end safety.
+These scenarios were added but not run. RuboCop and tests were not run.
+The reported iPhone event sequence remains a hypothesis until device testing;
+physical Safari verification of inline and native fullscreen completion is required.
