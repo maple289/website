@@ -189,6 +189,64 @@ try {
       console.log(`PASS ${engine} natural ended: ${condition}, ${condition === 'undelivered-ended' ? 'manual Close after withheld event' : 'direct event auto-close'}, cleanup/reopen`);
       await page.close();
     }
+    for (const native of [false, true]) {
+      const page = await fixture();
+      await page.evaluate(native => {
+        Object.defineProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode', {
+          configurable: true, value: native ? () => {} : undefined,
+        });
+      }, native);
+      await open(page);
+      if (native) {
+        // Keep the real ended event but simulate AVKit reporting a seek first.
+        await page.locator('video').evaluate(v => {
+          v.addEventListener('ended', () => v.dispatchEvent(new Event('seeking')), { capture: true });
+        });
+        await playToEnd(page); await closed(page);
+        assert.equal(await page.evaluate(() => window.endedEvents), 1);
+      } else {
+        await page.locator('video').evaluate(v => { v.currentTime = v.duration; });
+        await page.waitForFunction(() => !document.querySelector('video')?.seeking);
+        await page.locator('video').evaluate(v => {
+          v.dispatchEvent(new Event('ended'));
+          v.dispatchEvent(new Event('webkitendfullscreen'));
+          v.dispatchEvent(new Event('webkitpresentationmodechanged'));
+        });
+        assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'non-native seek-to-end behavior is preserved');
+        await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      }
+      console.log(`PASS ${engine}: ${native ? 'native seeking before real ended closes' : 'non-native seek-to-end remains open'}`);
+      await page.close();
+    }
+    for (const eventName of ['webkitendfullscreen', 'webkitpresentationmodechanged']) {
+      const page = await fixture();
+      await page.evaluate(() => {
+        Object.defineProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode', { configurable: true, value: () => {} });
+      });
+      await open(page);
+      await page.locator('video').evaluate((v, eventName) => {
+        v.dispatchEvent(new Event(eventName));
+        v.addEventListener('ended', event => { window.endedEvents++; event.stopImmediatePropagation(); }, { capture: true });
+      }, eventName);
+      assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'native mode change before completion must not close');
+      await playToEnd(page); await page.waitForFunction(() => window.endedEvents === 1);
+      assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'fixture withholds ended from the completion handler');
+      assert.equal(await page.locator('video').evaluate(v => v.ended), true);
+      await page.locator('video').evaluate((v, eventName) => {
+        window.completedNativeVideo = v;
+        v.dispatchEvent(new Event(eventName));
+      }, eventName);
+      await closed(page);
+      await open(page);
+      await page.evaluate(eventName => {
+        Object.defineProperty(window.completedNativeVideo, 'ended', { configurable: true, value: true });
+        window.completedNativeVideo.dispatchEvent(new Event(eventName));
+      }, eventName);
+      assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'detached video events must not close a reopened player');
+      await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      console.log(`PASS ${engine}: ${eventName} recovers real completion, preserves active playback and removes stale listeners`);
+      await page.close();
+    }
   } else if (phase === 'fullscreen' || phase === 'pip') {
     if (phase === 'fullscreen') {
       // Mobile WebKit can expose container and legacy methods while native

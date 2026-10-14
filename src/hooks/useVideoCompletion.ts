@@ -22,11 +22,25 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
 
   useEffect(() => {
     closed.current = false; seekedToEnd.current = false;
-    const video = videoRef.current;
+    const video = videoRef.current as NativeVideo | null;
     // Restore the source following the development StrictMode cleanup pass.
     if (video && source && !video.getAttribute('src')) video.src = source;
-    return () => { if (video) releaseVideo(video); };
-  }, [source, videoRef]);
+    const recoverNativeCompletion = () => {
+      if (video?.ended && !video.loop && !video.seeking && !video.error) close();
+    };
+    const nativePresentation = typeof video?.webkitSetPresentationMode === 'function';
+    if (nativePresentation) {
+      video?.addEventListener('webkitendfullscreen', recoverNativeCompletion);
+      video?.addEventListener('webkitpresentationmodechanged', recoverNativeCompletion);
+    }
+    return () => {
+      if (video) {
+        video.removeEventListener('webkitendfullscreen', recoverNativeCompletion);
+        video.removeEventListener('webkitpresentationmodechanged', recoverNativeCompletion);
+        releaseVideo(video);
+      }
+    };
+  }, [source, videoRef, close]);
 
   const onSeeking = (event: SyntheticEvent<HTMLVideoElement>) => {
     const video = event.currentTarget;
@@ -36,7 +50,9 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
     if (event.currentTarget.currentTime < event.currentTarget.duration) seekedToEnd.current = false;
   };
   const onEnded = (event: SyntheticEvent<HTMLVideoElement>) => {
-    if (!event.currentTarget.loop && !seekedToEnd.current) close();
+    const video = event.currentTarget as NativeVideo;
+    // Native completion takes precedence over a seek reported at the end.
+    if (!video.loop && (!seekedToEnd.current || typeof video.webkitSetPresentationMode === 'function')) close();
   };
   return { close, onEnded, onSeeking, onPlaying };
 }

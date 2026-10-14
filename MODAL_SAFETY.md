@@ -12,8 +12,12 @@ floating call panel is nonmodal so users can continue browsing.
 ## Shared behavior
 
 VideoPlayer and video-file previews close on the media element's natural ended
-event. Seeking directly to the end, pause, buffering and errors do not close
-them. Manual Close and the video element's direct React ended handler use the same
+event. Seeking directly to the end leaves the player open in browsers without
+native WebKit presentation support. Native WebKit accepts an ended event even
+after seeking and checks actual ended state on native presentation changes;
+seeking to the end can therefore close that player. Pause, buffering, errors and
+presentation changes before completion do not close it. Manual Close and the
+video element's direct React ended handler use the same
 synchronous close function. It pauses playback, independently attempts owned
 fullscreen/PiP exits, releases the source and always removes the player. Rejected
 or unresolved browser operations never disable Close or retain the modal. The
