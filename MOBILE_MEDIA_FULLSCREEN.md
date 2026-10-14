@@ -71,3 +71,30 @@ Firefox, Android Chrome and iPad/tablet testing was unavailable. In particular,
 the real Safari retest must verify gesture delivery while the system video player
 is fullscreen; a mocked WebKit API cannot verify that input path. Remote Linux CI
 and deployed-device results are separate checks.
+
+## CI follow-up for 8e2267e
+
+[CI run 38615618333](https://github.com/maple289/website/actions/runs/38615618333)
+failed in the new Chromium gesture suite while waiting for the photo viewer to
+return to normal after `document.exitFullscreen()`. Earlier validation, the video
+recovery suite, and the gesture/fallback scenarios passed; deployment was skipped.
+
+The new photo hook remembered native entry only through `fullscreenchange`. A fast
+browser can fulfill `requestFullscreen()` before delivering that queued event.
+If a system exit happens first, both queued events can observe a null fullscreen
+element, leaving the CSS fullscreen layout and Exit label active. This was a
+state-synchronization bug in the new hook, not a TypeScript/build failure.
+
+Native entry is now also remembered when the fulfilled request observes the owned
+fullscreen element. The existing change handler can then restore the normal viewer
+on external exit. Rejection retains the CSS fallback, and delayed-entry cancellation
+and Close cleanup keep their existing behavior. No fullscreen request is deferred
+or duplicated, and video/PiP actions are unchanged.
+
+The `coalesced` API fixture deterministically reproduced the stale UI before the
+fix: entry fulfilled with the fullscreen property set but without an entry event,
+then external exit delivered a change event with null. The same regression passes
+after the fix in Chromium, Firefox and WebKit. TypeScript, full ESLint, syntax and
+whitespace checks, and the production build also pass. The remote Linux CI result
+requires a new pushed revision; rerunning the original commit would still exercise
+the old hook.

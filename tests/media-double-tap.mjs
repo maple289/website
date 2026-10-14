@@ -195,7 +195,7 @@ try {
     await click(page, 'Exit photo fullscreen'); await click(page, 'Close'); await page.close();
     console.log(`PASS ${engine} photo rejected API: complete CSS fullscreen retained, exit/Close available`);
   }
-  for (const api of ['standard', 'vendor', 'delayed']) {
+  for (const api of ['standard', 'vendor', 'coalesced', 'delayed']) {
     const page = await fixture(); await openPhoto(page);
     await page.evaluate(api => {
       const root = document.querySelector('.photo-viewer');
@@ -208,6 +208,10 @@ try {
       const enter = () => {
         window.photoCalls.push('enter');
         if (api === 'delayed') return new Promise(resolve => { window.completePhotoEntry = () => { change(root); resolve(); }; });
+        // The native property and promise can settle before queued change events.
+        // If exit wins that race, both events observe null; entry must still be
+        // remembered so a system exit restores the normal viewer.
+        if (api === 'coalesced') { full = root; return Promise.resolve(); }
         change(root); return Promise.resolve();
       };
       const exit = () => { window.photoCalls.push('exit'); change(null); return Promise.resolve(); };

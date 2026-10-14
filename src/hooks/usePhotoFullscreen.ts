@@ -4,6 +4,7 @@ import type { FullscreenDocument, FullscreenSurface } from '@/lib/videoFullscree
 export function usePhotoFullscreen(ref: RefObject<HTMLElement>) {
   const [fullscreen, setFullscreen] = useState(false);
   const active = useRef(false);
+  const nativeEntered = useRef(false);
   const generation = useRef(0);
   const update = (value: boolean) => { active.current = value; setFullscreen(value); };
 
@@ -11,12 +12,11 @@ export function usePhotoFullscreen(ref: RefObject<HTMLElement>) {
     const element = ref.current;
     if (!element) return;
     const doc = element.ownerDocument as FullscreenDocument;
-    const invalidate = () => { generation.current++; active.current = false; };
-    let nativeEntered = false;
+    const invalidate = () => { generation.current++; active.current = false; nativeEntered.current = false; };
     const changed = () => {
       const owned = (doc.fullscreenElement ?? doc.webkitFullscreenElement) === element;
-      const wasNative = nativeEntered;
-      nativeEntered = owned;
+      const wasNative = nativeEntered.current;
+      nativeEntered.current = owned;
       if (owned && !active.current) {
         // A cancelled request can deliver its native event later, including
         // WebKit void APIs. Do not resurrect fullscreen after an explicit exit.
@@ -71,6 +71,10 @@ export function usePhotoFullscreen(ref: RefObject<HTMLElement>) {
     if (!enter) return;
     try {
       void Promise.resolve(enter.call(element)).then(() => {
+        // requestFullscreen can resolve before its queued fullscreenchange is
+        // delivered. Remember observed native entry now: a quick system exit may
+        // make both queued change events observe null rather than the entry.
+        if (ref.current === element && owned()) nativeEntered.current = true;
         // An entry resolving after exit/Close must not leave an orphan fullscreen.
         if ((ref.current !== element || (operation !== generation.current && !active.current)) && owned() && exit) {
           try { void Promise.resolve(exit.call(doc)).catch(() => {}); } catch { /* Best-effort browser cleanup. */ }
