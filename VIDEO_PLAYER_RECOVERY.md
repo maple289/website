@@ -118,15 +118,16 @@ the remote Linux CI result cannot be confirmed until the new revision runs there
 
 ## Native WebKit completion follow-up
 
-Players exposing `webkitSetPresentationMode` accept the real `ended` event even
-after a `seeking` event at the end of the media. They also check `video.ended`
-on `webkitendfullscreen` and `webkitpresentationmodechanged` when the direct
+Touch devices exposing `webkitSetPresentationMode` accept the real `ended` event
+even after a `seeking` event at the end of the media. They also check `video.ended`
+on `seeked`, `webkitendfullscreen` and `webkitpresentationmodechanged` when the direct
 completion event has not reached the handler. These checks exclude looping,
 active seeking and media errors; a presentation change before completion does
 not close the player. Listeners are removed on source changes and unmount.
 
-Browsers without this native API retain the existing seek-to-end guard. Native
-WebKit seeking directly to the end may close the player if it emits `ended` or
+Browsers without this native touch presentation retain the existing seek-to-end
+guard, including desktop Safari. Native WebKit seeking directly to the end may
+close the player if it emits `ended` or
 reports actual completion during a presentation change. No timer, user-agent
 check or asynchronous closing state was added.
 

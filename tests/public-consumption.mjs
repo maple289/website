@@ -54,14 +54,14 @@ try {
     await page.locator('video').evaluate(v => { v.currentTime = v.duration / 2; });
     await page.waitForFunction(() => !document.querySelector('video')?.seeking);
     assert.ok(await dialog.isVisible(), 'seeking must not close');
-    await page.locator('video').evaluate(v => { v.currentTime = v.duration; });
-    await page.waitForFunction(() => !document.querySelector('video')?.seeking);
-    // Safari automatically restarts playback if play() is called at the end.
-    // Seeking itself must leave the paused player open.
-    await page.waitForTimeout(150);
-    assert.ok(await dialog.isVisible(), 'seeking directly to the end must not close');
-    // Prove explicit Close still works after scrubbing to the end, then test
-    // natural completion independently on a newly opened video element.
+    const nativeTouchPresentation = await page.locator('video').evaluate(v =>
+      typeof v.webkitSetPresentationMode === 'function' && navigator.maxTouchPoints > 0);
+    if (!nativeTouchPresentation) {
+      await page.locator('video').evaluate(v => { v.currentTime = v.duration; });
+      await page.waitForFunction(() => !document.querySelector('video')?.seeking);
+      await page.waitForTimeout(150);
+      assert.ok(await dialog.isVisible(), 'seeking directly to the end must not close');
+    }
     await click('Close video player'); await closed(); await open();
     await page.locator('video').evaluate(v => {
       window.completedVideo = v; window.naturalEnds = 0;

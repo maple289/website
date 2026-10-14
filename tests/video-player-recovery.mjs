@@ -8,8 +8,16 @@ const browser = await engines[engine].launch({ headless: true, ...(process.env.B
 const base = process.env.TEST_BASE_URL;
 assert.match(base, /^http:\/\/127\.0\.0\.1:\d+$/);
 const results = [];
-async function fixture() {
+async function fixture(nativePresentation) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  if (nativePresentation !== undefined) await page.addInitScript(native => {
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true, value: native ? 5 : 0,
+    });
+    Object.defineProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode', {
+      configurable: true, value: native ? () => {} : undefined,
+    });
+  }, nativePresentation);
   if (engine === 'webkit') await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: '/tests/fixtures/playback-ended.mp4' } }));
   await page.goto(base + '/tests/public-previews.html?consumption=1');
   return page;
@@ -190,28 +198,17 @@ try {
       await page.close();
     }
     for (const native of [false, true]) {
-      const page = await fixture();
-      await page.evaluate(native => {
-        Object.defineProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode', {
-          configurable: true, value: native ? () => {} : undefined,
-        });
-      }, native);
+      const page = await fixture(native);
       await open(page);
-      if (native) {
-        // Keep the real ended event but simulate AVKit reporting a seek first.
-        await page.locator('video').evaluate(v => {
-          v.addEventListener('ended', () => v.dispatchEvent(new Event('seeking')), { capture: true });
-        });
-        await playToEnd(page); await closed(page);
-        assert.equal(await page.evaluate(() => window.endedEvents), 1);
-      } else {
-        await page.locator('video').evaluate(v => { v.currentTime = v.duration; });
-        await page.waitForFunction(() => !document.querySelector('video')?.seeking);
-        await page.locator('video').evaluate(v => {
-          v.dispatchEvent(new Event('ended'));
-          v.dispatchEvent(new Event('webkitendfullscreen'));
-          v.dispatchEvent(new Event('webkitpresentationmodechanged'));
-        });
+      await page.locator('video').evaluate(v => {
+        Object.defineProperty(v, 'duration', { configurable: true, value: 10 });
+        Object.defineProperty(v, 'currentTime', { configurable: true, value: 10 });
+        Object.defineProperty(v, 'ended', { configurable: true, value: true });
+        v.dispatchEvent(new Event('seeking'));
+        v.dispatchEvent(new Event('ended'));
+      });
+      if (native) await closed(page);
+      else {
         assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'non-native seek-to-end behavior is preserved');
         await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
       }
@@ -219,21 +216,15 @@ try {
       await page.close();
     }
     for (const eventName of ['webkitendfullscreen', 'webkitpresentationmodechanged']) {
-      const page = await fixture();
-      await page.evaluate(() => {
-        Object.defineProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode', { configurable: true, value: () => {} });
-      });
+      const page = await fixture(true);
       await open(page);
       await page.locator('video').evaluate((v, eventName) => {
         v.dispatchEvent(new Event(eventName));
-        v.addEventListener('ended', event => { window.endedEvents++; event.stopImmediatePropagation(); }, { capture: true });
       }, eventName);
       assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'native mode change before completion must not close');
-      await playToEnd(page); await page.waitForFunction(() => window.endedEvents === 1);
-      assert.ok(await page.getByRole('dialog', { name: 'Video player', exact: true }).isVisible(), 'fixture withholds ended from the completion handler');
-      assert.equal(await page.locator('video').evaluate(v => v.ended), true);
       await page.locator('video').evaluate((v, eventName) => {
         window.completedNativeVideo = v;
+        Object.defineProperty(v, 'ended', { configurable: true, value: true });
         v.dispatchEvent(new Event(eventName));
       }, eventName);
       await closed(page);

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, type RefObject, type SyntheticEvent } from 'react';
 import { closeVideoPresentation, releaseVideo, type NativeVideo } from '@/lib/videoFullscreen';
 
+function usesNativeTouchPresentation(video: NativeVideo) {
+  return typeof video.webkitSetPresentationMode === 'function' &&
+    (video.ownerDocument.defaultView?.navigator.maxTouchPoints ?? 0) > 0;
+}
+
 // Closing is a UI action, never a transaction waiting on a browser display mode.
 export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRef: RefObject<HTMLElement>, source: string | null | undefined, onClose: () => void) {
   const callback = useRef(onClose);
@@ -28,13 +33,15 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
     const recoverNativeCompletion = () => {
       if (video?.ended && !video.loop && !video.seeking && !video.error) close();
     };
-    const nativePresentation = typeof video?.webkitSetPresentationMode === 'function';
+    const nativePresentation = !!video && usesNativeTouchPresentation(video);
     if (nativePresentation) {
+      video.addEventListener('seeked', recoverNativeCompletion);
       video?.addEventListener('webkitendfullscreen', recoverNativeCompletion);
       video?.addEventListener('webkitpresentationmodechanged', recoverNativeCompletion);
     }
     return () => {
       if (video) {
+        video.removeEventListener('seeked', recoverNativeCompletion);
         video.removeEventListener('webkitendfullscreen', recoverNativeCompletion);
         video.removeEventListener('webkitpresentationmodechanged', recoverNativeCompletion);
         releaseVideo(video);
@@ -52,7 +59,7 @@ export function useVideoCompletion(videoRef: RefObject<HTMLVideoElement>, rootRe
   const onEnded = (event: SyntheticEvent<HTMLVideoElement>) => {
     const video = event.currentTarget as NativeVideo;
     // Native completion takes precedence over a seek reported at the end.
-    if (!video.loop && (!seekedToEnd.current || typeof video.webkitSetPresentationMode === 'function')) close();
+    if (!video.loop && (!seekedToEnd.current || usesNativeTouchPresentation(video))) close();
   };
   return { close, onEnded, onSeeking, onPlaying };
 }
