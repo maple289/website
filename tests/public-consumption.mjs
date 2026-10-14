@@ -89,7 +89,7 @@ try {
     await page.keyboard.press('Enter');
     const fileDialog = page.getByRole('dialog', { name: 'File preview', exact: true });
     await fileDialog.locator('.page[data-loaded="true"] canvas').first().waitFor();
-    assert.ok((await fileDialog.innerText()).includes('Public generated preview'));
+    await fileDialog.getByText('Public generated preview', { exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Download original file' }).count(), 0);
     await click('Close preview');
     await fileDialog.waitFor({ state: 'hidden' });
@@ -135,8 +135,9 @@ try {
       }, native);
       await runToEnd(); await closed();
       assert.equal(await page.evaluate(() => window.exitCalls), 1);
+      await page.waitForFunction(() => window.fullscreenExited);
       assert.equal(await page.evaluate(() => window.fullscreenExited), true);
-      assert.equal(await page.evaluate(() => window.presentDuringExit), true, 'exit precedes player removal');
+      assert.equal(await page.evaluate(() => window.presentDuringExit), false, 'delayed exit cannot hold the player open');
     }
     await open();
     await page.locator('video').evaluate(v => {
@@ -144,11 +145,9 @@ try {
       Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => window.fullscreenExited ? null : v });
       document.exitFullscreen = () => Promise.reject(new Error('Fixture fullscreen exit failure'));
     });
-    await runToEnd(); await dialog.getByRole('alert').waitFor();
-    assert.ok(await dialog.isVisible(), 'rejected exit must retain a visible player');
+    await runToEnd(); await closed();
     await page.evaluate(() => { window.fullscreenExited = true; document.dispatchEvent(new Event('fullscreenchange')); });
-    await closed();
-    console.log(`PASS ${engine} ${width}px: asynchronous standard and native Safari exits before close; rejected exit retains player and finishes closing when fullscreen exits`);
+    console.log(`PASS ${engine} ${width}px: standard and simulated native exits attempted; delayed/rejected exits cannot prevent closing`);
     assert.deepEqual(errors, []);
     await page.close();
   }

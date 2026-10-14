@@ -45,7 +45,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ci-placeholder-key
 
       - name: Install browser test runtime
-        run: npx playwright install --with-deps chromium firefox
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Browser and transfer regressions
         env:
@@ -57,10 +57,15 @@ jobs:
           node tests/mobile-auth.mjs
           node tests/temporary-share-hosting.mjs
 
-      - name: Firefox public preview and consumption regressions
+      - name: Firefox public preview and player regressions
         env:
           BROWSER_ENGINE: firefox
-        run: node scripts/run-ui-regressions.mjs public-previews public-consumption mobile-video-completion video-presentation
+        run: node scripts/run-ui-regressions.mjs public-previews public-consumption video-player-recovery
+
+      - name: WebKit player recovery regressions
+        env:
+          BROWSER_ENGINE: webkit
+        run: node scripts/run-ui-regressions.mjs public-consumption video-player-recovery
 
       - name: Email and reconciliation regressions
         run: |

@@ -1,5 +1,8 @@
 # Mobile fullscreen and PiP controls
 
+Superseded by VIDEO_PLAYER_RECOVERY.md. The implementation described below was
+replaced after the reported iPhone regression; it is retained as historical context.
+
 ## Findings
 
 The gallery and video-file players previously rendered `<video controls>` with

@@ -13,31 +13,24 @@ floating call panel is nonmodal so users can continue browsing.
 
 VideoPlayer and video-file previews close on the media element's natural ended
 event. Seeking directly to the end, pause, buffering and errors do not close
-them. Closing pauses playback and awaits standard/vendor/native Safari fullscreen
-exit before removing the player. Exit failure retains the modal for an explicit
-retry. Unmount removes listeners and releases the media source; the shared modal
-layer restores focus, scrolling and the gallery position. Browser fixtures cover
-desktop, phone and tablet widths, including simulated native fullscreen exits.
-The iPhone completion follow-up tracks native begin/end and presentation-mode
-events, tries inline presentation and legacy API aliases, and accepts native exit
-events when readonly fullscreen flags lag. Actual ended events remain the primary
-completion signal; native time/fullscreen/foreground events recover only an actual
-ended state or an already requested close, never a duration threshold. A delayed
-fullscreen exit completes the retained close request automatically. Manual exits,
-pause, buffering and direct seeks without natural completion leave the modal open.
+them. Manual Close and the video element's direct React ended handler use the same
+synchronous close function. It pauses playback, independently attempts owned
+fullscreen/PiP exits, releases the source and always removes the player. Rejected
+or unresolved browser operations never disable Close or retain the modal. The
+shared modal layer restores focus, scrolling and the gallery position. See
+VIDEO_PLAYER_RECOVERY.md for the regression evidence and device-testing limits.
 
-Gallery and video-file players use one application control bar while inline.
+Gallery and video-file players retain native playback controls and a small
+application bar for optional fullscreen and PiP actions.
 Fullscreen and PiP requests run directly in their respective tap handlers, with
-separate operation guards and no queued entry effects. Actual browser/native
+no queued entry effects or pending operation state. Actual browser/native
 events drive mode state; conflicting entry buttons require exiting the current
 mode first. Supported container fullscreen retains the header/Close and controls;
-iPhone native fullscreen uses the video-specific API and system controls. Close
-waits for an entry already in flight, then exits owned fullscreen and PiP before
-releasing the source. Failed cleanup retains the player; a later system exit
-finishes the retained close request. Native PiP recovery also requires actual
-ended state, never a duration timer. TaskModal retains focus, inertness and scroll
-ownership. Regression fixtures include real media, responsive layouts, API
-rejections and simulated iOS events; physical mobile devices were not available.
+iPhone native fullscreen uses the video-specific API and system controls. Native
+void APIs rely on browser events for mode confirmation without creating an
+application wait. Unsupported programmatic PiP is hidden. TaskModal retains focus,
+inertness and scroll ownership. Regression fixtures include real media, API
+rejections and simulated native events; these do not replace a physical iPhone test.
 
 TaskModal uses useModalLayer for focus containment, restoring focus, nested
 layer handling, background inertness and body/document scroll locking. Overlay

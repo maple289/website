@@ -1,3 +1,6 @@
+Superseded by VIDEO_PLAYER_RECOVERY.md. The implementation described below was
+replaced after the reported iPhone regression; it is retained as historical context.
+
 iPhone video completion follow-up
 
 Implemented locally; not pushed/deployed by this change.

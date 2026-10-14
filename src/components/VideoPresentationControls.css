@@ -1,9 +1,4 @@
 /* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
-@media (pointer: coarse) {
-  /* iOS volume uses device controls; mute remains available in the player. */
-  .video-volume-slider { display: none; }
-}
-
 .video-fullscreen-surface:fullscreen {
   display: flex;
   flex-direction: column;

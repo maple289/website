@@ -28,7 +28,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const viewEvent = useRef({ id: video.id, requestId: analyticsRequestId(), sent: false });
 
   useVideoVolume(videoRef, url);
-  const { close, closing, closeError } = useVideoCompletion(videoRef, playerRef, url, onClose);
+  const completion = useVideoCompletion(videoRef, playerRef, url, onClose);
 
   useEffect(() => {
     let active = true;
@@ -67,9 +67,8 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
       <div ref={surfaceRef} className="video-fullscreen-surface video-player-surface relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border bg-[#0a0a0a] shadow-2xl">
         <div className="flex shrink-0 items-center justify-between px-5 py-4">
           <h3 className="truncate text-base font-semibold tracking-[-0.02em]">{video.file_name}</h3>
-          <button aria-label="Close video player" disabled={closing} onClick={() => void close()} className="min-h-11 min-w-11 shrink-0 rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={20} /></button>
+          <button aria-label="Close video player" onClick={completion.close} className="min-h-11 min-w-11 shrink-0 rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={20} /></button>
         </div>
-        {closeError && <p role="alert" className="px-5 py-2 text-sm text-amber-300">{closeError}</p>}
         <div className="video-playback-area aspect-video w-full bg-black">
           {loading ? (
             <div className="flex h-full items-center justify-center"><Loader2 size={32} className="animate-spin text-blue-400" /></div>
@@ -80,13 +79,14 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
               <button onClick={() => setAttempt(value => value + 1)} className="min-h-11 rounded-xl border border-slate-600 px-5 text-sm text-white">Retry</button>
             </div>
           ) : (
-            <video ref={videoRef} src={url ?? undefined} controls={false} playsInline controlsList={user ? 'nofullscreen' : 'nodownload nofullscreen'} autoPlay className="managed-video h-full w-full object-contain" onPlaying={() => {
+            <video ref={videoRef} src={url ?? undefined} controls playsInline controlsList={user ? 'nofullscreen' : 'nodownload nofullscreen'} autoPlay className="managed-video h-full w-full object-contain" onEnded={completion.onEnded} onSeeking={completion.onSeeking} onPlaying={event => {
+              completion.onPlaying(event);
               if (viewEvent.current.id !== video.id) viewEvent.current = { id: video.id, requestId: analyticsRequestId(), sent: false };
               if (!viewEvent.current.sent) { viewEvent.current.sent = true; recordMediaView('video', video.id, viewEvent.current.requestId); }
             }} />
           )}
         </div>
-        {!loading && !error && <VideoPresentationControls videoRef={videoRef} surfaceRef={surfaceRef} source={url} closing={closing} />}
+        {!loading && !error && <VideoPresentationControls videoRef={videoRef} surfaceRef={surfaceRef} source={url} />}
         <div className="video-reactions"><MediaReactions mediaType="video" mediaId={video.id} mediaName={video.file_name} /></div>
       </div>
     </TaskModal>
