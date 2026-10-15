@@ -30,6 +30,12 @@ application bar for optional fullscreen and PiP actions.
 The normal gallery player retains its previous sizing. On coarse pointers,
 fullscreen gives the video the entire viewport; the header and application mode
 controls overlay it, leaving the bottom native playback-control strip available.
+Mobile gallery fullscreen fills the viewport with centered, aspect-preserving
+cropping. The application mode bar hides after two seconds of playback, returns on
+touch, and remains available during pause, buffering, seeking or keyboard use.
+Hidden buttons are inert; keyboard input reveals them before shared focus handling.
+The first revealing touch cannot activate a newly exposed Exit button. Close remains
+visible, and exit/source changes/unmount clear timers, listeners and hidden state.
 Fullscreen and PiP requests run directly in their respective tap handlers, with
 no queued entry effects or pending operation state. Actual browser/native
 events drive mode state; conflicting entry buttons require exiting the current

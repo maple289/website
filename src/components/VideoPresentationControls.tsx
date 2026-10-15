@@ -1,14 +1,17 @@
-import type { RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 import { Maximize, Minimize, PictureInPicture2 } from 'lucide-react';
 import { useVideoPresentation } from '@/hooks/useVideoPresentation';
+import { useVideoControlsAutoHide } from '@/hooks/useVideoControlsAutoHide';
 import './VideoPresentationControls.css';
 
 export function VideoPresentationControls({ videoRef, surfaceRef, source }: {
   videoRef: RefObject<HTMLVideoElement>; surfaceRef: RefObject<HTMLElement>; source: string | null | undefined;
 }) {
   const mode = useVideoPresentation(videoRef, surfaceRef, source);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  useVideoControlsAutoHide(videoRef, surfaceRef, controlsRef, source, mode.fullscreen, mode.error);
   const style = 'flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-white/15 disabled:opacity-50';
-  return <div className="video-presentation-controls shrink-0 bg-black px-2 py-1 text-white">
+  return <div ref={controlsRef} className="video-presentation-controls shrink-0 bg-black px-2 py-1 text-white">
     <div className="flex flex-wrap items-center justify-end gap-1">
       {mode.canFullscreen && <button type="button" className={style} aria-label={mode.fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         title={mode.pip ? 'Exit picture-in-picture first' : undefined} disabled={mode.pip} onClick={mode.toggleFullscreen}>

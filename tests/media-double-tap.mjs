@@ -110,7 +110,7 @@ async function videoPageGeometry(page) {
       fit: getComputedStyle(v).objectFit, portal: surface.closest('[data-task-modal]')?.parentElement === document.body };
   });
   for (const [actual, expected] of [[g.x, 0], [g.y, 0], [g.width, g.vw], [g.height, g.vh]]) assert.ok(Math.abs(actual - expected) < 1, JSON.stringify(g));
-  assert.equal(g.fit, 'contain'); assert.equal(g.portal, true);
+  assert.equal(g.fit, 'cover'); assert.equal(g.portal, true);
   for (const name of ['Close video player', 'Exit fullscreen']) {
     assert.equal(await page.getByRole('button', { name, exact: true }).evaluate(b => {
       const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
@@ -126,7 +126,7 @@ async function mobileVideoLayout(page, fullscreen = false) {
   });
   assert.ok(g.surface.x >= -1 && g.surface.y >= -1 && g.surface.right <= g.vw + 1 && g.surface.bottom <= g.vh + 1, JSON.stringify(g));
   assert.ok(g.video.width > 0 && g.video.height > 0 && g.video.x >= g.stage.x - 1 && g.video.y >= g.stage.y - 1 && g.video.right <= g.stage.right + 1 && g.video.bottom <= g.stage.bottom + 1, 'complete video fits its stage: ' + JSON.stringify(g));
-  assert.equal(g.fit, 'contain');
+  assert.equal(g.fit, fullscreen ? 'cover' : 'contain');
   if (!fullscreen) {
     assert.ok(Math.abs(g.stage.width / g.stage.height - 16 / 9) < .01, 'retain the previous normal video size instead of squeezing it into smaller rows');
     return g;
@@ -160,6 +160,61 @@ async function geometry(page) {
   }
 }
 try {
+  {
+    const page = await fixture(844, true, 390);
+    // Forty-five seconds of real playback avoids the short completion fixture's
+    // native loop boundary while checking idle/pause/keyboard timers.
+    await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } }));
+    await openVideo(page); await modes(page, 'presentation', 5);
+    await page.locator('video').evaluate(v => {
+      v.loop = true; window.controlEvents = [];
+      for (const name of ['playing', 'play', 'pause', 'seeking', 'seeked', 'waiting', 'stalled', 'error']) v.addEventListener(name, () => {
+        window.controlEvents.push({ name, paused: v.paused, seeking: v.seeking, ready: v.readyState, time: v.currentTime });
+        if (window.controlEvents.length > 30) window.controlEvents.shift();
+      });
+    });
+    await click(page, 'Enter fullscreen');
+    const bar = page.locator('.video-presentation-controls');
+    const exitBox = await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).boundingBox();
+    await page.locator('video').evaluate(v => v.play());
+    const hidden = async () => {
+      try { await page.waitForFunction(() => document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'), undefined, { timeout: 4500 }); }
+      catch (error) { throw new Error(error.message + ' ' + JSON.stringify(await page.locator('video').evaluate(v => ({ paused: v.paused, seeking: v.seeking, ready: v.readyState, ended: v.ended, time: v.currentTime, focus: document.activeElement?.outerHTML.slice(0, 220), events: window.controlEvents })))); }
+    };
+    const shown = () => page.waitForFunction(() => !document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'));
+    await hidden();
+    assert.equal(await bar.getAttribute('inert'), '');
+    assert.equal(await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).count(), 0, 'hidden controls leave the accessibility/focus tree');
+    if (process.env.CAPTURE_MEDIA_GESTURES) await page.screenshot({ path: `.runtime/video-fill-hidden-${engine}.png` });
+    if (engine === 'chromium') await page.touchscreen.tap(exitBox.x + exitBox.width / 2, exitBox.y + exitBox.height / 2);
+    else await gesture(page, 'video', 'single');
+    await shown();
+    assert.equal(await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).count(), 1, 'first touch reveals, rather than activating, the previously hidden Exit button');
+    assert.equal(await bar.getAttribute('inert'), null);
+    await page.locator('video').evaluate(v => v.pause()); await shown();
+    await page.waitForTimeout(2200);
+    assert.equal(await bar.getAttribute('aria-hidden'), null, 'paused playback retains usable controls');
+    await page.locator('video').evaluate(v => v.play()); await hidden();
+    await page.keyboard.press('Tab'); await shown();
+    await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).focus();
+    await page.waitForTimeout(2200);
+    assert.equal(await bar.getAttribute('aria-hidden'), null, 'keyboard focus must not disappear while using controls');
+    await gesture(page, 'video', 'single'); await hidden();
+    await gesture(page, 'video', 'double');
+    await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
+    assert.equal(await bar.getAttribute('inert'), null, 'exit restores the normal control bar');
+    assert.equal(await page.locator('video').evaluate(v => getComputedStyle(v).objectFit), 'contain', 'normal view preserves the complete picture');
+    await click(page, 'Enter fullscreen'); await hidden();
+    await click(page, 'Close video player');
+    assert.equal(await page.locator('.video-controls-hidden').count(), 0);
+    assert.equal(await page.locator('[inert]').count(), 0);
+    assert.equal(await page.evaluate(() => document.body.style.overflow), '');
+    await openVideo(page);
+    assert.equal(await page.locator('.video-presentation-controls').getAttribute('inert'), null, 'reopened player has fresh visible controls');
+    await click(page, 'Close video player');
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} fullscreen control bar: hides during playback, touch reveals safely, pause/keyboard retain controls, hidden double-tap exit and Close/reopen cleanup`);
+  }
   for (const [width, height] of [[390, 844], [844, 390], [932, 430], [844, 320], [768, 1024], [1024, 768]]) {
     const page = await fixture(width, true, height); await openVideo(page); await modes(page, 'presentation', 5);
     assert.equal(await page.locator('.video-page-fullscreen').count(), 0, 'opening a video must start in the normal viewer');

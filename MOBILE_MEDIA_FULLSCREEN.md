@@ -203,3 +203,44 @@ checks pass. TypeScript, full ESLint, syntax/whitespace checks and the productio
 build pass. Screenshots confirm the fullscreen video uses the full viewport and
 the overlay controls remain usable. The correction is local and has not been
 committed or deployed; physical iPhone Safari verification is still required.
+
+## Touch-to-reveal controls and fullscreen fill
+
+The user approved hiding the application bar during playback and filling unused
+black margins, with edge cropping where the source and screen proportions differ.
+The fullscreen stage/video geometry already matches the viewport and has no left
+offset in the source or local browser checks. Its previous `object-fit: contain`
+can leave margins. The screenshot alone cannot establish whether its one-sided
+black region is also present in the original video.
+
+Mobile gallery fullscreen now uses centered `object-fit: cover`. It fills the
+viewport without stretching, cropping excess source edges symmetrically. Normal
+gallery playback, desktop fullscreen, photos and file previews keep their previous
+fit behavior. No separate fullscreen mode/action has been added.
+
+The application bar hides after two idle seconds while playing in mobile gallery
+fullscreen. Touch reveals it without consuming video gestures or native playback
+controls. Pause, seeking, buffering and errors show it; keyboard focus keeps it
+usable. Hidden controls are inert and excluded from accessibility/focus navigation;
+keyboard input reveals them before the modal layer handles navigation. Close remains
+visible. Exit, source replacement and unmount restore visibility and clear listeners
+and timers. Photo navigation and site-wide zoom behavior are unchanged.
+
+A real Chromium touch test reproduced an important reveal hazard: the browser can
+retarget a touch's synthetic click to an Exit button newly revealed under the finger.
+A capture guard now suppresses that one control click; a subsequent deliberate touch
+can use the button. The test failed before the guard and passes with it. Regression
+coverage also includes idle hiding, pause/keyboard visibility, hidden-bar double-tap
+exit, cleanup/reopen, viewport fill and existing presentation/gesture behavior.
+
+A generated 45-second blue clip, in MP4 and WebM variants, gives the idle-control
+tests uninterrupted playback. The short completion fixture can pause at its loop
+boundary in Windows WebKit and is retained for completion-specific regressions.
+
+The complete media gesture suite passes in Chromium, WebKit and Firefox, including
+the new visibility/fill checks and existing photo, fullscreen, PiP and desktop cases.
+The Chromium player-recovery suite also passes. TypeScript, full ESLint, JavaScript
+syntax/whitespace checks and the production build pass. Local screenshots show
+edge-to-edge video with the application bar hidden during playback. These changes
+are local and have not been committed or deployed. Physical iPhone Safari input
+and the original clip's black region still require deployed-device verification.

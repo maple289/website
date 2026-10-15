@@ -1,5 +1,6 @@
 /* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
 .managed-video { touch-action: manipulation; }
+.video-presentation-controls.video-controls-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .video-page-fullscreen-layer { z-index: 100; padding: 0; }
 .video-fullscreen-surface.video-page-fullscreen {
   position: fixed;
@@ -94,6 +95,11 @@
     inset: 0;
     width: 100%;
     height: 100%;
+  }
+  .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) video {
+    object-fit: cover;
+    object-position: center;
+    margin: 0;
   }
   .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) .video-player-header {
     position: absolute;

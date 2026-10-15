@@ -335,11 +335,11 @@ try {
         await page.waitForFunction(() => document.fullscreenElement?.classList.contains('video-player-surface'));
         const geometry = await page.locator('.video-player-surface').evaluate(surface => {
           const rect = surface.getBoundingClientRect();
-          return { width: rect.width, height: rect.height, vw: innerWidth, vh: innerHeight, fit: getComputedStyle(surface.querySelector('video')).objectFit };
+          return { width: rect.width, height: rect.height, vw: innerWidth, vh: innerHeight, fit: getComputedStyle(surface.querySelector('video')).objectFit, touch: matchMedia('(pointer: coarse)').matches };
         });
         assert.ok(Math.abs(geometry.width - geometry.vw) < 1);
         assert.ok(Math.abs(geometry.height - geometry.vh) < 1);
-        assert.equal(geometry.fit, 'contain');
+        assert.equal(geometry.fit, geometry.touch ? 'cover' : 'contain');
         await button('Exit fullscreen').click(); await page.waitForFunction(() => !document.fullscreenElement);
       }
       await button('Enter fullscreen').click(); await button('Exit fullscreen').waitFor();
