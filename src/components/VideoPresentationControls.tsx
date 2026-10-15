@@ -13,7 +13,7 @@ export function VideoPresentationControls({ videoRef, surfaceRef, source }: {
   const style = 'flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-white/15 disabled:opacity-50';
   return <div ref={controlsRef} className="video-presentation-controls shrink-0 bg-black px-2 py-1 text-white">
     <div className="flex flex-wrap items-center justify-end gap-1">
-      {mode.canFullscreen && <button type="button" className={style} aria-label={mode.fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+      {mode.canFullscreen && <button type="button" data-video-fullscreen-toggle className={style} aria-label={mode.fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         title={mode.pip ? 'Exit picture-in-picture first' : undefined} disabled={mode.pip} onClick={mode.toggleFullscreen}>
         {mode.fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}{mode.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
       </button>}

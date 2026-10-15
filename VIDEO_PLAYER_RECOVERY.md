@@ -1,5 +1,48 @@
 # Gallery video player recovery
 
+## Android Chrome PiP fullscreen return
+
+The user confirmed iPhone playback/fullscreen works and reported that tapping
+Fullscreen in Android Chrome's floating PiP window stops playback. Inspection
+found that `leavepictureinpicture` shared the fullscreen-exit callback, which
+cleared page fullscreen and native mode state. The standard PiP path also had no
+playback recovery when a browser paused the video during the return to fullscreen.
+No source reload or explicit pause was found in that exit callback.
+
+An isolated real-media fixture reproduces the playback gap with the old hook:
+clear the PiP property, deliver leave/pause/fullscreen events, and playback stays
+paused. This models the reported Chrome handoff; it is not a capture of the user's
+physical Android event sequence. The [PiP specification](https://www.w3.org/TR/picture-in-picture/#exit-pip)
+recommends preserving playback on exit but permits native controls to change it.
+
+The standard PiP leave event now has its own mode callback, preserving a restored
+fullscreen presentation. `videoPipPlayback.ts` remembers playing/paused state in
+standard PiP and makes at most one play attempt when that playing session returns
+to owned fullscreen, freshly returns focus to the foreground page, or the user
+explicitly exits PiP on the page. Chrome's [native return action](https://raw.githubusercontent.com/chromium/chromium/main/content/browser/picture_in_picture/video_picture_in_picture_window_controller_impl.cc)
+can focus the originating page without a DOM fullscreen event. The guard keeps the
+same video, source and playback position. A short recovery window tolerates queued
+pause/leave/fullscreen events without retaining playback intent indefinitely.
+PiP Pause, native window dismissal, later user interaction, source changes, ended/
+error, Close and stale promises cannot restart playback. Background playback is
+not resumed. Rejected play leaves native Play and Close available without retries.
+The native WebKit/iPhone presentation actions and fullscreen sizing are unchanged.
+
+The `pip-handoff` phase in `tests/video-player-recovery.mjs` covers five event
+orders, foreground focus before/after exit without DOM fullscreen,
+source/node/position preservation, explicit exits from playing and paused
+states, PiP Pause, dismissal, subsequent manual Pause, restored fullscreen layout,
+autoplay rejection, Close during delayed exit and replacement PiP sessions. It is
+included in the existing Chromium/Firefox/WebKit recovery CI runs. Physical Android
+Chrome verification remains required after deployment.
+
+Local results: 19 PiP handoff scenarios passed in each of Chromium, WebKit and
+Firefox (57 checks). Existing Chromium player recovery/media gestures and WebKit
+media gestures also passed, including iPhone-style fullscreen and auto-hide.
+TypeScript, full ESLint, whitespace validation and the production build passed.
+These are Windows engine fixtures with simulated native events, not an Android
+hardware test. The changes have not been committed, pushed or deployed by this work.
+
 Candidate implementation; not committed, pushed or deployed by this work.
 The user reports Android closing works and the remaining device failure is iPhone.
 Physical iPhone Safari testing remains required after deployment; Windows WebKit

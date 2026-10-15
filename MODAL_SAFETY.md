@@ -27,6 +27,10 @@ VIDEO_PLAYER_RECOVERY.md for the regression evidence and device-testing limits.
 
 Gallery and video-file players retain native playback controls and a small
 application bar for optional fullscreen and PiP actions.
+Standard PiP return preserves playing/paused state during the fullscreen handoff;
+its leave event does not run fullscreen-exit cleanup. Recovery is limited to the
+same connected source, excludes native dismissal/background playback and respects
+subsequent manual Pause. Close remains unconditional and cancels recovery listeners.
 The normal gallery player retains its previous sizing. On coarse pointers,
 fullscreen gives the video the entire viewport; the header and application mode
 controls overlay it, leaving the bottom native playback-control strip available.

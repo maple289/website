@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { closeVideoPresentation, setVideoPageFullscreen, type FullscreenDocument, type FullscreenSurface, type NativeVideo } from '@/lib/videoFullscreen';
 import { listenForMediaDoubleTap } from '@/lib/mediaDoubleTap';
+import { preserveVideoPipPlayback } from '@/lib/videoPipPlayback';
 
 const empty = { fullscreen: false, pip: false, canFullscreen: false, canPip: false };
 type Snapshot = typeof empty;
@@ -22,11 +23,14 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
   const [error, setError] = useState('');
   const sync = useRef<() => Snapshot>(() => empty);
   const fullscreenAction = useRef(() => {});
+  const pipPlayback = useRef<ReturnType<typeof preserveVideoPipPlayback> | null>(null);
   useEffect(() => {
     const video = videoRef.current as NativeVideo | null, surface = surfaceRef.current as FullscreenSurface | null;
     setError('');
     if (!video || !surface) { setState(empty); return; }
     const doc = video.ownerDocument as FullscreenDocument;
+    const playback = preserveVideoPipPlayback(video, surface);
+    pipPlayback.current = playback;
     let nativeMode: NativeVideo['webkitPresentationMode'];
     let wasOwnedFullscreen = false;
     const read = () => {
@@ -50,10 +54,13 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
       read();
     };
     const pipEntered = () => { setVideoPageFullscreen(surface, false); nativeMode = 'picture-in-picture'; read(); };
+    // Leaving PiP can be part of entering fullscreen. It is not a fullscreen
+    // exit and must not tear down a presentation the browser just restored.
+    const pipLeft = () => { if (nativeMode === 'picture-in-picture') nativeMode = 'inline'; read(); };
     const failed = () => { read(); if (!surface.classList.contains('video-page-fullscreen')) setError('Fullscreen is unavailable. You can continue playing or close the video.'); };
     const events: Array<[string, () => void]> = [
       ['loadedmetadata', read], ['webkitbeginfullscreen', entered], ['webkitendfullscreen', left],
-      ['webkitpresentationmodechanged', presentationChanged], ['enterpictureinpicture', pipEntered], ['leavepictureinpicture', left],
+      ['webkitpresentationmodechanged', presentationChanged], ['enterpictureinpicture', pipEntered], ['leavepictureinpicture', pipLeft],
     ];
     for (const [name, handler] of events) video.addEventListener(name, handler);
     doc.addEventListener('fullscreenchange', read); doc.addEventListener('webkitfullscreenchange', read);
@@ -80,6 +87,8 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
     surface.addEventListener('dblclick', doubleClick, true);
     read();
     return () => {
+      playback.dispose();
+      if (pipPlayback.current === playback) pipPlayback.current = null;
       setVideoPageFullscreen(surface, false);
       sync.current = () => empty;
       for (const [name, handler] of events) video.removeEventListener(name, handler);
@@ -158,7 +167,7 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
     const message = 'Picture-in-picture is unavailable. You can continue playing or close the video.';
     try {
       let result: unknown;
-      if (actual.pip && doc.pictureInPictureElement === video && doc.exitPictureInPicture) result = doc.exitPictureInPicture();
+      if (actual.pip && doc.pictureInPictureElement === video && doc.exitPictureInPicture) result = pipPlayback.current?.exit() ?? doc.exitPictureInPicture();
       else if (actual.pip && video.webkitSetPresentationMode) result = video.webkitSetPresentationMode('inline');
       else if (cap.pip) result = video.requestPictureInPicture();
       else if (cap.nativePip) result = video.webkitSetPresentationMode!('picture-in-picture');

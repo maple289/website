@@ -84,6 +84,24 @@ async function modes(page, api) {
       change(next); return promised ? Promise.resolve() : undefined;
     };
     window.systemExitMode = () => change('inline');
+    window.returnPipToFullscreen = async order => {
+      const leave = () => { mode = 'inline'; v.dispatchEvent(new Event('leavepictureinpicture')); };
+      const fullscreen = () => { mode = 'fullscreen'; document.dispatchEvent(new Event('fullscreenchange')); };
+      const pause = async () => {
+        if (v.paused) return;
+        const paused = new Promise(resolve => v.addEventListener('pause', resolve, { once: true }));
+        v.pause(); await paused;
+      };
+      // The PiP property changes before queued DOM events are delivered.
+      mode = 'inline';
+      for (const event of order.split('-')) {
+        if (event === 'leave') {
+          if (mode === 'fullscreen') v.dispatchEvent(new Event('leavepictureinpicture'));
+          else leave();
+        } else if (event === 'full') fullscreen();
+        else await pause();
+      }
+    };
     surface.requestFullscreen = () => request('standard-fullscreen', 'fullscreen', true);
     document.exitFullscreen = () => request('standard-exit', 'inline', true);
     v.requestPictureInPicture = () => request('standard-pip', 'picture-in-picture', true);
@@ -97,7 +115,7 @@ async function modes(page, api) {
   }, api);
 }
 try {
-  for (const phase of requestedPhase === 'all' ? ['close', 'ended', 'fullscreen', 'pip', 'combinations', 'desktop'] : [requestedPhase]) {
+  for (const phase of requestedPhase === 'all' ? ['close', 'ended', 'fullscreen', 'pip', 'pip-handoff', 'combinations', 'desktop'] : [requestedPhase]) {
   if (phase === 'close') {
     if (!process.env.CAPTURE_PLAYER_BASELINE) {
       const page = await fixture();
@@ -300,6 +318,171 @@ try {
       await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
       console.log(`PASS ${engine}: unsupported programmatic PiP hidden; normal playback/Close independent`);
       await page.close();
+    }
+  } else if (phase === 'pip-handoff') {
+    const prepare = async () => {
+      const page = await fixture(false); await open(page); await modes(page, 'standard');
+      await page.locator('video').evaluate(async v => {
+        Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+        v.loop = true; v.playbackRate = .25; v.currentTime = .5; await v.play();
+        window.pipSource = v.getAttribute('src'); window.pipLoads = 0; window.pipPlayCalls = 0;
+        for (const event of ['loadstart', 'emptied']) v.addEventListener(event, () => window.pipLoads++);
+        const play = v.play.bind(v); v.play = () => { window.pipPlayCalls++; return play(); };
+      });
+      await page.getByRole('button', { name: 'Enter picture-in-picture', exact: true }).click();
+      await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).waitFor();
+      return page;
+    };
+    for (const order of ['leave-pause-full', 'full-pause-leave', 'pause-leave-full', 'leave-full-pause', 'full-leave-pause']) {
+      const page = await prepare();
+      await page.evaluate(order => window.returnPipToFullscreen(order), order);
+      await page.waitForFunction(() => !document.querySelector('video').paused, null, { timeout: 3000 });
+      await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
+      const result = await page.locator('video').evaluate(v => ({ same: v === window.recoveryVideo, source: v.getAttribute('src') === window.pipSource, time: v.currentTime, loads: window.pipLoads, plays: window.pipPlayCalls }));
+      assert.equal(result.same, true); assert.equal(result.source, true); assert.ok(result.time >= .5);
+      assert.equal(result.loads, 0); assert.equal(result.plays, 1);
+      await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      console.log(`PASS ${engine} Android-style PiP handoff: ${order}, playing continues on same source/node/time`);
+      await page.close();
+    }
+    for (const paused of [false, true]) {
+      const page = await prepare();
+      if (paused) await page.locator('video').evaluate(async v => {
+        const event = new Promise(resolve => v.addEventListener('pause', resolve, { once: true })); v.pause(); await event;
+      });
+      await page.locator('video').evaluate(v => {
+        const exit = document.exitPictureInPicture;
+        document.exitPictureInPicture = () => { const result = exit.call(document); v.pause(); return result; };
+      });
+      await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).click();
+      await page.getByRole('button', { name: 'Enter picture-in-picture', exact: true }).waitFor();
+      await page.waitForFunction(paused => document.querySelector('video').paused === paused, paused);
+      await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click();
+      assert.equal(await page.locator('video').evaluate(v => v.paused), paused);
+      assert.equal(await page.evaluate(() => window.pipLoads), 0);
+      await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      console.log(`PASS ${engine} explicit Exit PiP then Fullscreen preserves ${paused ? 'paused' : 'playing'} state`);
+      await page.close();
+    }
+    for (const focusBeforeLeave of [false, true]) for (const paused of [false, true]) {
+      const page = await prepare();
+      if (paused) await page.locator('video').evaluate(async v => {
+        const event = new Promise(resolve => v.addEventListener('pause', resolve, { once: true })); v.pause(); await event;
+      });
+      await page.locator('video').evaluate((v, before) => {
+        Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true });
+        if (before) window.dispatchEvent(new Event('focus'));
+        window.systemExitMode(); v.pause();
+        if (!before) window.dispatchEvent(new Event('focus'));
+      }, focusBeforeLeave);
+      await page.waitForFunction(paused => document.querySelector('video').paused === paused, paused, { timeout: 3000 });
+      assert.equal(await page.evaluate(() => document.fullscreenElement), null);
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), paused ? 0 : 1);
+      assert.equal(await page.evaluate(() => window.pipLoads), 0);
+      await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      await page.close();
+      console.log(`PASS ${engine} Android native expand: focus ${focusBeforeLeave ? 'before' : 'after'} PiP leave, ${paused ? 'paused' : 'playing'} state, no DOM fullscreen required`);
+    }
+    {
+      const page = await prepare();
+      await page.locator('video').evaluate(async v => {
+        const event = new Promise(resolve => v.addEventListener('pause', resolve, { once: true })); v.pause(); await event;
+      });
+      await page.evaluate(() => window.returnPipToFullscreen('leave-full'));
+      await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 0);
+      await page.close();
+      console.log(`PASS ${engine} PiP Pause stays paused on system fullscreen return`);
+    }
+    {
+      const page = await prepare();
+      await page.evaluate(() => window.systemExitMode());
+      await page.locator('video').evaluate(v => v.pause());
+      await page.waitForTimeout(1650);
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click();
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 0);
+      await page.close();
+      console.log(`PASS ${engine} system PiP dismissal stays paused; expired intent cannot restart later fullscreen`);
+    }
+    {
+      const page = await prepare();
+      await page.evaluate(() => window.returnPipToFullscreen('leave-full'));
+      await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
+      await page.locator('video').dispatchEvent('pointerdown', { pointerType: 'touch' });
+      await page.locator('video').evaluate(v => v.pause());
+      await page.waitForTimeout(100);
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 0);
+      await page.close();
+      console.log(`PASS ${engine} intentional Pause after fullscreen return cancels handoff recovery`);
+    }
+    {
+      const page = await prepare();
+      await page.evaluate(() => {
+        document.querySelector('.video-player-surface').classList.add('video-page-fullscreen');
+        window.systemExitMode();
+      });
+      assert.equal(await page.locator('.video-page-fullscreen').count(), 1);
+      await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
+      await page.close();
+      console.log(`PASS ${engine} PiP leave does not tear down restored page fullscreen`);
+    }
+    {
+      const page = await prepare();
+      await page.evaluate(() => Object.defineProperty(document, 'hidden', { configurable: true, value: true }));
+      await page.evaluate(() => window.returnPipToFullscreen('leave-pause-full'));
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 0);
+      await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await page.waitForFunction(() => !document.querySelector('video').paused, null, { timeout: 3000 });
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 1);
+      await page.close();
+      console.log(`PASS ${engine} handoff waits for foreground visibility before restoring fullscreen playback`);
+    }
+    {
+      const page = await prepare();
+      await page.locator('video').evaluate(v => { v.play = () => { window.pipPlayCalls++; return Promise.reject(new Error('fixture autoplay blocked')); }; });
+      await page.evaluate(() => window.returnPipToFullscreen('leave-pause-full'));
+      await page.waitForTimeout(100);
+      await page.locator('video').dispatchEvent('pause');
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 1);
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      await page.close();
+      console.log(`PASS ${engine} rejected recovery leaves Play/Close usable without automatic retries`);
+    }
+    {
+      const page = await prepare();
+      await page.evaluate(() => {
+        document.exitPictureInPicture = () => new Promise(resolve => { window.finishPipExit = () => { window.systemExitMode(); resolve(); }; });
+      });
+      await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).click();
+      await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
+      await page.evaluate(() => window.finishPipExit());
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 0);
+      await page.close();
+      console.log(`PASS ${engine} Close during delayed PiP exit cannot resume released media`);
+    }
+    {
+      const page = await prepare();
+      await page.evaluate(() => {
+        const exit = document.exitPictureInPicture;
+        document.exitPictureInPicture = () => { void exit.call(document); return new Promise(resolve => { window.finishOldPipExit = resolve; }); };
+      });
+      await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).click();
+      await page.getByRole('button', { name: 'Enter picture-in-picture', exact: true }).click();
+      await page.evaluate(() => window.finishOldPipExit());
+      await page.evaluate(() => window.returnPipToFullscreen('leave-pause-full'));
+      await page.waitForFunction(() => !document.querySelector('video').paused, null, { timeout: 3000 });
+      assert.equal(await page.evaluate(() => window.pipPlayCalls), 1);
+      await page.close();
+      console.log(`PASS ${engine} delayed old exit cannot overwrite a newer PiP playback session`);
     }
   } else if (phase === 'combinations') {
     for (const api of ['standard', 'native']) {
