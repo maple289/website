@@ -11,7 +11,7 @@ export type Dashboard = {
   distribution: Metric[]; file_types: Metric[]; storage_by_user: Metric[];
   top: Record<ContentType, Metric[]>; storage: StorageSnapshot | null;
   largest_files: Metric[];
-  tracking_started_at: string; generated_at: string; timezone: string; user: AnalyticsRow | null;
+  tracking_started_at: string; statistics_since?: string; generated_at: string; timezone: string; user: AnalyticsRow | null;
 };
 export type AnalyticsPage = { rows: AnalyticsRow[]; total: number; page: number; page_size: number };
 export type AnalyticsFilters = { from: string; to: string; page?: number; search?: string; sort?: string; direction?: 'asc' | 'desc'; owner?: string; visibility?: string; fileType?: string; filterDates?: boolean };
@@ -47,6 +47,12 @@ export async function fetchAnalytics<T>(section: AnalyticsSection | 'user' | 'ow
   const { data, error } = await (signal ? query.abortSignal(signal) : query);
   if (error) throw new Error(error.code === '42501' ? 'Administrator access is required.' : 'Statistics could not be loaded. Please try again.');
   return data as T;
+}
+
+export async function resetAllStatistics(): Promise<{ statistics_since: string }> {
+  const { data, error } = await supabase.rpc('admin_reset_statistics');
+  if (error) throw new Error(error.code === '42501' ? 'An active administrator account is required to reset statistics.' : 'Statistics could not be reset. Please try again.');
+  return data as { statistics_since: string };
 }
 
 // Best effort only: analytics must never interrupt playback, previews or uploads.

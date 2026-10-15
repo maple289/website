@@ -1,5 +1,11 @@
 # Delete-action inventory
 
+Admin Statistics Reset All Statistics uses `useDeleteConfirmation`; only its
+`onConfirm` invokes `admin_reset_statistics`. This changes a reporting timestamp,
+preserves content and raw analytics, and writes a private reset audit entry.
+Cancel/outside/Escape/pending/retry protections come from the shared provider.
+The RPC independently requires an authenticated, active administrator.
+
 Admin analytics add only cascading derived records and cache invalidation. They do
 not add deletion controls, deletion history or another caller of a delete helper.
 The existing sharing Save RPC now preserves unchanged grants; actual saved removals

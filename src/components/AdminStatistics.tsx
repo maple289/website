@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowLeft, BarChart3, ChevronLeft, ChevronRight, FileText, HardDrive, Image, LayoutDashboard, LoaderCircle, RefreshCw, Search, Users, Video } from 'lucide-react';
-import { fetchAnalytics, formatBytes, type AnalyticsFilters, type AnalyticsPage, type AnalyticsSection, type ContentType, type Dashboard, type Metric, type StorageSnapshot } from '@/lib/analytics';
+import { fetchAnalytics, resetAllStatistics, formatBytes, type AnalyticsFilters, type AnalyticsPage, type AnalyticsSection, type ContentType, type Dashboard, type Metric, type StorageSnapshot } from '@/lib/analytics';
+import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { StatisticsTable as RecordsTable } from './StatisticsTable';
 import { statisticsColumn as col, statisticsDate as date, statisticsNumber as number } from '@/lib/statisticsPresentation';
 import { BarChart, DistributionChart, TimeChart } from './AnalyticsCharts';
@@ -24,19 +25,28 @@ function useDebounced(value: string) {
 }
 
 function useStatistics<T>(section: AnalyticsSection | 'user' | 'owners', filters: AnalyticsFilters, refresh: number, enabled = true) {
-  const [data, setData] = useState<T | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const key = JSON.stringify(filters);
+  const requestKey = JSON.stringify([section, key, refresh]);
+  const [result, setResult] = useState<{ key: string; data: T | null; error: string; loading: boolean }>({ key: '', data: null, error: '', loading: true });
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
-    setLoading(true); setError(''); setData(null);
-    void fetchAnalytics<T>(section, JSON.parse(key), controller.signal).then(result => { if (!controller.signal.aborted) { setData(result); setLoading(false); } }, failure => { if (!controller.signal.aborted) { setError(failure.message); setLoading(false); } });
+    setResult({ key: requestKey, data: null, error: '', loading: true });
+    void fetchAnalytics<T>(section, JSON.parse(key), controller.signal).then(data => {
+      if (!controller.signal.aborted) setResult({ key: requestKey, data, error: '', loading: false });
+    }, failure => {
+      if (!controller.signal.aborted) setResult({ key: requestKey, data: null, error: failure.message, loading: false });
+    });
     return () => controller.abort();
-  }, [section, key, refresh, enabled]);
-  return { data, error, loading };
+  }, [section, key, requestKey, enabled]);
+  // Invalidate synchronously on reset/filter changes, including responses from
+  // requests that started before the reset. Never render old counters as new.
+  return result.key === requestKey ? result : { data: null, error: '', loading: true };
 }
 
 export function AdminStatistics() {
+  const { requestDelete } = useDeleteConfirmation();
+  const [baseline, setBaseline] = useState(''), [notice, setNotice] = useState(''), [resetting, setResetting] = useState(false);
   const [section, setSection] = useState<AnalyticsSection>('overview'), [userId, setUserId] = useState<string>();
   const [range, setRange] = useState('30'), [from, setFrom] = useState(''), [to, setTo] = useState(''), [refresh, setRefresh] = useState(0);
   const [search, setSearch] = useState(''), [sort, setSort] = useState(''), [direction, setDirection] = useState<'asc' | 'desc'>('desc'), [page, setPage] = useState(0);
@@ -63,9 +73,32 @@ export function AdminStatistics() {
   const data = dates ? dashboard.data : null;
   const tableColumns = section === 'users' ? userColumns : section === 'activity' ? activityColumns : section === 'files' ? fileColumns : section === 'videos' ? [...mediaColumns.slice(0, 4), col('processed_file_size', 'Playable size', 'bytes'), col('duration_seconds', 'Duration (seconds)', 'number', false), col('resolution', 'Resolution', undefined, false), ...mediaColumns.slice(4)] : mediaColumns;
   const sortBy = (key: string) => { setDirection(sort === key && direction === 'desc' ? 'asc' : 'desc'); setSort(key); setPage(0); };
+  useEffect(() => {
+    if (data) setBaseline(data.statistics_since ?? data.tracking_started_at);
+  }, [data]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(''), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const confirmReset = () => void requestDelete({
+    title: 'Reset all statistics?',
+    message: 'Most Viewed Content and Activity Statistics will start again from zero.',
+    details: 'This will NOT delete users, videos, photos, files, messages, shares, or any uploaded content.',
+    confirmLabel: 'Reset All', processingLabel: 'Resetting…', tone: 'primary',
+    onConfirm: async () => {
+      setResetting(true);
+      try {
+        const result = await resetAllStatistics();
+        setBaseline(result.statistics_since); setPage(0); setRefresh(n => n + 1);
+        setNotice('All statistics have been reset. New views and activity will count from now.');
+      } finally { setResetting(false); }
+    },
+  });
 
   return <div className="analytics-shell">
-    <header className="analytics-heading"><div><span className="analytics-eyebrow">ADMINISTRATOR INSIGHTS</span><h2><BarChart3 size={25} />Statistics &amp; Analytics</h2><p>Current content, activity and storage at a glance.</p></div><button onClick={() => setRefresh(n => n + 1)} disabled={dashboard.loading || tab.loading && ['users', 'videos', 'photos', 'files', 'activity'].includes(section)}><RefreshCw size={17} />Refresh</button></header>
+    <header className="analytics-heading"><div><span className="analytics-eyebrow">ADMINISTRATOR INSIGHTS</span><h2><BarChart3 size={25} />Statistics &amp; Analytics</h2><p>Current content, activity and storage at a glance.</p><p className="analytics-baseline">Statistics since: {baseline ? <time dateTime={baseline}>{new Date(baseline).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time> : 'Loading…'}</p></div><div className="analytics-heading-actions"><button onClick={() => setRefresh(n => n + 1)} disabled={resetting || dashboard.loading || tab.loading && ['users', 'videos', 'photos', 'files', 'activity'].includes(section)}><RefreshCw size={17} />Refresh</button><button className="analytics-reset" onClick={confirmReset} disabled={resetting}>Reset All Statistics</button></div></header>
+    {notice && <p role="status" className="analytics-notice">{notice}</p>}
     <nav className="analytics-nav" aria-label="Statistics sections">{sections.map(item => <button key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => changeSection(item.id)}><item.icon size={17} />{item.name}</button>)}</nav>
     <div className="analytics-range"><label>Date range<select value={range} onChange={event => { setRange(event.target.value); setPage(0); }}><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="month">This month</option><option value="custom">Custom range</option></select></label>{range === 'custom' && <><label>From<input type="date" value={from} onInput={event => { setFrom(event.currentTarget.value); setPage(0); }} /></label><label>Through<input type="date" value={to} onInput={event => { setTo(event.currentTarget.value); setPage(0); }} /></label></>}<span>Charts use {Intl.DateTimeFormat().resolvedOptions().timeZone}. Week begins Monday.</span></div>
     {!dates && <p className="analytics-notice">Choose a valid date range of up to one year.</p>}
@@ -103,7 +136,7 @@ export function AdminStatistics() {
 
     {!userId && section === 'storage' && <StorageDetails snapshot={storage.data?.storage ?? data?.storage ?? null} error={storage.error} />}
     {data && !userId && section === 'storage' && <><div className="analytics-chart-controls"><label>Storage by user<select value={storageOrder} onChange={event => setStorageOrder(event.target.value as 'asc' | 'desc')}><option value="desc">Largest first</option><option value="asc">Smallest first</option></select></label></div><BarChart title="Stored content by user · first 20" data={data.storage_by_user.slice(0, 20)} bytes /></>}
-    <footer className="analytics-footnote">{data ? <>Totals and top-content charts cover current content across all dates. Summaries may be cached for 30 seconds. Views and activity tracking began {date(data.tracking_started_at)}. Unique viewers count registered user IDs only. Active users have activity within 30 days. Existing successful content supplies historical upload dates; older copied files cannot be distinguished from uploads. {data.storage && <>Disk inventory collected {date(data.storage.collected_at)}; refreshes every {Math.round(data.storage.data.interval_seconds / 60)} minutes.</>}</> : 'Analytics are available to administrators only.'}</footer>
+    <footer className="analytics-footnote">{data ? <>Content and storage totals cover current content across all dates. Views, rankings and activity count from the statistics baseline; charts also use the selected date range. Summaries may be cached for 30 seconds. Unique viewers count registered user IDs only. Active users have activity within 30 days and since the baseline. Resetting preserves historical events and uploaded content. {data.storage && <>Disk inventory collected {date(data.storage.collected_at)}; refreshes every {Math.round(data.storage.data.interval_seconds / 60)} minutes.</>}</> : 'Analytics are available to administrators only.'}</footer>
   </div>;
 }
 

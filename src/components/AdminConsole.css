@@ -93,8 +93,8 @@
 .admin-console :is(.analytics-summary span, .analytics-subtext, .analytics-shell label, .analytics-table-scroll th, .analytics-pagination, .analytics-chart-legend button, .analytics-values, .analytics-percent, .analytics-owner-pages) { color: var(--fluent-muted); }
 .admin-console :is(.analytics-shell input, .analytics-shell select) { background: var(--fluent-surface-muted); border-color: var(--fluent-border); border-radius: 12px; color: var(--fluent-text); }
 .admin-console .analytics-table-scroll tr:hover td { background: #f8fbff; }
-.admin-console :is(.analytics-heading > button, .analytics-back, .analytics-pagination button) { border-radius: 12px; border-color: var(--fluent-border); color: var(--fluent-muted); }
-.admin-console :is(.analytics-heading > button, .analytics-back, .analytics-pagination button):hover:not(:disabled) { background: var(--fluent-hover); color: var(--fluent-primary-hover); }
+.admin-console :is(.analytics-heading-actions > button:not(.analytics-reset), .analytics-back, .analytics-pagination button) { border-radius: 12px; border-color: var(--fluent-border); color: var(--fluent-muted); }
+.admin-console :is(.analytics-heading-actions > button:not(.analytics-reset), .analytics-back, .analytics-pagination button):hover:not(:disabled) { background: var(--fluent-hover); color: var(--fluent-primary-hover); }
 @media (min-width: 640px) {
   .admin-console .admin-brand { display: flex; }
   .admin-header-title { padding-left: 18px; border-left: 1px solid #ffffff24; }

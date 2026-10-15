@@ -68,6 +68,11 @@ Busy forms cannot close. Completed saves bypass discard prompts.
 
 ## Inventory
 
+Admin Statistics Reset All Statistics reuses DeleteConfirmationProvider and its
+shared modal layer. Only Cancel or a successful reset closes the confirmation;
+outside taps and Escape retain it. Pending requests block both actions and errors
+stay inside the dialog. No editable draft or additional modal implementation is added.
+
 Messenger New Conversation and group-member pickers share the paginated People
 list. Direct selection closes only after successful server-authorized creation/
 reopening; failure stays in the task. Pending selection disables list and close
