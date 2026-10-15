@@ -33,6 +33,8 @@ controls overlay it, leaving the bottom native playback-control strip available.
 Mobile gallery fullscreen fills the viewport with centered, aspect-preserving
 cropping. The application mode bar hides after two seconds of playback, returns on
 touch, and remains available during pause, buffering, seeking or keyboard use.
+Download stalls with playable buffered data do not reveal the bar. Current media
+readiness/progress restores auto-hide after buffering without a latched waiting flag.
 Hidden buttons are inert; keyboard input reveals them before shared focus handling.
 The first revealing touch cannot activate a newly exposed Exit button. Close remains
 visible, and exit/source changes/unmount clear timers, listeners and hidden state.

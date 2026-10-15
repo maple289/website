@@ -244,3 +244,33 @@ syntax/whitespace checks and the production build pass. Local screenshots show
 edge-to-edge video with the application bar hidden during playback. These changes
 are local and have not been committed or deployed. Physical iPhone Safari input
 and the original clip's black region still require deployed-device verification.
+
+## Follow-up: the control bar reappears and stays visible
+
+A reproduced cause matches the user's symptom. The hook treated both `waiting`
+and `stalled` as buffering, revealed the bar and latched `buffering = true`. Only
+`playing` cleared that flag. A [stalled event](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/stalled_event)
+reports missing downloaded data, while already buffered video can continue playing.
+Without another `playing` event, the flag prevented every subsequent hide attempt.
+The physical iPhone event sequence was not recorded; this is a verified code defect
+and local reproduction, rather than a captured device trace.
+
+Visibility now follows current paused/ended/seeking/error/readiness state. Advisory
+media events preserve an already hidden bar. `canplay`, `progress` and `timeupdate`
+can restart auto-hide when future frames become available, without requiring a new
+`playing` event. Continuous progress does not reset an existing two-second idle
+deadline. A fired timer clears its handle so later recovery can schedule another.
+Explicit touch/keyboard actions still reveal controls, and actual pause/buffering
+and keyboard focus retain accessibility. Fullscreen, fill sizing and gestures are
+unchanged.
+
+The new regression dispatches `stalled` during buffered real playback and failed
+before the fix because the hidden bar became visible. It also checks background
+progress/late playing events, genuine low-readiness waiting, and recovery through
+`timeupdate` without another playing event. Existing real-touch, focus, paused-bar,
+fullscreen/PiP, cleanup and photo tests remain in the same suite.
+
+The complete media suite passes in Chromium, WebKit and Firefox, and Chromium's
+player-recovery suite passes. TypeScript, full ESLint, JavaScript syntax/whitespace
+checks and the production build pass. This correction is local and uncommitted;
+physical iPhone Safari verification is still required after deployment.

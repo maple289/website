@@ -183,6 +183,25 @@ try {
     };
     const shown = () => page.waitForFunction(() => !document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'));
     await hidden();
+    await page.locator('video').evaluate(v => v.dispatchEvent(new Event('stalled')));
+    assert.equal(await bar.getAttribute('aria-hidden'), 'true', 'a download stall with buffered video must not reveal or latch the bar while playback continues');
+    await page.locator('video').evaluate(v => {
+      for (const name of ['progress', 'canplay', 'playing', 'timeupdate']) v.dispatchEvent(new Event(name));
+    });
+    assert.equal(await bar.getAttribute('aria-hidden'), 'true', 'background media events do not reveal hidden controls');
+    await page.locator('video').evaluate(v => {
+      Object.defineProperty(v, 'readyState', { configurable: true, value: v.HAVE_CURRENT_DATA });
+      v.dispatchEvent(new Event('waiting'));
+    });
+    await shown(); await page.waitForTimeout(2200);
+    assert.equal(await bar.getAttribute('aria-hidden'), null, 'actual waiting retains controls');
+    await page.locator('video').evaluate(v => {
+      delete v.readyState;
+      // Readiness/progress can recover without another playing event. Normal
+      // timeupdates must not keep resetting the new two-second idle deadline.
+      v.dispatchEvent(new Event('timeupdate'));
+    });
+    await hidden();
     assert.equal(await bar.getAttribute('inert'), '');
     assert.equal(await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).count(), 0, 'hidden controls leave the accessibility/focus tree');
     if (process.env.CAPTURE_MEDIA_GESTURES) await page.screenshot({ path: `.runtime/video-fill-hidden-${engine}.png` });

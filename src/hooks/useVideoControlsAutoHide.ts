@@ -7,7 +7,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     const view = video.ownerDocument.defaultView;
     if (!view) return;
     const coarse = view.matchMedia('(pointer: coarse)');
-    let timer: number | undefined, held = false, keyboard = false, buffering = false, revealTouch = false;
+    let timer: number | undefined, held = false, keyboard = false, revealTouch = false;
     const clear = () => { view.clearTimeout(timer); timer = undefined; };
     const show = () => {
       clear();
@@ -16,12 +16,16 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       controls.removeAttribute('aria-hidden');
     };
     const canHide = () => fullscreen && !error && coarse.matches && surface.classList.contains('video-player-surface') &&
-      !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= 2 && !buffering && !held &&
+      !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= video.HAVE_FUTURE_DATA && !held &&
       !(keyboard && controls.contains(video.ownerDocument.activeElement));
-    const schedule = () => {
-      show();
-      if (!canHide()) return;
+    const reconcile = () => {
+      if (!canHide()) { show(); return; }
+      // Media progress must neither reveal hidden controls nor keep restarting
+      // an existing idle deadline. Read current readiness instead of latching
+      // a download-stall event until a future "playing" event happens to arrive.
+      if (timer !== undefined || controls.classList.contains('video-controls-hidden')) return;
       timer = view.setTimeout(() => {
+        timer = undefined;
         if (!canHide()) return;
         // A touch-clicked Exit button may retain focus. Move it inside the same
         // viewer before hiding; keyboard focus always keeps controls available.
@@ -31,6 +35,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
         controls.setAttribute('aria-hidden', 'true');
       }, 2000);
     };
+    const schedule = () => { show(); reconcile(); };
     const touchStart = (event: TouchEvent) => {
       revealTouch = controls.classList.contains('video-controls-hidden') && event.target instanceof Node && !controls.contains(event.target);
       keyboard = false; held = true; show();
@@ -53,13 +58,8 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       revealTouch = false; event.preventDefault(); event.stopImmediatePropagation();
     };
     const focused = () => { if (keyboard) schedule(); };
-    const waiting = () => { buffering = true; show(); };
-    const playing = () => { buffering = false; schedule(); };
-    const events: Array<[string, () => void]> = [
-      ['playing', playing], ['play', schedule], ['pause', show], ['ended', show],
-      ['seeking', show], ['seeked', schedule], ['waiting', waiting], ['stalled', waiting], ['error', show],
-    ];
-    for (const [name, handler] of events) video.addEventListener(name, handler);
+    const events = ['playing', 'play', 'pause', 'ended', 'seeking', 'seeked', 'waiting', 'stalled', 'error', 'canplay', 'progress', 'timeupdate'];
+    for (const name of events) video.addEventListener(name, reconcile);
     surface.addEventListener('touchstart', touchStart, { capture: true, passive: true });
     surface.addEventListener('touchend', touchEnd, { capture: true, passive: true });
     surface.addEventListener('touchcancel', touchCancel, { capture: true, passive: true });
@@ -73,7 +73,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     schedule();
     return () => {
       show();
-      for (const [name, handler] of events) video.removeEventListener(name, handler);
+      for (const name of events) video.removeEventListener(name, reconcile);
       surface.removeEventListener('touchstart', touchStart, true);
       surface.removeEventListener('touchend', touchEnd, true);
       surface.removeEventListener('touchcancel', touchCancel, true);
