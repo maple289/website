@@ -1,5 +1,24 @@
 /* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
 .managed-video { touch-action: manipulation; }
+@media (pointer: coarse) {
+  /* Fit the normal mobile player before expanding it. An unconstrained 16:9
+     stage can exceed a landscape viewport and make fullscreen look smaller. */
+  .video-player-surface {
+    display: flex;
+    flex-direction: column;
+    max-height: min(95dvh, calc(100dvh - 2rem));
+    overflow: hidden;
+  }
+  .video-player-surface .video-playback-area {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+  }
+  .video-player-surface .managed-video { flex: 1; min-height: 0; height: auto; }
+  .video-player-surface .video-reactions { flex-shrink: 0; }
+}
 .video-page-fullscreen-layer { z-index: 100; padding: 0; }
 .video-fullscreen-surface.video-page-fullscreen {
   position: fixed;

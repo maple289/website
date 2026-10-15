@@ -10,8 +10,8 @@ const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"
 const currentPhoto = '.pv-slide[aria-hidden="false"] .pv-photo';
 const click = (page, name) => page.getByRole('button', { name, exact: true }).click();
 
-async function fixture(width = 390, touch = true) {
-  const page = await browser.newPage({ viewport: { width, height: 844 }, hasTouch: touch });
+async function fixture(width = 390, touch = true, height = 844) {
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   page.fixtureErrors = errors;
   if (engine === 'webkit') await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: '/tests/fixtures/playback-ended.mp4' } }));
@@ -117,6 +117,25 @@ async function videoPageGeometry(page) {
     }), true, name + ' receives taps in the page fullscreen viewer');
   }
 }
+async function mobileVideoLayout(page, fullscreen = false) {
+  const g = await page.locator('.video-player-surface').evaluate(surface => {
+    const video = surface.querySelector('video'), stage = surface.querySelector('.video-playback-area');
+    const box = e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
+    return { surface: box(surface), stage: box(stage), video: box(video), vw: innerWidth, vh: innerHeight,
+      scrollHeight: surface.scrollHeight, clientHeight: surface.clientHeight, scrollTop: surface.scrollTop, fit: getComputedStyle(video).objectFit };
+  });
+  assert.ok(g.surface.x >= -1 && g.surface.y >= -1 && g.surface.right <= g.vw + 1 && g.surface.bottom <= g.vh + 1, JSON.stringify(g));
+  assert.ok(g.scrollHeight <= g.clientHeight + 1 && g.scrollTop === 0, 'mobile player must fit without scrolling to reach its controls: ' + JSON.stringify(g));
+  assert.ok(g.video.width > 0 && g.video.height > 0 && g.video.x >= g.stage.x - 1 && g.video.y >= g.stage.y - 1 && g.video.right <= g.stage.right + 1 && g.video.bottom <= g.stage.bottom + 1, 'complete video fits its stage: ' + JSON.stringify(g));
+  assert.ok(g.stage.y >= g.surface.y && g.stage.bottom <= g.surface.bottom, JSON.stringify(g));
+  assert.equal(g.fit, 'contain');
+  for (const name of ['Close video player', fullscreen ? 'Exit fullscreen' : 'Enter fullscreen']) {
+    assert.equal(await page.getByRole('button', { name, exact: true }).evaluate(b => {
+      const r = b.getBoundingClientRect(); return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    }), true, name + ' is visible and receives taps without scrolling');
+  }
+  return g;
+}
 async function geometry(page) {
   await page.waitForFunction(selector => document.querySelector(selector)?.naturalWidth > 0, currentPhoto);
   const g = await page.locator('.photo-viewer').evaluate(root => {
@@ -135,6 +154,26 @@ async function geometry(page) {
   }
 }
 try {
+  for (const [width, height] of [[390, 844], [844, 390], [932, 430], [844, 320], [768, 1024], [1024, 768]]) {
+    const page = await fixture(width, true, height); await openVideo(page); await modes(page, 'presentation', 5);
+    assert.equal(await page.locator('.video-page-fullscreen').count(), 0, 'opening a video must start in the normal viewer');
+    const normal = await mobileVideoLayout(page);
+    for (let i = 0; i < 2; i++) {
+      await click(page, 'Enter fullscreen'); await videoPageGeometry(page);
+      const expanded = await mobileVideoLayout(page, true);
+      assert.ok(expanded.video.height > normal.video.height + 1 && expanded.video.width >= normal.video.width, 'Fullscreen must enlarge the complete video rather than shrink an oversized normal stage');
+      if (process.env.CAPTURE_MEDIA_GESTURES && i === 0) await page.screenshot({ path: `.runtime/video-button-full-${engine}-${width}x${height}.png` });
+      if (i === 0) await click(page, 'Exit fullscreen');
+      else await gesture(page, 'video', 'double');
+      await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
+      const restored = await mobileVideoLayout(page);
+      assert.ok(Math.abs(restored.video.height - normal.video.height) < 1 && Math.abs(restored.video.width - normal.video.width) < 1, 'exit restores the original fitted normal layout');
+    }
+    if (process.env.CAPTURE_MEDIA_GESTURES) await page.screenshot({ path: `.runtime/video-button-normal-${engine}-${width}x${height}.png` });
+    assert.deepEqual(await page.evaluate(() => window.modeCalls), [], 'the iPhone button keeps video presentation in the page');
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} mobile video button ${width}x${height}: starts normal, controls visible, fullscreen enlarges, button/gesture exit restores size`);
+  }
   for (const api of ['native-events', 'standard', 'presentation', 'legacy', 'vendor']) {
     const page = await fixture(); await openVideo(page); await modes(page, api);
     for (let i = 0; i < 3; i++) {

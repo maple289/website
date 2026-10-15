@@ -145,3 +145,33 @@ build passed. These changes are local and have not been committed or deployed.
 
 Physical iPhone testing remains required after deploying this revision; the local
 browser fixtures are not an iPhone system player.
+
+## Mobile Fullscreen button size follow-up
+
+The user's landscape screenshot shows the application's Fullscreen entry button
+inside the normal bordered card. Local iPhone-sized WebKit reproduced the apparent
+size reversal: at 844x390, the normal card was capped at 370.5px high while its
+width-driven 16:9 video stage remained 455.6px high. The header, controls and reactions
+added further height, so the card scrolled and clipped its contents. The fullscreen
+layout correctly fitted the video between the header and controls at 262px high,
+which looked smaller than the overflowing normal video. Opening did not set a
+fullscreen mode, and the button's enter/exit state was correct.
+
+Coarse-pointer gallery players now use a bounded column layout in normal mode.
+The stage and video can shrink together while the header, presentation controls and
+reactions retain their space. Explicit flex sizing also avoids WebKit retaining a
+percentage video height from the stage's original aspect-ratio size. The complete
+video remains contained. At 844x390, normal video height is now 174px, fullscreen
+increases it to 262px, and exit restores 174px. The same fullscreen action and state
+remain in use; file-preview and desktop layouts are unchanged.
+
+The gesture suite adds initial normal-state, no-overflow, control hit-testing,
+fullscreen enlargement and restored-size assertions at 390x844, 844x390, 932x430,
+844x320, 768x1024 and 1024x768. Both button exit and double-tap exit are exercised.
+These are local browser-engine checks; physical iPhone Safari remains unavailable.
+
+The complete media gesture suite passes in WebKit, Chromium and Firefox, including
+all six new size cases. Chromium's real touch/Fullscreen API checks and Chromium/
+Firefox desktop double-click checks also pass. TypeScript, full ESLint, JavaScript
+syntax/whitespace checks and the production build pass. The layout correction is
+local and has not been committed or deployed.
