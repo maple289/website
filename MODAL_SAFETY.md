@@ -27,9 +27,9 @@ VIDEO_PLAYER_RECOVERY.md for the regression evidence and device-testing limits.
 
 Gallery and video-file players retain native playback controls and a small
 application bar for optional fullscreen and PiP actions.
-On coarse pointers the normal gallery player's video shrinks within a bounded
-column, keeping Close and mode controls visible without card scrolling. This
-prevents an overflowing landscape video from appearing larger before fullscreen.
+The normal gallery player retains its previous sizing. On coarse pointers,
+fullscreen gives the video the entire viewport; the header and application mode
+controls overlay it, leaving the bottom native playback-control strip available.
 Fullscreen and PiP requests run directly in their respective tap handlers, with
 no queued entry effects or pending operation state. Actual browser/native
 events drive mode state; conflicting entry buttons require exiting the current

@@ -1,24 +1,5 @@
 /* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
 .managed-video { touch-action: manipulation; }
-@media (pointer: coarse) {
-  /* Fit the normal mobile player before expanding it. An unconstrained 16:9
-     stage can exceed a landscape viewport and make fullscreen look smaller. */
-  .video-player-surface {
-    display: flex;
-    flex-direction: column;
-    max-height: min(95dvh, calc(100dvh - 2rem));
-    overflow: hidden;
-  }
-  .video-player-surface .video-playback-area {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    flex-shrink: 1;
-    overflow: hidden;
-  }
-  .video-player-surface .managed-video { flex: 1; min-height: 0; height: auto; }
-  .video-player-surface .video-reactions { flex-shrink: 0; }
-}
 .video-page-fullscreen-layer { z-index: 100; padding: 0; }
 .video-fullscreen-surface.video-page-fullscreen {
   position: fixed;
@@ -103,4 +84,34 @@
 }
 .video-fullscreen-surface:-webkit-full-screen .video-reactions {
   display: none;
+}
+@media (pointer: coarse) {
+  /* The large presentation belongs to Fullscreen. Float application controls
+     over the picture instead of subtracting their rows from its height. */
+  .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) { padding: 0; }
+  .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) .video-playback-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) .video-player-header {
+    position: absolute;
+    z-index: 2;
+    inset: 0 0 auto;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
+    background: linear-gradient(#000b, transparent);
+  }
+  .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) .video-presentation-controls {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    left: 0;
+    padding-left: max(.5rem, env(safe-area-inset-left));
+    padding-right: max(.5rem, env(safe-area-inset-right));
+    background: #0009;
+  }
 }

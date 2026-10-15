@@ -66,7 +66,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
     <TaskModal ref={playerRef} aria-label="Video player" className="fixed inset-0 z-70 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
       <div ref={surfaceRef} className="video-fullscreen-surface video-player-surface relative w-full max-w-4xl max-h-[95dvh] overflow-y-auto rounded-2xl border bg-[#0a0a0a] shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between px-5 py-4">
+        <div className="video-player-header flex shrink-0 items-center justify-between px-5 py-4">
           <h3 className="truncate text-base font-semibold tracking-[-0.02em]">{video.file_name}</h3>
           <button aria-label="Close video player" onClick={completion.close} className="min-h-11 min-w-11 shrink-0 rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={20} /></button>
         </div>

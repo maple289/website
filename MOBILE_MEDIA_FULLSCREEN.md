@@ -146,7 +146,7 @@ build passed. These changes are local and have not been committed or deployed.
 Physical iPhone testing remains required after deploying this revision; the local
 browser fixtures are not an iPhone system player.
 
-## Mobile Fullscreen button size follow-up
+## Superseded mobile Fullscreen button size follow-up
 
 The user's landscape screenshot shows the application's Fullscreen entry button
 inside the normal bordered card. Local iPhone-sized WebKit reproduced the apparent
@@ -175,3 +175,31 @@ all six new size cases. Chromium's real touch/Fullscreen API checks and Chromium
 Firefox desktop double-click checks also pass. TypeScript, full ESLint, JavaScript
 syntax/whitespace checks and the production build pass. The layout correction is
 local and has not been committed or deployed.
+
+## Restore the large mobile presentation
+
+The user rejected the preceding sizing change: reducing the normal picture did
+not solve the small fullscreen picture. The coarse-pointer normal-size restriction
+has been removed, restoring the previous width-driven 16:9 normal player.
+
+Mobile gallery fullscreen now gives both the playback area and video the entire
+viewport. The header and application controls overlay that picture instead of
+subtracting separate rows from its height. Close and Exit fullscreen stay accessible;
+the application bar sits above the native playback-control strip. At 844x390,
+fullscreen video height is now 390px rather than 262px. The complete source remains
+contain-fitted, without distortion or cropping. Safe-area spacing applies to the
+overlaid application controls. The same fullscreen state/action still controls the
+button and double tap; desktop and file-preview layouts are unchanged.
+
+The size regression now checks the restored normal dimensions, actual viewport-sized
+fullscreen media and accessible overlay controls. Button exit and double-tap exit
+must both restore the earlier normal size. This replaces the rejected requirement
+that normal media shrink to accommodate separate rows in landscape.
+
+The full media gesture suite passes in WebKit, Chromium and Firefox, including the
+six phone/tablet sizes, repeated button/gesture toggles, PiP, Close and photo
+regressions. Real Chromium touch/Fullscreen API and Chromium/Firefox desktop
+checks pass. TypeScript, full ESLint, syntax/whitespace checks and the production
+build pass. Screenshots confirm the fullscreen video uses the full viewport and
+the overlay controls remain usable. The correction is local and has not been
+committed or deployed; physical iPhone Safari verification is still required.

@@ -125,10 +125,16 @@ async function mobileVideoLayout(page, fullscreen = false) {
       scrollHeight: surface.scrollHeight, clientHeight: surface.clientHeight, scrollTop: surface.scrollTop, fit: getComputedStyle(video).objectFit };
   });
   assert.ok(g.surface.x >= -1 && g.surface.y >= -1 && g.surface.right <= g.vw + 1 && g.surface.bottom <= g.vh + 1, JSON.stringify(g));
-  assert.ok(g.scrollHeight <= g.clientHeight + 1 && g.scrollTop === 0, 'mobile player must fit without scrolling to reach its controls: ' + JSON.stringify(g));
   assert.ok(g.video.width > 0 && g.video.height > 0 && g.video.x >= g.stage.x - 1 && g.video.y >= g.stage.y - 1 && g.video.right <= g.stage.right + 1 && g.video.bottom <= g.stage.bottom + 1, 'complete video fits its stage: ' + JSON.stringify(g));
-  assert.ok(g.stage.y >= g.surface.y && g.stage.bottom <= g.surface.bottom, JSON.stringify(g));
   assert.equal(g.fit, 'contain');
+  if (!fullscreen) {
+    assert.ok(Math.abs(g.stage.width / g.stage.height - 16 / 9) < .01, 'retain the previous normal video size instead of squeezing it into smaller rows');
+    return g;
+  }
+  assert.ok(g.scrollHeight <= g.clientHeight + 1 && g.scrollTop === 0, 'fullscreen must not scroll: ' + JSON.stringify(g));
+  for (const box of [g.stage, g.video]) {
+    assert.ok(Math.abs(box.x) < 1 && Math.abs(box.y) < 1 && Math.abs(box.width - g.vw) < 1 && Math.abs(box.height - g.vh) < 1, 'fullscreen picture uses the entire viewport, without reserved application control rows: ' + JSON.stringify(g));
+  }
   for (const name of ['Close video player', fullscreen ? 'Exit fullscreen' : 'Enter fullscreen']) {
     assert.equal(await page.getByRole('button', { name, exact: true }).evaluate(b => {
       const r = b.getBoundingClientRect(); return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
@@ -161,18 +167,18 @@ try {
     for (let i = 0; i < 2; i++) {
       await click(page, 'Enter fullscreen'); await videoPageGeometry(page);
       const expanded = await mobileVideoLayout(page, true);
-      assert.ok(expanded.video.height > normal.video.height + 1 && expanded.video.width >= normal.video.width, 'Fullscreen must enlarge the complete video rather than shrink an oversized normal stage');
+      assert.ok(expanded.video.width > normal.video.width && expanded.video.height >= Math.min(normal.video.height, normal.surface.bottom - normal.video.y), 'fullscreen expands the visible media area');
       if (process.env.CAPTURE_MEDIA_GESTURES && i === 0) await page.screenshot({ path: `.runtime/video-button-full-${engine}-${width}x${height}.png` });
       if (i === 0) await click(page, 'Exit fullscreen');
       else await gesture(page, 'video', 'double');
       await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
       const restored = await mobileVideoLayout(page);
-      assert.ok(Math.abs(restored.video.height - normal.video.height) < 1 && Math.abs(restored.video.width - normal.video.width) < 1, 'exit restores the original fitted normal layout');
+      assert.ok(Math.abs(restored.video.height - normal.video.height) < 1 && Math.abs(restored.video.width - normal.video.width) < 1, 'exit restores the previous normal video size');
     }
     if (process.env.CAPTURE_MEDIA_GESTURES) await page.screenshot({ path: `.runtime/video-button-normal-${engine}-${width}x${height}.png` });
     assert.deepEqual(await page.evaluate(() => window.modeCalls), [], 'the iPhone button keeps video presentation in the page');
     assert.deepEqual(page.fixtureErrors, []); await page.close();
-    console.log(`PASS ${engine} mobile video button ${width}x${height}: starts normal, controls visible, fullscreen enlarges, button/gesture exit restores size`);
+    console.log(`PASS ${engine} mobile video button ${width}x${height}: previous normal size restored, fullscreen video fills viewport, button/gesture exits, overlay controls accessible`);
   }
   for (const api of ['native-events', 'standard', 'presentation', 'legacy', 'vendor']) {
     const page = await fixture(); await openVideo(page); await modes(page, api);
