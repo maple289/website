@@ -49,6 +49,10 @@ events drive mode state; conflicting entry buttons require exiting the current
 mode first. Supported container fullscreen retains the header/Close and controls.
 Touch WebKit keeps the same video in a page-controlled fullscreen viewer, with a
 fixed viewport fallback when container fullscreen is unavailable or ineffective.
+On coarse pointers that fallback follows the visible viewport's size and offset
+as browser chrome or orientation changes. Pinch zoom is left to the browser;
+explicit exit and Close remove viewport overrides and listeners. Real element
+fullscreen and fine-pointer desktop layout retain browser sizing.
 This preserves both double taps on iPhone; its native system player owns the taps
 and cannot provide the page's custom exit gesture. Player/preview modal roots use
 stable body portals so ancestor layout cannot constrain that fallback. Button and

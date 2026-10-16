@@ -104,6 +104,12 @@ async function modes(page, api, touchPoints = 0) {
 }
 
 async function videoPageGeometry(page) {
+  // Visible viewport changes are applied on the next animation frame. Wait for
+  // the rotated geometry rather than sampling between resize and that update.
+  await page.waitForFunction(() => {
+    const r = document.querySelector('.video-player-surface')?.getBoundingClientRect();
+    return r && Math.abs(r.x) < 1 && Math.abs(r.y) < 1 && Math.abs(r.width - innerWidth) < 1 && Math.abs(r.height - innerHeight) < 1;
+  });
   const g = await page.locator('.video-player-surface').evaluate(surface => {
     const r = surface.getBoundingClientRect(), v = surface.querySelector('video');
     return { width: r.width, height: r.height, x: r.x, y: r.y, vw: innerWidth, vh: innerHeight,
@@ -160,6 +166,56 @@ async function geometry(page) {
   }
 }
 try {
+  // Mobile browser chrome can move/resize the visible viewport without changing
+  // the layout viewport. Model those metrics, not a different browser engine.
+  {
+    const page = await fixture(932, true, 430);
+    await openVideo(page); await modes(page, 'presentation', 5);
+    await page.evaluate(() => {
+      const viewport = Object.assign(new EventTarget(), { width: 824, height: 374, offsetLeft: 54, offsetTop: 12, scale: 1 });
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+      window.setVisibleViewport = (metrics, event = 'resize') => { Object.assign(viewport, metrics); viewport.dispatchEvent(new Event(event)); };
+    });
+    const box = () => page.locator('.video-playback-area').evaluate(e => {
+      const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height];
+    });
+    const fits = async expected => {
+      await page.waitForFunction(expected => {
+        const r = document.querySelector('.video-playback-area').getBoundingClientRect();
+        return [r.x, r.y, r.width, r.height].every((n, i) => Math.abs(n - expected[i]) < 1);
+      }, expected);
+      assert.equal(await page.locator('video').evaluate(v => getComputedStyle(v).objectFit), 'contain');
+      for (const name of ['Close video player', 'Exit fullscreen']) {
+        const r = await page.getByRole('button', { name, exact: true }).boundingBox();
+        assert.ok(r.x >= expected[0] && r.y >= expected[1] && r.x + r.width <= expected[0] + expected[2] + 1 && r.y + r.height <= expected[1] + expected[3] + 1, name + ' stays in the visible viewport');
+      }
+    };
+    const normal = await box();
+    await click(page, 'Enter fullscreen');
+    await fits([54, 12, 824, 374]);
+    // Browser chrome changes and a later orientation event must both refit.
+    await page.evaluate(() => window.setVisibleViewport({ width: 844, height: 390, offsetLeft: 44, offsetTop: 0 }, 'scroll'));
+    await fits([44, 0, 844, 390]);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.setVisibleViewport({ width: 390, height: 760, offsetLeft: 0, offsetTop: 24 }));
+    await fits([0, 24, 390, 760]);
+    // Pinch zoom retains normal browser magnification instead of chasing it.
+    await page.evaluate(() => window.setVisibleViewport({ width: 195, height: 380, offsetLeft: 50, offsetTop: 100, scale: 2 }));
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.deepEqual(await box(), [0, 24, 390, 760]);
+    await click(page, 'Exit fullscreen');
+    assert.equal(await page.locator('.video-player-surface').evaluate(e => e.style.length), 0, 'exit clears viewport overrides');
+    await page.setViewportSize({ width: 932, height: 430 });
+    await page.evaluate(() => window.setVisibleViewport({ width: 824, height: 374, offsetLeft: 54, offsetTop: 12, scale: 1 }));
+    assert.deepEqual(await box(), normal, 'normal viewer does not follow visible viewport events');
+    await click(page, 'Enter fullscreen'); await fits([54, 12, 824, 374]);
+    await page.locator('.video-player-surface').evaluate(e => { window.closedVideoSurface = e; });
+    await click(page, 'Close video player');
+    await page.evaluate(() => window.setVisibleViewport({ width: 700, offsetLeft: 60 }));
+    assert.equal(await page.evaluate(() => window.closedVideoSurface.style.length), 0, 'Close detaches viewport tracking');
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} mobile video visible viewport: offsets, toolbar resize, rotation, pinch, exit, reentry and Close`);
+  }
   {
     const page = await fixture(844, true, 390);
     // Forty-five seconds of real playback avoids the short completion fixture's
@@ -331,7 +387,7 @@ try {
       assert.equal(await page.locator('.video-page-fullscreen').count(), 1);
       if (process.env.CAPTURE_MEDIA_GESTURES && i === 0) await page.screenshot({ path: `.runtime/video-page-fullscreen-${engine}-${api}.png` });
       await page.setViewportSize({ width: 844, height: 390 }); await videoPageGeometry(page);
-      await page.setViewportSize({ width: 390, height: 844 });
+      await page.setViewportSize({ width: 390, height: 844 }); await videoPageGeometry(page);
       await gesture(page, 'video', 'double');
       assert.equal(await page.locator('.video-page-fullscreen, .video-page-fullscreen-layer').count(), 0, 'second double tap removes fullscreen and its layer');
       await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();

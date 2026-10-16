@@ -90,6 +90,14 @@
   /* The large presentation belongs to Fullscreen. Float application controls
      over the picture instead of subtracting their rows from its height. */
   .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) { padding: 0; }
+  .video-player-surface.video-page-fullscreen {
+    top: var(--video-viewport-top, 0px);
+    right: auto;
+    bottom: auto;
+    left: var(--video-viewport-left, 0px);
+    width: var(--video-viewport-width, 100vw);
+    height: var(--video-viewport-height, 100dvh);
+  }
   .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) .video-playback-area {
     position: absolute;
     inset: 0;

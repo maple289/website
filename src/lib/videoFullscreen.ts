@@ -17,9 +17,56 @@ export type FullscreenDocument = Document & {
 };
 export type FullscreenSurface = HTMLElement & { webkitRequestFullscreen?: () => void | Promise<void> };
 
+const pageViewports = new WeakMap<HTMLElement, () => void>();
+const viewportProperties = ['--video-viewport-left', '--video-viewport-top', '--video-viewport-width', '--video-viewport-height'];
+
+function trackPageViewport(surface: HTMLElement) {
+  const doc = surface.ownerDocument as FullscreenDocument, view = doc.defaultView;
+  const viewport = view?.visualViewport;
+  if (!view || !viewport || !view.matchMedia('(pointer: coarse)').matches) return;
+  let frame = 0;
+  const clear = () => { for (const name of viewportProperties) surface.style.removeProperty(name); };
+  const update = () => {
+    frame = 0;
+    // Real element fullscreen is sized by the browser. Only fit the mobile
+    // page fallback to the visible area, which can differ from 100vw/100dvh.
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) { clear(); return; }
+    // Do not chase a pinch with layout changes or counteract accessibility zoom.
+    if (Math.abs(viewport.scale - 1) > .01) return;
+    const values = [viewport.offsetLeft, viewport.offsetTop, viewport.width, viewport.height];
+    if (!values.every(Number.isFinite) || viewport.width <= 0 || viewport.height <= 0) return;
+    values.forEach((value, i) => surface.style.setProperty(viewportProperties[i], `${value}px`));
+  };
+  const schedule = () => { if (!frame) frame = view.requestAnimationFrame(update); };
+  viewport.addEventListener('resize', schedule);
+  viewport.addEventListener('scroll', schedule);
+  view.addEventListener('resize', schedule);
+  view.addEventListener('orientationchange', schedule);
+  doc.addEventListener('fullscreenchange', schedule);
+  doc.addEventListener('webkitfullscreenchange', schedule);
+  update();
+  return () => {
+    view.cancelAnimationFrame(frame);
+    viewport.removeEventListener('resize', schedule);
+    viewport.removeEventListener('scroll', schedule);
+    view.removeEventListener('resize', schedule);
+    view.removeEventListener('orientationchange', schedule);
+    doc.removeEventListener('fullscreenchange', schedule);
+    doc.removeEventListener('webkitfullscreenchange', schedule);
+    clear();
+  };
+}
+
 export function setVideoPageFullscreen(surface: HTMLElement, fullscreen: boolean) {
   surface.classList.toggle('video-page-fullscreen', fullscreen);
   surface.closest('[data-task-modal]')?.classList.toggle('video-page-fullscreen-layer', fullscreen);
+  if (fullscreen && !pageViewports.has(surface)) {
+    const stop = trackPageViewport(surface);
+    if (stop) pageViewports.set(surface, stop);
+  } else if (!fullscreen) {
+    pageViewports.get(surface)?.();
+    pageViewports.delete(surface);
+  }
 }
 
 function attemptCleanup(action: () => unknown) {

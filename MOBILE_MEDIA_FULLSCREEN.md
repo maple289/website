@@ -307,3 +307,43 @@ fullscreen recovery checks. Portrait/landscape WebKit screenshots show centered,
 contained video. TypeScript, full ESLint, JavaScript syntax, whitespace validation
 and the production build passed. These are engine fixtures with simulated iPhone
 APIs, not physical Safari verification. The fix is local and has not been deployed.
+
+## iPhone Firefox Mobile Site viewport follow-up
+
+The reported case is Firefox on iPhone in Mobile Site mode: a left black strip,
+displacement and clipping in fullscreen. The earlier desktop-only compatibility
+helper investigation does not explain that mode, and no desktop presentation API
+change is included.
+
+The deployed CSS already uses `object-fit: contain`. A mobile viewport regression
+reproduces a separate layout defect: when the browser's visible viewport is narrower
+or offset from the layout viewport, `100vw`/`100dvh` still size the page fallback to
+the larger area. Contain fitting within that frame does not keep the entire frame
+inside the visible area. This is a modeled reproduction; the physical Firefox
+viewport measurements and exact cause of the user's screenshot are unverified.
+See [VisualViewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)
+for the layout/visible viewport distinction.
+
+Only the coarse-pointer page fullscreen fallback now tracks visible width, height,
+left and top. Resize, viewport scroll and orientation events update its geometry,
+batched into an animation frame. Real element fullscreen retains browser sizing.
+The same video/source, shared action/state, contain fitting and controls remain.
+Pinch zoom does not trigger compensating resize/repositioning. Exit, Close, PiP,
+source cleanup and natural completion remove listeners and inline overrides.
+Fine-pointer desktop layout and desktop fullscreen actions are unchanged.
+
+The regression covers an offset landscape viewport, changing browser chrome,
+portrait rotation, pinch zoom, exit, reentry and Close. It failed before the change
+and passed in all three engines after the change. Existing rotation assertions
+wait for the scheduled viewport geometry update instead of sampling mid-frame;
+no fixed delay is added.
+
+Validation: 78 gesture groups and 131 player recovery checks passed across
+Chromium, Firefox and WebKit, including actual desktop fullscreen/button/double-click
+checks in Chromium and Firefox. Separate WebKit probes verified fine-pointer
+desktop exclusion and removal of overrides when real element fullscreen takes over;
+a mobile screenshot showed centered contain-fit video. TypeScript, full ESLint,
+JavaScript syntax, whitespace checks and the production build passed. The tests
+use local media and simulated mobile viewport/native API behavior. Physical iPhone
+Firefox verification is still required after deployment. Changes are local and
+have not been deployed.
