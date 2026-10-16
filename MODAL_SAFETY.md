@@ -34,8 +34,9 @@ subsequent manual Pause. Close remains unconditional and cancels recovery listen
 The normal gallery player retains its previous sizing. On coarse pointers,
 fullscreen gives the video the entire viewport; the header and application mode
 controls overlay it, leaving the bottom native playback-control strip available.
-Mobile gallery fullscreen fills the viewport with centered, aspect-preserving
-cropping. The application mode bar hides after two seconds of playback, returns on
+Mobile gallery fullscreen fills the viewport and centers the complete video with
+contain-fit sizing, preserving its aspect ratio without cropping. The application
+mode bar hides after two seconds of playback, returns on
 touch, and remains available during pause, buffering, seeking or keyboard use.
 Download stalls with playable buffered data do not reveal the bar. Current media
 readiness/progress restores auto-hide after buffering without a latched waiting flag.

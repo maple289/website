@@ -97,7 +97,7 @@
     height: 100%;
   }
   .video-player-surface:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen) video {
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     margin: 0;
   }

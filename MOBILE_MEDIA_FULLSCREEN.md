@@ -213,10 +213,10 @@ offset in the source or local browser checks. Its previous `object-fit: contain`
 can leave margins. The screenshot alone cannot establish whether its one-sided
 black region is also present in the original video.
 
-Mobile gallery fullscreen now uses centered `object-fit: cover`. It fills the
-viewport without stretching, cropping excess source edges symmetrically. Normal
-gallery playback, desktop fullscreen, photos and file previews keep their previous
-fit behavior. No separate fullscreen mode/action has been added.
+That revision used centered `object-fit: cover` in mobile gallery fullscreen. It
+filled the viewport without stretching, cropping excess source edges symmetrically.
+Normal gallery playback, desktop fullscreen, photos and file previews kept their
+previous fit behavior. No separate fullscreen mode/action was added.
 
 The application bar hides after two idle seconds while playing in mobile gallery
 fullscreen. Touch reveals it without consuming video gestures or native playback
@@ -274,3 +274,36 @@ The complete media suite passes in Chromium, WebKit and Firefox, and Chromium's
 player-recovery suite passes. TypeScript, full ESLint, JavaScript syntax/whitespace
 checks and the production build pass. This correction is local and uncommitted;
 physical iPhone Safari verification is still required after deployment.
+
+## Follow-up: show the complete iPhone fullscreen video frame
+
+The mobile fullscreen rule introduced for edge-to-edge fill used
+`object-fit: cover`, overriding the player's normal `contain` fit. That enlarges
+the picture until it fills both viewport dimensions and crops source edges when screen and
+video proportions differ. This matches the reported cutoff. The fullscreen stage
+itself already fills the viewport; reducing its dimensions is unnecessary.
+
+Mobile fullscreen now uses centered `object-fit: contain`, showing the largest
+complete frame that fits without distortion or cropping. Black bars are expected
+when source and screen proportions differ. The viewport-sized stage, overlaid
+controls, auto-hide, shared button/double-tap action and PiP handling are retained.
+
+The existing mobile layout regression now requires contain-fit sizing for all six
+phone/tablet viewports and iPhone fallback/rotation cases. It failed in Windows
+WebKit before the CSS correction (`cover` versus `contain`). Standard container
+fullscreen coverage also requires the complete frame.
+
+The iPhone fixture also establishes a position through normal playback of the
+longer clip, then pauses before comparing position across fullscreen toggles.
+Concurrent WebKit runs failed the old artificial-seek threshold, including during
+setup before fullscreen entry. Isolated diagnostics retained the same paused
+video/source and a stable position. Removing that unrelated seek avoids coupling
+fullscreen to decoder seeking; assertions now check paused state and unchanged
+position across toggles. Reopening retains the short natural-completion fixture.
+
+Local Windows validation passed the complete media gesture suite in WebKit,
+Chromium and Firefox (75 groups), plus actual Chromium/Firefox container
+fullscreen recovery checks. Portrait/landscape WebKit screenshots show centered,
+contained video. TypeScript, full ESLint, JavaScript syntax, whitespace validation
+and the production build passed. These are engine fixtures with simulated iPhone
+APIs, not physical Safari verification. The fix is local and has not been deployed.

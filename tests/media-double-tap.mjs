@@ -110,7 +110,7 @@ async function videoPageGeometry(page) {
       fit: getComputedStyle(v).objectFit, portal: surface.closest('[data-task-modal]')?.parentElement === document.body };
   });
   for (const [actual, expected] of [[g.x, 0], [g.y, 0], [g.width, g.vw], [g.height, g.vh]]) assert.ok(Math.abs(actual - expected) < 1, JSON.stringify(g));
-  assert.equal(g.fit, 'cover'); assert.equal(g.portal, true);
+  assert.equal(g.fit, 'contain', 'fullscreen must show the complete video frame without cropping'); assert.equal(g.portal, true);
   for (const name of ['Close video player', 'Exit fullscreen']) {
     assert.equal(await page.getByRole('button', { name, exact: true }).evaluate(b => {
       const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
@@ -126,7 +126,7 @@ async function mobileVideoLayout(page, fullscreen = false) {
   });
   assert.ok(g.surface.x >= -1 && g.surface.y >= -1 && g.surface.right <= g.vw + 1 && g.surface.bottom <= g.vh + 1, JSON.stringify(g));
   assert.ok(g.video.width > 0 && g.video.height > 0 && g.video.x >= g.stage.x - 1 && g.video.y >= g.stage.y - 1 && g.video.right <= g.stage.right + 1 && g.video.bottom <= g.stage.bottom + 1, 'complete video fits its stage: ' + JSON.stringify(g));
-  assert.equal(g.fit, fullscreen ? 'cover' : 'contain');
+  assert.equal(g.fit, 'contain', 'normal and fullscreen playback must preserve every source edge');
   if (!fullscreen) {
     assert.ok(Math.abs(g.stage.width / g.stage.height - 16 / 9) < .01, 'retain the previous normal video size instead of squeezing it into smaller rows');
     return g;
@@ -252,7 +252,7 @@ try {
     if (process.env.CAPTURE_MEDIA_GESTURES) await page.screenshot({ path: `.runtime/video-button-normal-${engine}-${width}x${height}.png` });
     assert.deepEqual(await page.evaluate(() => window.modeCalls), [], 'the iPhone button keeps video presentation in the page');
     assert.deepEqual(page.fixtureErrors, []); await page.close();
-    console.log(`PASS ${engine} mobile video button ${width}x${height}: previous normal size restored, fullscreen video fills viewport, button/gesture exits, overlay controls accessible`);
+    console.log(`PASS ${engine} mobile video button ${width}x${height}: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible`);
   }
   for (const api of ['native-events', 'standard', 'presentation', 'legacy', 'vendor']) {
     const page = await fixture(); await openVideo(page); await modes(page, api);
@@ -293,8 +293,27 @@ try {
     console.log(`PASS ${engine} video ${api}: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP`);
   }
   for (const api of ['presentation', 'legacy', 'container-noop', 'container-rejection']) {
-    const page = await fixture(); await openVideo(page); await modes(page, api === 'legacy' ? 'legacy' : 'presentation', 5);
-    await page.locator('video').evaluate(v => { window.pageFullscreenVideo = v; v.currentTime = .5; });
+    const page = await fixture();
+    const playbackMedia = r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } });
+    await page.route('**/functions/v1/serve-media?*', playbackMedia);
+    await openVideo(page); await modes(page, api === 'legacy' ? 'legacy' : 'presentation', 5);
+    // Establish a real position without making fullscreen depend on a setup seek.
+    await page.locator('video').evaluate(v => v.play());
+    await page.waitForFunction(() => {
+      const v = document.querySelector('video');
+      return v && !v.paused && !v.seeking && v.currentTime >= .5;
+    }, null, { timeout: 5000 });
+    await page.locator('video').evaluate(async v => {
+      if (!v.paused) {
+        const paused = new Promise(resolve => v.addEventListener('pause', resolve, { once: true }));
+        v.pause(); await paused;
+      }
+      window.pageFullscreenVideo = v;
+    });
+    const initialPosition = await page.locator('video').evaluate(v => v.currentTime);
+    assert.ok(initialPosition >= .25, 'fixture advances before testing fullscreen position preservation');
+    // Reopening below still uses the short clip to check natural completion.
+    await page.unroute('**/functions/v1/serve-media?*', playbackMedia);
     if (api.startsWith('container-')) await page.evaluate(api => {
       Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
       document.querySelector('.video-player-surface').requestFullscreen = () => {
@@ -305,7 +324,10 @@ try {
     }, api);
     for (let i = 0; i < 3; i++) {
       await gesture(page, 'video', 'double'); await videoPageGeometry(page);
-      assert.equal(await page.locator('video').evaluate(v => v === window.pageFullscreenVideo && v.currentTime >= .5), true, 'fullscreen retains the same video and playback position');
+      const playback = await page.locator('video').evaluate(v => ({ same: v === window.pageFullscreenVideo, time: v.currentTime, paused: v.paused }));
+      assert.equal(playback.same, true, 'fullscreen retains the same video');
+      assert.equal(playback.paused, true, 'fullscreen preserves the paused state');
+      assert.ok(Math.abs(playback.time - initialPosition) < .01, 'fullscreen retains the settled playback position: ' + JSON.stringify({ before: initialPosition, after: playback.time }));
       assert.equal(await page.locator('.video-page-fullscreen').count(), 1);
       if (process.env.CAPTURE_MEDIA_GESTURES && i === 0) await page.screenshot({ path: `.runtime/video-page-fullscreen-${engine}-${api}.png` });
       await page.setViewportSize({ width: 844, height: 390 }); await videoPageGeometry(page);
