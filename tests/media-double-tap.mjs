@@ -223,7 +223,7 @@ try {
     await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } }));
     await openVideo(page); await modes(page, 'presentation', 5);
     await page.locator('video').evaluate(v => {
-      v.loop = true; window.controlEvents = [];
+      v.loop = true; window.controlEvents = []; window.idleVideo = v; window.idleSource = v.currentSrc;
       for (const name of ['playing', 'play', 'pause', 'seeking', 'seeked', 'waiting', 'stalled', 'error']) v.addEventListener(name, () => {
         window.controlEvents.push({ name, paused: v.paused, seeking: v.seeking, ready: v.readyState, time: v.currentTime });
         if (window.controlEvents.length > 30) window.controlEvents.shift();
@@ -237,8 +237,29 @@ try {
       try { await page.waitForFunction(() => document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'), undefined, { timeout: 4500 }); }
       catch (error) { throw new Error(error.message + ' ' + JSON.stringify(await page.locator('video').evaluate(v => ({ paused: v.paused, seeking: v.seeking, ready: v.readyState, ended: v.ended, time: v.currentTime, focus: document.activeElement?.outerHTML.slice(0, 220), events: window.controlEvents })))); }
     };
-    const shown = () => page.waitForFunction(() => !document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'));
+    const shown = async () => {
+      try { await page.waitForFunction(() => !document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'), undefined, { timeout: 4500 }); }
+      catch (error) { throw new Error(error.message + ' ' + JSON.stringify(await page.locator('video').evaluate(v => ({ paused: v.paused, seeking: v.seeking, ready: v.readyState, ended: v.ended, time: v.currentTime, duration: v.duration, controls: v.controls, skipBefore: window.skipBefore, skipTarget: window.skipTarget, events: window.controlEvents })))); }
+    };
     await hidden();
+    assert.equal(await page.locator('video').evaluate(v => v.controls), false, 'idle mobile page fullscreen hides the browser Pause/skip controls as well as the application bar');
+    if (engine === 'chromium') {
+      const r = await page.locator('video').boundingBox();
+      await page.touchscreen.tap(r.x + 24, r.y + r.height - 20);
+      await shown();
+      assert.equal(await page.locator('video').evaluate(v => !v.paused && v.controls), true, 'first touch over the newly revealed native Play/Pause only reveals controls');
+      await hidden();
+    }
+    for (const delta of [10, -10]) {
+      // Reveal the menu before using skip, as a real touch user must. Buffered
+      // seeks can finish before their transient seeking state is sampled.
+      await gesture(page, 'video', 'single'); await shown();
+      assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'native skip controls are available after revealing the menu');
+      await page.locator('video').evaluate((v, delta) => { window.skipBefore = v.currentTime; window.skipTarget = Math.max(0, Math.min(v.duration - 2, v.currentTime + delta)); v.currentTime = window.skipTarget; }, delta);
+      await page.waitForFunction(() => { const v = document.querySelector('video'); return !v.paused && !v.seeking && Math.abs(v.currentTime - window.skipTarget) < 2; });
+      await hidden();
+      assert.equal(await page.locator('video').evaluate(v => !v.controls && !v.paused && v === window.idleVideo && v.currentSrc === window.idleSource), true, 'native controls hide again after skip without replacing or pausing playback');
+    }
     await page.locator('video').evaluate(v => v.dispatchEvent(new Event('stalled')));
     assert.equal(await bar.getAttribute('aria-hidden'), 'true', 'a download stall with buffered video must not reveal or latch the bar while playback continues');
     await page.locator('video').evaluate(v => {
@@ -251,6 +272,7 @@ try {
     });
     await shown(); await page.waitForTimeout(2200);
     assert.equal(await bar.getAttribute('aria-hidden'), null, 'actual waiting retains controls');
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'buffering restores native playback controls');
     await page.locator('video').evaluate(v => {
       delete v.readyState;
       // Readiness/progress can recover without another playing event. Normal
@@ -266,18 +288,25 @@ try {
     await shown();
     assert.equal(await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).count(), 1, 'first touch reveals, rather than activating, the previously hidden Exit button');
     assert.equal(await bar.getAttribute('inert'), null);
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'touch restores native playback controls');
     await page.locator('video').evaluate(v => v.pause()); await shown();
     await page.waitForTimeout(2200);
     assert.equal(await bar.getAttribute('aria-hidden'), null, 'paused playback retains usable controls');
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'Pause keeps native Play and skip available');
     await page.locator('video').evaluate(v => v.play()); await hidden();
     await page.keyboard.press('Tab'); await shown();
     await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).focus();
     await page.waitForTimeout(2200);
     assert.equal(await bar.getAttribute('aria-hidden'), null, 'keyboard focus must not disappear while using controls');
+    await page.locator('video').focus();
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(2200);
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'keyboard focus in native playback controls prevents idle hiding');
     await gesture(page, 'video', 'single'); await hidden();
     await gesture(page, 'video', 'double');
     await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
     assert.equal(await bar.getAttribute('inert'), null, 'exit restores the normal control bar');
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'exit restores normal native playback controls');
     assert.equal(await page.locator('video').evaluate(v => getComputedStyle(v).objectFit), 'contain', 'normal view preserves the complete picture');
     await click(page, 'Enter fullscreen'); await hidden();
     await click(page, 'Close video player');
@@ -289,6 +318,35 @@ try {
     await click(page, 'Close video player');
     assert.deepEqual(page.fixtureErrors, []); await page.close();
     console.log(`PASS ${engine} fullscreen control bar: hides during playback, touch reveals safely, pause/keyboard retain controls, hidden double-tap exit and Close/reopen cleanup`);
+  }
+  {
+    const page = await fixture();
+    await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } }));
+    await openVideo(page); await modes(page, 'presentation', 5);
+    await page.evaluate(() => {
+      const surface = document.querySelector('.video-player-surface');
+      let full = null;
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => full });
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+      surface.requestFullscreen = () => new Promise(resolve => { window.finishIdleContainerEntry = () => {
+        full = surface; document.dispatchEvent(new Event('fullscreenchange')); resolve();
+      }; });
+      document.exitFullscreen = () => { full = null; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
+      const v = surface.querySelector('video'); window.idleVideo = v; window.idleSource = v.currentSrc;
+      v.dispatchEvent(new Event('loadedmetadata'));
+    });
+    await click(page, 'Enter fullscreen');
+    await page.locator('video').evaluate(v => v.play());
+    await page.waitForFunction(() => document.querySelector('video').controls === false);
+    await page.evaluate(() => window.finishIdleContainerEntry());
+    await page.waitForFunction(() => document.querySelector('video').controls === true);
+    assert.equal(await page.locator('video').evaluate(v => !v.paused && v === window.idleVideo && v.currentSrc === window.idleSource), true, 'late container fullscreen restores browser controls without interrupting playback');
+    await gesture(page, 'video', 'single'); // Reveal the idle application Exit bar.
+    await click(page, 'Exit fullscreen');
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true);
+    await click(page, 'Close video player');
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} idle controls: delayed container takeover restores browser-owned playback controls`);
   }
   for (const [width, height] of [[390, 844], [844, 390], [932, 430], [844, 320], [768, 1024], [1024, 768]]) {
     const page = await fixture(width, true, height); await openVideo(page); await modes(page, 'presentation', 5);

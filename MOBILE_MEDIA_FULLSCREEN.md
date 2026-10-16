@@ -347,3 +347,39 @@ JavaScript syntax, whitespace checks and the production build passed. The tests
 use local media and simulated mobile viewport/native API behavior. Physical iPhone
 Firefox verification is still required after deployment. Changes are local and
 have not been deployed.
+
+## Native Pause/skip menu idle follow-up
+
+The user confirmed fullscreen sizing works, then reported that the native
+Pause / 10-second skip overlay sometimes remains visible. The application's
+`useVideoControlsAutoHide` only hid the Fullscreen/PiP bar; it never governed the
+native menu. A focused WebKit regression failed because `video.controls` stayed
+enabled after the idle deadline. WebKit's separate
+[AutoHideController](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/Modules/modern-media-controls/controls/auto-hide-controller.js)
+tracks pointers/hover and secondary UI when deciding whether to fade. The physical
+iPhone's specific reason for retaining its overlay cannot be inspected here.
+
+The same two-second idle action now temporarily sets `video.controls = false`
+only in the coarse-pointer gallery page fullscreen fallback. Existing reveal and
+cleanup paths restore the same native controls on touch, pause, seek, buffering,
+keyboard use, exit and Close. The video and source stay mounted; fullscreen sizing,
+presentation APIs, normal playback UI and desktop behavior are retained. Keyboard
+focus within native playback controls prevents hiding. The first revealing touch
+is guarded from activating a newly exposed native playback button.
+If a delayed container fullscreen request succeeds after idle hiding, fullscreen
+events immediately restore browser ownership of native controls.
+
+Regression coverage includes idle native visibility, real forward/backward seeks,
+restored controls during pause/buffering/keyboard use, touch reveal, unchanged
+video/source/playback and restoration on exit. Skip tests reveal the menu first,
+matching the actual touch sequence instead of relying on observing a transient
+buffered-seek state. A delayed container takeover is also covered.
+
+Validation: 81 gesture groups passed across Chromium, Firefox and WebKit, including
+native visibility, real seek completion, touch/keyboard access, container handoff,
+rotation, shared fullscreen actions and desktop regressions. The player recovery
+suites also passed (131 checks). WebKit's idle screenshot shows native playback
+controls and the application bar hidden while the centered video continues.
+TypeScript, full ESLint, JavaScript syntax, whitespace checks and production build
+passed. These use isolated local media and simulated mobile APIs. Physical iPhone
+verification remains necessary after deployment. Changes are local, not deployed.

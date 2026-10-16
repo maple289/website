@@ -38,6 +38,12 @@ Mobile gallery fullscreen fills the viewport and centers the complete video with
 contain-fit sizing, preserving its aspect ratio without cropping. The application
 mode bar hides after two seconds of playback, returns on
 touch, and remains available during pause, buffering, seeking or keyboard use.
+In the mobile page fullscreen fallback the same idle deadline temporarily hides
+the native Pause/skip menu through the media element's controls property. Touch,
+keyboard use, pause, seeking, buffering and exit restore it. Keyboard focus in
+native controls keeps them available; the first revealing touch cannot trigger
+a newly exposed playback button. Desktop and real element fullscreen retain
+browser-owned native controls. Video/source and fullscreen geometry are unchanged.
 Download stalls with playable buffered data do not reveal the bar. Current media
 readiness/progress restores auto-hide after buffering without a latched waiting flag.
 Hidden buttons are inert; keyboard input reveals them before shared focus handling.
