@@ -321,11 +321,22 @@ try {
     }
   } else if (phase === 'pip-handoff') {
     const prepare = async () => {
-      const page = await fixture(false); await open(page); await modes(page, 'standard');
+      const page = await fixture(false);
+      // Exercise the handoff with normal playback, without seeking/rate changes
+      // or crossing the tiny completion fixture's native loop boundary.
+      await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } }));
+      await open(page); await modes(page, 'standard');
       await page.locator('video').evaluate(async v => {
         Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
-        v.loop = true; v.playbackRate = .25; v.currentTime = .5; await v.play();
-        window.pipSource = v.getAttribute('src'); window.pipLoads = 0; window.pipPlayCalls = 0;
+        v.loop = true; await v.play();
+      });
+      await page.waitForFunction(() => {
+        const v = document.querySelector('video');
+        return v && !v.paused && !v.seeking && v.readyState >= v.HAVE_FUTURE_DATA && v.currentTime >= .5;
+      }, null, { timeout: 5000 });
+      await page.locator('video').evaluate(v => {
+        window.pipSource = v.getAttribute('src'); window.pipTime = v.currentTime;
+        window.pipLoads = 0; window.pipPlayCalls = 0;
         for (const event of ['loadstart', 'emptied']) v.addEventListener(event, () => window.pipLoads++);
         const play = v.play.bind(v); v.play = () => { window.pipPlayCalls++; return play(); };
       });
@@ -336,10 +347,13 @@ try {
     for (const order of ['leave-pause-full', 'full-pause-leave', 'pause-leave-full', 'leave-full-pause', 'full-leave-pause']) {
       const page = await prepare();
       await page.evaluate(order => window.returnPipToFullscreen(order), order);
-      await page.waitForFunction(() => !document.querySelector('video').paused, null, { timeout: 3000 });
+      await page.waitForFunction(() => {
+        const v = document.querySelector('video');
+        return v && !v.paused && !v.seeking && v.currentTime > window.pipTime + .15;
+      }, null, { timeout: 3000 });
       await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
-      const result = await page.locator('video').evaluate(v => ({ same: v === window.recoveryVideo, source: v.getAttribute('src') === window.pipSource, time: v.currentTime, loads: window.pipLoads, plays: window.pipPlayCalls }));
-      assert.equal(result.same, true); assert.equal(result.source, true); assert.ok(result.time >= .5);
+      const result = await page.locator('video').evaluate(v => ({ same: v === window.recoveryVideo, source: v.getAttribute('src') === window.pipSource, time: v.currentTime, before: window.pipTime, loads: window.pipLoads, plays: window.pipPlayCalls }));
+      assert.equal(result.same, true); assert.equal(result.source, true); assert.ok(result.time > result.before);
       assert.equal(result.loads, 0); assert.equal(result.plays, 1);
       await page.getByRole('button', { name: 'Close video player', exact: true }).click(); await closed(page);
       console.log(`PASS ${engine} Android-style PiP handoff: ${order}, playing continues on same source/node/time`);

@@ -1,5 +1,29 @@
 # Gallery video player recovery
 
+## CI follow-up for a619b81
+
+[CI run 38836846738](https://github.com/maple289/website/actions/runs/38836846738)
+failed in WebKit at the Close click following the first simulated Android PiP
+handoff. The handoff assertions had passed; Playwright timed out performing the
+click after confirming the button was visible, enabled and stable. Chromium and
+Firefox, including both preview-replacement options, passed. Deployment was skipped.
+
+The handoff fixture used the three-second completion clip, sought to 0.5 seconds
+and changed playback to quarter speed. It did not wait for seeking to settle or
+verify that playback time advanced after recovery. The fixture now uses the
+existing 45-second controls clip at normal speed without a setup seek. It waits
+for ready, advancing playback before PiP and verifies advancing time after each
+handoff, alongside the same source/node, no reload, one recovery attempt and
+successful Close assertions. No application code or CI gates were changed.
+
+Local Windows validation passed all 19 handoff scenarios in Chromium, Firefox
+and WebKit (57 checks), plus the complete WebKit CI browser command: public
+consumption, player recovery, media double-tap and all nine preview-replacement
+checks. JavaScript syntax, ESLint and whitespace checks passed. The original
+timeout did not reproduce on Windows; its precise Linux native-media cause is
+not established. A Linux CI rerun is still required to confirm this fixture
+change resolves it. These tests do not constitute physical phone verification.
+
 ## Android Chrome PiP fullscreen return
 
 The user confirmed iPhone playback/fullscreen works and reported that tapping
