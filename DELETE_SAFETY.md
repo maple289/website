@@ -64,6 +64,12 @@ does not issue the mutation. Changing a reaction to another type remains an upda
 removing it is a direct reversible toggle without confirmation. Favorite toggles change a reversible boolean,
 without deleting the file or its metadata record.
 
+Captured/uploaded video preview data URLs are decoded locally; the production
+connect-src policy blocks fetching them. Replacement still runs only inside the
+existing confirmation's `onConfirm`, validates/uploads before saving the video row,
+and removes the old preview only after the new path is saved. A failed upload
+retains the original preview, captured draft and retryable confirmation.
+
 Media records are retained until storage cleanup succeeds. Storage and database
 operations are not one distributed transaction: partial storage failures are
 reported explicitly and retries can finish the cleanup. Folder/bulk failures reload

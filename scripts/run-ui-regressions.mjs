@@ -13,6 +13,7 @@ const suites = {
   'audit-chunk-recovery': 'upload-test',
   'initial-password-ui': 'upload-test',
   'admin-statistics-reset-ui': 'upload-test',
+  'video-preview-replacement': 'upload-test',
   'public-previews': 'public-preview-test',
   'public-consumption': 'public-preview-test',
   'video-player-recovery': 'public-preview-test',

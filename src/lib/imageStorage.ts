@@ -13,8 +13,19 @@ export function fileExtension(file: File): string {
 }
 
 export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  const response = await fetch(dataUrl);
-  return response.blob();
+  // Canvas and FileReader produce base64 data URLs. Fetching those URLs is
+  // blocked by the site's connect-src policy, even though img-src permits them.
+  // Decode the existing local bytes instead of issuing a network request.
+  try {
+    const match = /^data:([^,]*);base64,([\s\S]*)$/i.exec(dataUrl);
+    if (!match) throw new Error('Invalid image data URL');
+    const binary = atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: match[1] || 'application/octet-stream' });
+  } catch {
+    throw new Error('The preview image could not be read. Choose an image or capture the frame again.');
+  }
 }
 
 type ImageVariants = {

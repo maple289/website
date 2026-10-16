@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Match the production connect-src restriction; data images may be displayed,
+     but their bytes must be decoded locally rather than fetched. -->
+<meta http-equiv="Content-Security-Policy" content="connect-src 'self' https: wss:" />
+</head><body><div id="root"></div><script type="module" src="/tests/video-preview-replacement-harness.tsx"></script></body></html>
