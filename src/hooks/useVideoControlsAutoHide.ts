@@ -9,7 +9,12 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     if (!view) return;
     const coarse = view.matchMedia('(pointer: coarse)');
     let timer: number | undefined, held = false, keyboard = false, revealTouch = false, nativeControlsHidden = false;
+    let progressTimer: number | undefined, lastTime = video.currentTime, progressedAt = -Infinity;
     const clear = () => { view.clearTimeout(timer); timer = undefined; };
+    const resetProgress = () => {
+      view.clearTimeout(progressTimer); progressTimer = undefined;
+      lastTime = video.currentTime; progressedAt = -Infinity;
+    };
     const restoreNativeControls = () => {
       if (nativeControlsHidden) { nativeControlsHidden = false; video.controls = true; }
     };
@@ -20,13 +25,31 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       controls.removeAttribute('inert');
       controls.removeAttribute('aria-hidden');
     };
-    const canHide = () => fullscreen && !error && coarse.matches && surface.classList.contains('video-player-surface') &&
-      !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= video.HAVE_FUTURE_DATA && !held &&
+    const mobileFullscreen = () => fullscreen && !error && coarse.matches && surface.classList.contains('video-player-surface');
+    const running = () => !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= video.HAVE_CURRENT_DATA;
+    const needsProgress = () => mobileFullscreen() && running() && video.readyState < video.HAVE_FUTURE_DATA;
+    const canHide = () => mobileFullscreen() && running() &&
+      (video.readyState >= video.HAVE_FUTURE_DATA || view.performance.now() - progressedAt < 1000) && !held &&
       !(keyboard && (controls.contains(doc.activeElement) || doc.activeElement === video));
+    const sampleProgress = () => {
+      progressTimer = undefined;
+      if (needsProgress()) {
+        const time = video.currentTime;
+        if (Math.abs(time - lastTime) > .001) progressedAt = view.performance.now();
+        lastTime = time;
+      }
+      reconcile();
+    };
     const reconcile = () => {
+      // WebKit can stay at HAVE_CURRENT_DATA after a seek even as playback
+      // advances. Observe the clock only in that mobile fullscreen state.
+      // Sampling also expires the evidence if progress stops without an event.
+      if (needsProgress()) {
+        if (progressTimer === undefined) progressTimer = view.setTimeout(sampleProgress, 250);
+      } else resetProgress();
       if (!canHide()) { show(); return; }
       // Media progress must neither reveal hidden controls nor keep restarting
-      // an existing idle deadline. Read current readiness instead of latching
+      // an existing idle deadline. Read current readiness/progress instead of latching
       // a download-stall event until a future "playing" event happens to arrive.
       if (timer !== undefined || controls.classList.contains('video-controls-hidden')) return;
       timer = view.setTimeout(() => {
@@ -79,8 +102,14 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       // Hand native control visibility back to the browser on that transition.
       if (doc.fullscreenElement || doc.webkitFullscreenElement) restoreNativeControls();
     };
-    const events = ['playing', 'play', 'pause', 'ended', 'seeking', 'seeked', 'waiting', 'stalled', 'error', 'canplay', 'progress', 'timeupdate'];
-    for (const name of events) video.addEventListener(name, reconcile);
+    const mediaChanged = (event: Event) => {
+      // A seek jump is not sustained playback. Genuine waiting/pause also
+      // invalidates earlier progress immediately; subsequent motion can recover.
+      if (['seeking', 'seeked', 'waiting', 'pause', 'ended', 'emptied', 'error'].includes(event.type)) resetProgress();
+      reconcile();
+    };
+    const events = ['playing', 'play', 'pause', 'ended', 'seeking', 'seeked', 'waiting', 'stalled', 'error', 'emptied', 'canplay', 'progress', 'timeupdate'];
+    for (const name of events) video.addEventListener(name, mediaChanged);
     surface.addEventListener('touchstart', touchStart, { capture: true, passive: true });
     surface.addEventListener('touchend', touchEnd, { capture: true, passive: true });
     surface.addEventListener('touchcancel', touchCancel, { capture: true, passive: true });
@@ -95,8 +124,9 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     coarse.addEventListener('change', schedule);
     schedule();
     return () => {
+      resetProgress();
       show();
-      for (const name of events) video.removeEventListener(name, reconcile);
+      for (const name of events) video.removeEventListener(name, mediaChanged);
       surface.removeEventListener('touchstart', touchStart, true);
       surface.removeEventListener('touchend', touchEnd, true);
       surface.removeEventListener('touchcancel', touchCancel, true);

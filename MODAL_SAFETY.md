@@ -46,6 +46,10 @@ a newly exposed playback button. Desktop and real element fullscreen retain
 browser-owned native controls. Video/source and fullscreen geometry are unchanged.
 Download stalls with playable buffered data do not reveal the bar. Current media
 readiness/progress restores auto-hide after buffering without a latched waiting flag.
+If WebKit reports only current data while the playback clock advances, a scoped
+mobile fullscreen probe supplies expiring progress evidence. A stopped clock
+reveals controls; seek/wait/pause invalidate earlier evidence. Exit, source changes
+and unmount stop the probe. Healthy readiness and desktop behavior are retained.
 Hidden buttons are inert; keyboard input reveals them before shared focus handling.
 The first revealing touch cannot activate a newly exposed Exit button. Close remains
 visible, and exit/source changes/unmount clear timers, listeners and hidden state.

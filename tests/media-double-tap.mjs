@@ -268,6 +268,8 @@ try {
     assert.equal(await bar.getAttribute('aria-hidden'), 'true', 'background media events do not reveal hidden controls');
     await page.locator('video').evaluate(v => {
       Object.defineProperty(v, 'readyState', { configurable: true, value: v.HAVE_CURRENT_DATA });
+      const stoppedAt = v.currentTime;
+      Object.defineProperty(v, 'currentTime', { configurable: true, get: () => stoppedAt });
       v.dispatchEvent(new Event('waiting'));
     });
     await shown(); await page.waitForTimeout(2200);
@@ -275,6 +277,7 @@ try {
     assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'buffering restores native playback controls');
     await page.locator('video').evaluate(v => {
       delete v.readyState;
+      delete v.currentTime;
       // Readiness/progress can recover without another playing event. Normal
       // timeupdates must not keep resetting the new two-second idle deadline.
       v.dispatchEvent(new Event('timeupdate'));
@@ -347,6 +350,42 @@ try {
     await click(page, 'Close video player');
     assert.deepEqual(page.fixtureErrors, []); await page.close();
     console.log(`PASS ${engine} idle controls: delayed container takeover restores browser-owned playback controls`);
+  }
+  // Model the CI WebKit state: current data is reported while playback advances.
+  {
+    const page = await fixture(844, true, 390);
+    await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } }));
+    await openVideo(page); await modes(page, 'presentation', 5);
+    await page.locator('video').evaluate(v => {
+      Object.defineProperty(v, 'readyState', { configurable: true, value: v.HAVE_CURRENT_DATA });
+      window.lowDataVideo = v;
+    });
+    await click(page, 'Enter fullscreen');
+    await page.locator('video').evaluate(v => v.play());
+    await page.waitForFunction(() => document.querySelector('.video-controls-hidden'), undefined, { timeout: 4500 });
+    assert.equal(await page.locator('video').evaluate(v => !v.controls && !v.paused && v.readyState === v.HAVE_CURRENT_DATA), true, 'advancing playback hides controls even if WebKit keeps reporting current data');
+    // Stop the observed clock without emitting waiting: stale progress alone
+    // must restore controls, rather than leaving a genuine stall hidden.
+    await page.locator('video').evaluate(v => {
+      const stoppedAt = v.currentTime;
+      Object.defineProperty(v, 'currentTime', { configurable: true, get: () => stoppedAt });
+    });
+    await page.waitForFunction(() => !document.querySelector('.video-controls-hidden'), undefined, { timeout: 2500 });
+    await page.waitForTimeout(2200);
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'a genuinely stopped clock retains native controls');
+    await page.locator('video').evaluate(v => {
+      const jumpedTo = v.currentTime + 10;
+      Object.defineProperty(v, 'currentTime', { configurable: true, get: () => jumpedTo });
+      v.dispatchEvent(new Event('seeking')); v.dispatchEvent(new Event('seeked'));
+    });
+    await page.waitForTimeout(2200);
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'a single seek jump without continued progress must not hide controls');
+    await page.locator('video').evaluate(v => { delete v.currentTime; });
+    await page.waitForFunction(() => document.querySelector('.video-controls-hidden'), undefined, { timeout: 4500 });
+    await click(page, 'Close video player');
+    assert.equal(await page.evaluate(() => window.lowDataVideo.controls), true, 'Close restores native controls and releases progress tracking');
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} current-data playback: progress hides controls, a stopped clock reveals them, recovery hides again and Close cleans up`);
   }
   for (const [width, height] of [[390, 844], [844, 390], [932, 430], [844, 320], [768, 1024], [1024, 768]]) {
     const page = await fixture(width, true, height); await openVideo(page); await modes(page, 'presentation', 5);

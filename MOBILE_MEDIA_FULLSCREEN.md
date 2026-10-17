@@ -383,3 +383,32 @@ controls and the application bar hidden while the centered video continues.
 TypeScript, full ESLint, JavaScript syntax, whitespace checks and production build
 passed. These use isolated local media and simulated mobile APIs. Physical iPhone
 verification remains necessary after deployment. Changes are local, not deployed.
+
+## CI follow-up for c65ae82: WebKit readiness after seeking
+
+[CI run 38983068656](https://github.com/maple289/website/actions/runs/38983068656/job/117248158972)
+failed in the WebKit controls test after its first 10-second seek. The log reports
+`paused: false`, `seeking: false`, `readyState: 2`, and playback time advancing
+from about 10.90 to 15.44 seconds. The hide predicate required `HAVE_FUTURE_DATA`
+(3), so it could never hide the controls in that recovered state. Chromium,
+Firefox and the preceding WebKit player recovery checks passed in the same run.
+
+Mobile gallery fullscreen now checks playback-clock progress when readiness is
+only `HAVE_CURRENT_DATA`. A 250-ms probe provides evidence that expires after one
+second without movement. It leaves the existing two-second idle deadline intact.
+Seek, waiting, pause, end, error and emptied events invalidate earlier progress;
+a seek jump alone does not qualify as sustained playback. Genuine stopped-clock
+buffering restores controls. Healthy readiness bypasses the probe; exit, source
+changes and unmount cancel it. Fullscreen sizing and desktop controls are unchanged.
+
+A local WebKit regression modeling the reported readiness state failed before
+the change and passed afterward. It covers continuous motion, an unannounced
+clock stall, a non-progressing seek jump, recovery and Close. The pre-existing
+buffering fixture now freezes its observed clock as well as readiness, accurately
+distinguishing genuine buffering from the advancing-clock CI condition.
+
+Local validation passed: 84 gesture groups and 131 player recovery checks across
+Chromium, Firefox and WebKit, plus TypeScript, full ESLint, JavaScript syntax,
+whitespace checks and the production build. These are Windows engine fixtures
+with simulated mobile/native APIs. Hosted Linux CI and physical iPhone behavior
+are separate verification steps.
