@@ -1,5 +1,7 @@
 /* Explicit mode buttons share neither browser-native callbacks nor pending intent. */
 .managed-video { touch-action: manipulation; }
+/* Keep iOS timeline drags in the media surface; retain accessibility pinch zoom. */
+.managed-video.ios-video-seek { touch-action: pinch-zoom; }
 .video-presentation-controls.video-controls-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .video-page-fullscreen-layer { z-index: 100; padding: 0; }
 .video-fullscreen-surface.video-page-fullscreen {

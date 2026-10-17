@@ -423,3 +423,40 @@ on failure. The current-data regression also deliberately leaves the play promis
 pending while real playback advances. All 84 gesture groups passed again across
 Chromium, Firefox and WebKit with this bounded helper, plus full ESLint and syntax
 and whitespace checks. The application change is unchanged from the earlier fix.
+
+## iOS repeated seek-bar interaction
+
+The video player has no horizontal swipe-navigation handler. Its idle handler
+tracked TouchEvents but ignored touch PointerEvents. A regression modeling the
+native controls' opaque event boundary passed the first scrub with a TouchEvent
+start and failed the second, pointer-only scrub: after the seek settled, the
+two-second idle action removed `video.controls` while the pointer was still held.
+The media element's `touch-action: manipulation` also permitted page panning.
+
+An iOS/coarse-pointer guard now preserves native controls throughout that pointer
+interaction. It observes release/cancel outside the video without taking native
+pointer capture, and clears held state even if a matching page touchend is absent.
+Touch cancellation, backgrounding, blur, source changes and Close release the
+guard. Seek/movement clears the reveal-click latch so native scrubbing completion
+is not consumed. A pointer-only first tap still only reveals playback controls.
+The native timeline strip remains excluded from fullscreen double taps on iOS.
+
+Only iOS gallery videos receive `touch-action: pinch-zoom`: single-finger page
+panning is excluded within that video while pinch zoom remains available. No
+global touch policy, Android event binding, Android CSS behavior, fullscreen
+geometry, PiP action, source selection or photo gesture is changed. Existing
+native/application idle hiding resumes after the scrub ends.
+
+This follows the pointer-lifetime protection used by WebKit's
+[native controls auto-hide controller](https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebCore/Modules/modern-media-controls/controls/auto-hide-controller.js).
+WebKit documents the panning behavior of `manipulation` in
+[More Responsive Tapping on iOS](https://webkit.org/blog/5610/more-responsive-tapping-on-ios/).
+
+Local validation: the second-scrub regression failed before the guard and passed
+afterward. All 96 gesture groups and 131 recovery checks passed across Chromium,
+Firefox and WebKit. The final iOS cases were rerun in all three engines after
+adding pointer-only reveal and explicit fullscreen exit/re-entry coverage; all
+12 device-policy groups passed. TypeScript, full ESLint, production build,
+JavaScript syntax and whitespace checks passed. Safari/Firefox iPhone identities
+and opaque native event streams are modeled with local media; a physical iPhone
+scrub/visual-thickness check remains a separate verification step.

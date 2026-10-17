@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { closeVideoPresentation, setVideoPageFullscreen, type FullscreenDocument, type FullscreenSurface, type NativeVideo } from '@/lib/videoFullscreen';
 import { listenForMediaDoubleTap } from '@/lib/mediaDoubleTap';
 import { preserveVideoPipPlayback } from '@/lib/videoPipPlayback';
+import { isIOSTouchVideo } from '@/lib/iosVideoSeek';
 
 const empty = { fullscreen: false, pip: false, canFullscreen: false, canPip: false };
 type Snapshot = typeof empty;
@@ -70,7 +71,7 @@ export function useVideoPresentation(videoRef: RefObject<HTMLVideoElement>, surf
     const mediaPoint = (target: EventTarget | null, x: number, y: number) => {
       if (target !== video) return false;
       const rect = video.getBoundingClientRect();
-      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom - (video.controls ? 64 : 0)) return false;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom - (video.controls || isIOSTouchVideo(video) ? 64 : 0)) return false;
       return !video.controls || !video.paused || Math.abs(x - (rect.left + rect.width / 2)) > 32 || Math.abs(y - (rect.top + rect.height / 2)) > 32;
     };
     let lastTouch = -Infinity;

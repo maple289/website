@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import type { FullscreenDocument } from '@/lib/videoFullscreen';
+import { protectIOSVideoSeek } from '@/lib/iosVideoSeek';
 
 export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, surfaceRef: RefObject<HTMLElement>, controlsRef: RefObject<HTMLDivElement>, source: string | null | undefined, fullscreen: boolean, error: string) {
   useEffect(() => {
@@ -29,7 +30,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     const running = () => !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= video.HAVE_CURRENT_DATA;
     const needsProgress = () => mobileFullscreen() && running() && video.readyState < video.HAVE_FUTURE_DATA;
     const canHide = () => mobileFullscreen() && running() &&
-      (video.readyState >= video.HAVE_FUTURE_DATA || view.performance.now() - progressedAt < 1000) && !held &&
+      (video.readyState >= video.HAVE_FUTURE_DATA || view.performance.now() - progressedAt < 1000) && !held && !iosSeek.held &&
       !(keyboard && (controls.contains(doc.activeElement) || doc.activeElement === video));
     const sampleProgress = () => {
       progressTimer = undefined;
@@ -106,8 +107,16 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       // A seek jump is not sustained playback. Genuine waiting/pause also
       // invalidates earlier progress immediately; subsequent motion can recover.
       if (['seeking', 'seeked', 'waiting', 'pause', 'ended', 'emptied', 'error'].includes(event.type)) resetProgress();
+      if (iosSeek.enabled && event.type === 'seeking') revealTouch = false;
       reconcile();
     };
+    const iosSeek = protectIOSVideoSeek(video, surface, {
+      start: () => { revealTouch = controls.classList.contains('video-controls-hidden'); clear(); },
+      moved: () => { revealTouch = false; },
+      // A native scrub can omit the matching page TouchEvent as well. The
+      // last observed iOS pointer release must release that idle hold too.
+      end: () => { held = false; schedule(); },
+    });
     const events = ['playing', 'play', 'pause', 'ended', 'seeking', 'seeked', 'waiting', 'stalled', 'error', 'emptied', 'canplay', 'progress', 'timeupdate'];
     for (const name of events) video.addEventListener(name, mediaChanged);
     surface.addEventListener('touchstart', touchStart, { capture: true, passive: true });
@@ -124,6 +133,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     coarse.addEventListener('change', schedule);
     schedule();
     return () => {
+      iosSeek.dispose();
       resetProgress();
       show();
       for (const name of events) video.removeEventListener(name, mediaChanged);

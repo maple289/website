@@ -31,8 +31,8 @@ async function playControls(page, phase) {
   }
 }
 
-async function fixture(width = 390, touch = true, height = 844) {
-  const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch });
+async function fixture(width = 390, touch = true, height = 844, userAgent) {
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch, ...(userAgent ? { userAgent } : {}) });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   page.fixtureErrors = errors;
   if (engine === 'webkit') await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: '/tests/fixtures/playback-ended.mp4' } }));
@@ -187,6 +187,88 @@ async function geometry(page) {
   }
 }
 try {
+  // iOS native timeline ownership: its opaque controls can expose PointerEvents
+  // without a matching page TouchEvent stream on a later scrub.
+  for (const brand of ['Safari', 'Firefox']) {
+    const userAgent = `Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 ${brand === 'Firefox' ? 'FxiOS/131.0' : 'Version/18.0'} Mobile/15E148 Safari/604.1`;
+    const page = await fixture(844, true, 390, userAgent);
+    await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: `/tests/fixtures/video-controls.${engine === 'webkit' ? 'mp4' : 'webm'}` } }));
+    await openVideo(page); await modes(page, 'presentation', 5);
+    await click(page, 'Enter fullscreen'); await playControls(page, 'iOS repeated seeking');
+    await page.locator('video').evaluate(v => {
+      window.scrubVideo = v; window.scrubSource = v.currentSrc; window.controlsRemovedDuringScrub = 0;
+      new MutationObserver(records => {
+        if (window.scrubActive && records.some(record => record.attributeName === 'controls') && !v.controls) window.controlsRemovedDuringScrub++;
+      }).observe(v, { attributes: true, attributeFilter: ['controls'] });
+    });
+    for (const [index, target] of [5, 12, 4].entries()) {
+      await gesture(page, 'video', 'single');
+      await page.locator('video').evaluate((v, { index, target }) => {
+        const r = v.getBoundingClientRect(), x = r.left + r.width * .4, y = r.bottom - 24;
+        const touch = window.scrubTouch = { identifier: 1, target: v, clientX: x, clientY: y };
+        window.scrubActive = true;
+        window.scrubPointer = index + 41;
+        const down = new PointerEvent('pointerdown', { bubbles: true, composed: true, cancelable: true, pointerType: 'touch', pointerId: window.scrubPointer, clientX: x, clientY: y });
+        v.dispatchEvent(down);
+        if (index === 0) {
+          const start = new Event('touchstart', { bubbles: true, cancelable: true });
+          Object.defineProperties(start, { touches: { value: [touch] }, changedTouches: { value: [touch] } });
+          v.dispatchEvent(start);
+        }
+        window.scrubDownPrevented = down.defaultPrevented;
+        v.currentTime = target;
+      }, { index, target });
+      await page.waitForFunction(() => !document.querySelector('video').seeking);
+      await page.waitForTimeout(2200); // A settled seek must not end the finger's ownership.
+      assert.equal(await page.locator('video').evaluate(v => v.controls), true, `${brand} scrub ${index + 1}: native timeline remains mounted while held`);
+      assert.equal(await page.evaluate(() => window.scrubDownPrevented), false, 'native timeline receives its original pointerdown');
+      await page.evaluate(index => {
+        window.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'touch', pointerId: window.scrubPointer, clientX: innerWidth + 40, clientY: innerHeight - 24 }));
+        // Release/cancel outside the video, as happens when a finger leaves the bar.
+        window.dispatchEvent(new PointerEvent(index === 2 ? 'pointercancel' : 'pointerup', { pointerType: 'touch', pointerId: window.scrubPointer }));
+        // Deliberately omit TouchEvent completion: pointer release must also
+        // release a hold established by an earlier page touchstart.
+        window.scrubActive = false;
+      }, index);
+      await page.waitForFunction(() => document.querySelector('.video-controls-hidden'), undefined, { timeout: 4500 });
+      assert.equal(await page.locator('video').evaluate(v => v === window.scrubVideo && v.currentSrc === window.scrubSource && !v.paused), true);
+      assert.equal(await page.locator('.video-page-fullscreen').count(), 1, 'scrubbing never toggles fullscreen');
+    }
+    assert.equal(await page.evaluate(() => window.controlsRemovedDuringScrub), 0);
+    assert.equal(await page.locator('video').evaluate(v => {
+      v.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', pointerId: 71 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', pointerId: 71 }));
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 });
+      v.dispatchEvent(click); return click.defaultPrevented;
+    }), true, 'a pointer-only reveal cannot activate a newly exposed native playback button');
+    assert.equal(await page.locator('video').evaluate(v => getComputedStyle(v).touchAction), 'pinch-zoom', 'iOS media permits pinch zoom without page panning');
+    await gesture(page, 'video', 'double', [.5, .98]);
+    assert.equal(await page.locator('.video-page-fullscreen').count(), 1, 'timeline taps are excluded from fullscreen gestures');
+    await gesture(page, 'video', 'double');
+    await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
+    await gesture(page, 'video', 'double');
+    await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
+    await page.locator('video').evaluate(v => {
+      v.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', pointerId: 90 }));
+      window.dispatchEvent(new Event('blur'));
+    });
+    await page.waitForFunction(() => document.querySelector('.video-controls-hidden'), undefined, { timeout: 4500 });
+    await page.locator('video').evaluate(v => v.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', pointerId: 91 })));
+    await click(page, 'Close video player');
+    assert.equal(await page.evaluate(() => window.scrubVideo.classList.contains('ios-video-seek')), false, 'Close removes iOS gesture policy');
+    await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', pointerId: 43 })));
+    assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} iPhone ${brand}: three seeks, pointer-only second scrub, missing touchend, outside release/cancel, fullscreen toggles, blur/Close cleanup and pinch zoom`);
+  }
+  for (const android of [true, false]) {
+    const page = await fixture(844, android, 390, android ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36');
+    await openVideo(page);
+    assert.equal(await page.locator('video').evaluate(v => v.classList.contains('ios-video-seek')), false);
+    assert.equal(await page.locator('video').evaluate(v => getComputedStyle(v).touchAction), 'manipulation');
+    assert.equal(await page.locator('video').evaluate(v => v.controls), true);
+    await click(page, 'Close video player'); assert.deepEqual(page.fixtureErrors, []); await page.close();
+    console.log(`PASS ${engine} ${android ? 'Android' : 'desktop'}: existing video touch policy and native controls unchanged`);
+  }
   // Mobile browser chrome can move/resize the visible viewport without changing
   // the layout viewport. Model those metrics, not a different browser engine.
   {
