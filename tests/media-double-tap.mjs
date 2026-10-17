@@ -10,6 +10,27 @@ const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"
 const currentPhoto = '.pv-slide[aria-hidden="false"] .pv-photo';
 const click = (page, name) => page.getByRole('button', { name, exact: true }).click();
 
+async function playControls(page, phase) {
+  // WebKit can advance the media clock at readyState 2 without settling a new
+  // play() promise. Require real playback with a bounded, diagnostic wait.
+  await page.locator('video').evaluate(v => {
+    const state = window.controlPlayback = { start: v.currentTime, resolved: false, error: null };
+    void v.play().then(() => { state.resolved = true; }, error => { state.error = error.message; });
+  });
+  try {
+    await page.waitForFunction(() => {
+      const v = document.querySelector('video'), state = window.controlPlayback;
+      return state.error || (v && !v.paused && !v.seeking && !v.error && Math.abs(v.currentTime - state.start) > .01);
+    }, undefined, { timeout: 7000 });
+    assert.equal(await page.evaluate(() => window.controlPlayback.error), null);
+  } catch (error) {
+    throw new Error(phase + ': ' + error.message + ' ' + JSON.stringify(await page.locator('video').evaluate(v => ({
+      ...window.controlPlayback, paused: v.paused, seeking: v.seeking, ready: v.readyState,
+      ended: v.ended, time: v.currentTime, mediaError: v.error?.code, events: window.controlEvents,
+    }))));
+  }
+}
+
 async function fixture(width = 390, touch = true, height = 844) {
   const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -232,7 +253,7 @@ try {
     await click(page, 'Enter fullscreen');
     const bar = page.locator('.video-presentation-controls');
     const exitBox = await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).boundingBox();
-    await page.locator('video').evaluate(v => v.play());
+    await playControls(page, 'Initial controls playback');
     const hidden = async () => {
       try { await page.waitForFunction(() => document.querySelector('.video-presentation-controls')?.classList.contains('video-controls-hidden'), undefined, { timeout: 4500 }); }
       catch (error) { throw new Error(error.message + ' ' + JSON.stringify(await page.locator('video').evaluate(v => ({ paused: v.paused, seeking: v.seeking, ready: v.readyState, ended: v.ended, time: v.currentTime, focus: document.activeElement?.outerHTML.slice(0, 220), events: window.controlEvents })))); }
@@ -296,7 +317,7 @@ try {
     await page.waitForTimeout(2200);
     assert.equal(await bar.getAttribute('aria-hidden'), null, 'paused playback retains usable controls');
     assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'Pause keeps native Play and skip available');
-    await page.locator('video').evaluate(v => v.play()); await hidden();
+    await playControls(page, 'Controls playback after Pause'); await hidden();
     await page.keyboard.press('Tab'); await shown();
     await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).focus();
     await page.waitForTimeout(2200);
@@ -339,7 +360,7 @@ try {
       v.dispatchEvent(new Event('loadedmetadata'));
     });
     await click(page, 'Enter fullscreen');
-    await page.locator('video').evaluate(v => v.play());
+    await playControls(page, 'Delayed container controls playback');
     await page.waitForFunction(() => document.querySelector('video').controls === false);
     await page.evaluate(() => window.finishIdleContainerEntry());
     await page.waitForFunction(() => document.querySelector('video').controls === true);
@@ -359,9 +380,12 @@ try {
     await page.locator('video').evaluate(v => {
       Object.defineProperty(v, 'readyState', { configurable: true, value: v.HAVE_CURRENT_DATA });
       window.lowDataVideo = v;
+      const play = v.play.bind(v);
+      v.play = () => new Promise((_, reject) => { void play().catch(reject); });
     });
     await click(page, 'Enter fullscreen');
-    await page.locator('video').evaluate(v => v.play());
+    await playControls(page, 'Current-data controls playback');
+    assert.equal(await page.evaluate(() => window.controlPlayback.resolved), false, 'fixture proves playback with an unsettled play promise');
     await page.waitForFunction(() => document.querySelector('.video-controls-hidden'), undefined, { timeout: 4500 });
     assert.equal(await page.locator('video').evaluate(v => !v.controls && !v.paused && v.readyState === v.HAVE_CURRENT_DATA), true, 'advancing playback hides controls even if WebKit keeps reporting current data');
     // Stop the observed clock without emitting waiting: stale progress alone

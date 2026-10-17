@@ -412,3 +412,14 @@ Chromium, Firefox and WebKit, plus TypeScript, full ESLint, JavaScript syntax,
 whitespace checks and the production build. These are Windows engine fixtures
 with simulated mobile/native APIs. Hosted Linux CI and physical iPhone behavior
 are separate verification steps.
+
+The first hosted follow-up (run 39028794249) passed Chromium, Firefox and all
+WebKit player recovery checks, then stopped producing output inside the controls
+fixture. It was cancelled without deployment. That fixture directly awaited
+`video.play()` through an evaluation with no timeout. Its controls playback
+helper now starts playback without waiting on that promise and requires actual
+clock progress within seven seconds, reporting readiness, errors and media events
+on failure. The current-data regression also deliberately leaves the play promise
+pending while real playback advances. All 84 gesture groups passed again across
+Chromium, Firefox and WebKit with this bounded helper, plus full ESLint and syntax
+and whitespace checks. The application change is unchanged from the earlier fix.
