@@ -30,6 +30,15 @@ export function notificationCore(): Promise<NotificationCore> {
 export async function notificationRequest<T>(action: string, data: object = {}): Promise<T> {
   const result = await authenticatedRequest(() => supabase.rpc('messenger_notifications_rpc', { p_action: action, p_data: data }));
   if (result.error) throw new Error(result.error.message || 'Could not update notifications');
+  if (action === 'settings' || action === 'preferences') {
+    const value = result.data as NotificationSettings | null;
+    if (!value || !value.preferences || typeof value.available !== 'boolean'
+      || (value.public_key !== null && typeof value.public_key !== 'string')
+      || Object.keys(defaultNotificationPreferences).some(key => typeof value.preferences[key as keyof NotificationPreferences] !== 'boolean')
+      || (value.muted_conversations !== undefined && (!Array.isArray(value.muted_conversations) || value.muted_conversations.some(id => typeof id !== 'string')))) {
+      throw new Error('Notification settings are unavailable. Please try again.');
+    }
+  }
   return result.data as T;
 }
 let registrationPromise: Promise<ServiceWorkerRegistration | null> | undefined;

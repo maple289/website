@@ -85,6 +85,8 @@ Notifications action for this device. Loading the page/registering a worker
 does not ask permission. A denied state explains browser/device settings without
 repeated requests. Device disabling is a reversible preference, not content
 deletion. Preference-save failures leave the previous checkbox values intact.
+Malformed/unavailable notification settings fail safely and retry on reconnect;
+ordinary navigation and input remain usable while notification delivery recovers.
 
 The browser stores only an account/device binding, preferences, and deduplication
 metadata in IndexedDB, never a session token. Sign-out clears its binding and
@@ -128,12 +130,14 @@ Database-only backups do not contain the private volume key.
 Local verification on Windows (2026-10-18): type-check, ESLint and production
 build passed; eight PostgreSQL notification groups, ten service-worker groups,
 and five Python encryption/dispatcher tests passed. Notification browser tests
-passed in Windows Edge (10 groups, `/video/`), Firefox (10 groups, root path), and
-Windows WebKit (9 groups, `/video/`; Push API unsupported in that runtime).
+passed in Windows Edge (11 groups, `/video/`), Firefox (11 groups, `/video/`;
+the earlier 10-group suite also passed at the root path), and Windows WebKit
+(10 groups, `/video/`; Push API unsupported in that runtime).
 Existing core Messenger/call/relay/audio/security tests, mobile authentication
 (18 cases), call layouts/audio, and iPhone/Android/desktop media gesture/player
-regressions also passed. Device profiles in automation are emulation, not actual
-iPhone/Android OS push delivery. CI additionally validates the Linux Docker image
+regressions also passed. Public navigation and Settings navigation passed with
+an unavailable notification endpoint. Device profiles in automation are emulation,
+not physical iPhone/Android OS push delivery. CI additionally validates the Linux Docker image
 and Compose configuration before the existing production deployment.
 
 - PostgreSQL/PGlite applies the actual Messenger, call, and new migrations and

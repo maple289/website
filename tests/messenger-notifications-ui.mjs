@@ -6,6 +6,7 @@ import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 const states=new Map();
 const appPath=process.env.NOTIFICATION_BASE_PATH || '/video/';
+let shuttingDown=false;
 // A real loopback backend is necessary: WebKit does not reliably expose requests
 // controlled by a service worker to Playwright's network interception APIs.
 const server=await createServer({configFile:false,root:process.cwd(),base:appPath,cacheDir:path.resolve('.runtime/vite-notification-'+appPath.replace(/\W/g,'_')),plugins:[react(),{name:'notification-backend',configureServer(server){
@@ -19,7 +20,7 @@ const server=await createServer({configFile:false,root:process.cwd(),base:appPat
     if(request.url.endsWith('/messenger_notifications_rpc')){
       if(action==='settings'||action==='preferences'){
         if(action==='preferences') {if(state.fail){status=400;result={code:'P0001',message:'Fixture save failed'};}else state.preferences={...state.preferences,...data};}
-        if(status===200)result={preferences:state.preferences,available:true,public_key:key,muted_conversations:state.mutedConversations};
+        if(status===200)result=state.invalidSettings?[]:{preferences:state.preferences,available:true,public_key:key,muted_conversations:state.mutedConversations};
       }
       if(action==='events'){state.feedRequests.push(data);if(state.failEvents){status=503;result={message:'Fixture offline'};}else result={cursor:state.events.length,events:state.events.slice(data.after??0)};}
       if(action==='subscribe'){state.subscriptions++;result={id:device};}
@@ -35,6 +36,9 @@ const server=await createServer({configFile:false,root:process.cwd(),base:appPat
     response.statusCode=status;response.setHeader('Content-Type','application/json');response.end(JSON.stringify(result));
   });
 }}],envPrefix:[],resolve:{alias:{'@':path.resolve('src')}},define:{'import.meta.env.VITE_SUPABASE_URL':'window.location.origin','import.meta.env.VITE_SUPABASE_ANON_KEY':JSON.stringify('isolated-fixture')},server:{host:'127.0.0.1',port:0}});
+// WebKit can reset loopback sockets as its contexts close. Ignore only expected
+// disconnects during teardown; transport errors during assertions still fail.
+server.httpServer.on('connection',socket=>socket.on('error',cause=>{if(!shuttingDown||!['ECONNRESET','EPIPE'].includes(cause.code))throw cause;}));
 await server.listen();
 const engines=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const engine=process.env.BROWSER_ENGINE || 'chromium';
@@ -171,9 +175,18 @@ try {
     await incoming.getByRole('button',{name:'Decline',exact:true}).click();await incoming.waitFor({state:'detached'});
     pass('muted calls outside the cached inbox stay quiet; unmuting restores the existing call alert');
   }
+  {
+    const {page,state,check,errors}=await setup();state.invalidSettings=true;await check();
+    await page.getByText('Could not load notification settings. Check your connection.').waitFor();
+    await page.getByLabel('Untouched draft').fill('Still usable');await page.getByLabel('Untouched draft').click();
+    assert.deepEqual(errors,[],'malformed notification settings cannot break ordinary page interaction');
+    state.invalidSettings=false;await check();await page.getByText('Could not load notification settings. Check your connection.').waitFor({state:'detached'});
+    state.events.push(event());await check();await page.getByRole('article',{name:'New message from John Smith'}).waitFor();
+    pass('malformed settings fail safely without breaking the site; a valid retry restores notifications');
+  }
 } catch(cause) {
   console.log('Notification fixture diagnostic',JSON.stringify(diagnosticState));
   if(diagnosticPage&&!diagnosticPage.isClosed())console.log(await diagnosticPage.evaluate(async()=>({visibility:document.visibilityState,focus:document.hasFocus(),binding:await window.MyhostageNotifications?.get('binding'),text:document.body.innerText})));
   throw cause;
-} finally {await Promise.all(contexts.map(context=>context.close()));await browser.close();await server.close();}
+} finally {shuttingDown=true;await Promise.all(contexts.map(context=>context.close()));await browser.close();await server.close();}
 console.log(`${checks} notification browser groups passed`);
