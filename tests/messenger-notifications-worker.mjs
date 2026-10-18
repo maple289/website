@@ -29,7 +29,7 @@ const push=payload=>emit('push',{data:{text:()=>JSON.stringify(payload),json:()=
 const windowClient=({visible=true,focused=true,respond=true,url='https://myhostage.test/video/#/'}={})=>({url,focused,visibilityState:visible?'visible':'hidden',
   focus:async function(){return this;},navigate:async function(url){navigated.push(url);this.url=url;return this;},
   postMessage:async(message,ports)=>{messages.push(message);if(respond){if(message.type==='messenger-notification')await core.claim(message.payload.id,owner);ports?.[0]?.postMessage('handled');ports?.[0]?.close();}}});
-const page=payload=>emit('message',{source:windowClient(),data:{type:'deliver-notification',payload},ports:[]});
+const page=(payload,pageOwner=owner)=>emit('message',{source:windowClient(),data:{type:'deliver-notification',payload,owner:pageOwner},ports:[]});
 
 await emit('install');await emit('activate');
 const message=make();await push(message);assert.equal(shown.length,1);assert.equal(shown[0].tag,'message-conversation-'+conversation);assert.equal(shown[0].data.message_id,message.message_id);
@@ -66,4 +66,11 @@ sandbox.registration.showNotification=show;await push(retry);assert.equal(shown.
 console.log('PASS temporary OS display failure releases dedupe claim for retry');
 await push(null);const generic=shown.at(-1);windows=[];await emit('notificationclick',{notification:{data:generic.data,close:()=>{}}});assert.equal(opened.at(-1),'https://myhostage.test/video/#/messages');
 console.log('PASS empty push still displays a private generic update with safe Messenger routing');
+const anotherOwner=randomUUID();shown.push({tag:'another-account',data:{owner:anotherOwner},closed:false});
+count=shown.length;await page(make(),anotherOwner);assert.equal(shown.length,count,'stale page delivery must not enter another account');
+await emit('message',{source:windowClient(),data:{type:'clear-notifications',owner},ports:[]});
+assert.equal(shown.filter(item=>item.data?.owner===owner&& !item.closed).length,0);
+assert.equal(shown.at(-1).closed,false,'delayed logout must not close a newer account notification');
+await emit('message',{source:windowClient(),data:{type:'clear-notifications'},ports:[]});assert.equal(shown.at(-1).closed,false);
+console.log('PASS notification delivery and cleanup are owner-specific across delayed sign-out/account switching');
 console.log('PASS notification SW leaves media fetches, WebRTC and read state untouched');

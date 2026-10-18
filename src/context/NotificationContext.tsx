@@ -21,9 +21,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     if (!authLoading && !user) {
-      void notificationCore().then(core => { if (!cancelled) return core.clearBinding(); }).catch(() => undefined);
-      void navigator.serviceWorker?.getRegistration(import.meta.env.BASE_URL).then(registration => {
-        if (registration?.active) void workerMessage(registration.active, { type: 'clear-notifications' });
+      void notificationCore().then(async core => {
+        const previous = await core.get<NotificationBinding>('binding');
+        if (cancelled || !previous) return;
+        const binding = await core.clearBinding(previous.user_id);
+        const registration = await navigator.serviceWorker?.getRegistration(import.meta.env.BASE_URL);
+        if (registration?.active && binding?.user_id) void workerMessage(registration.active, { type: 'clear-notifications', owner: binding.user_id });
       }).catch(() => undefined);
     }
     return () => { cancelled = true; };
@@ -168,7 +171,7 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
             payload = delivery.payload ?? payload; lease = delivery.lease;
           }
           if (registration?.active) {
-            const handled = await workerMessage(registration.active, { type: 'deliver-notification', payload });
+            const handled = await workerMessage(registration.active, { type: 'deliver-notification', payload, owner: userId });
             if (!handled && !await handle(payload)) throw new Error('Notification delivery will retry');
           }
           else await handle(payload);
@@ -242,7 +245,7 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
       if (binding?.user_id === userId && binding.device_id) await notificationRequest('disable', { id: binding.device_id });
       await core.put('binding', { user_id: userId });
       const registration = await notificationWorker();
-      if (registration?.active) await workerMessage(registration.active, { type: 'clear-notifications' });
+      if (registration?.active) await workerMessage(registration.active, { type: 'clear-notifications', owner: userId });
       if (alive.current) setDeviceEnabled(false);
     } catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : 'Could not disable notifications'); }
     finally { guard.current = false; if (alive.current) setPending(false); }

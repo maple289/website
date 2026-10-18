@@ -126,7 +126,7 @@ Database-only backups do not contain the private volume key.
 ## Verification and limits
 
 Local verification on Windows (2026-10-18): type-check, ESLint and production
-build passed; eight PostgreSQL notification groups, nine service-worker groups,
+build passed; eight PostgreSQL notification groups, ten service-worker groups,
 and five Python encryption/dispatcher tests passed. Notification browser tests
 passed in Windows Edge (10 groups, `/video/`), Firefox (10 groups, root path), and
 Windows WebKit (9 groups, `/video/`; Push API unsupported in that runtime).

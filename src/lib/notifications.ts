@@ -103,7 +103,7 @@ export async function detachNotificationDevice(token?: string, owner?: string) {
     const core = await notificationCore();
     const binding = await core.clearBinding(owner);
     const registration = await navigator.serviceWorker?.getRegistration(import.meta.env.BASE_URL);
-    if (registration?.active) void workerMessage(registration.active, { type: 'clear-notifications' });
+    if (registration?.active && binding?.user_id) void workerMessage(registration.active, { type: 'clear-notifications', owner: binding.user_id });
     if (binding?.device_id && token) {
       await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/messenger_notifications_rpc`, {
         method: 'POST', headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

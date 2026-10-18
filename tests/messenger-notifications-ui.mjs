@@ -8,7 +8,7 @@ const states=new Map();
 const appPath=process.env.NOTIFICATION_BASE_PATH || '/video/';
 // A real loopback backend is necessary: WebKit does not reliably expose requests
 // controlled by a service worker to Playwright's network interception APIs.
-const server=await createServer({configFile:false,root:process.cwd(),base:appPath,plugins:[react(),{name:'notification-backend',configureServer(server){
+const server=await createServer({configFile:false,root:process.cwd(),base:appPath,cacheDir:path.resolve('.runtime/vite-notification-'+appPath.replace(/\W/g,'_')),plugins:[react(),{name:'notification-backend',configureServer(server){
   server.middlewares.use(async(request,response,next)=>{
     if(!request.url?.startsWith('/rest/v1/rpc/'))return next();
     const id=/notification-fixture=([^;]+)/.exec(request.headers.cookie || '')?.[1];
@@ -85,7 +85,7 @@ try {
     const bounds=await card.boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=viewport.width+1&&bounds.y+bounds.height<=viewport.height);
     assert.equal(await card.evaluate(node=>getComputedStyle(node).borderRadius),'16px');
     const payload=state.events[0];
-    await page.evaluate(async payload=>{const registration=await navigator.serviceWorker.ready;registration.active.postMessage({type:'deliver-notification',payload});},payload);
+    await page.evaluate(async ({payload,owner})=>{const registration=await navigator.serviceWorker.ready;registration.active.postMessage({type:'deliver-notification',payload,owner});},{payload,owner:me});
     await page.waitForTimeout(200);assert.equal(await page.locator('.messenger-notification-card').count(),1);
     await card.getByRole('button',{name:/John Smith/}).click();await page.waitForFunction(cid=>location.hash.includes('conversation='+cid),cid);
     assert.equal(await page.evaluate(()=>location.hash.includes('notification=1')),false,'active notification navigation must not leave a guest sign-in marker');

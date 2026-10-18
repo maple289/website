@@ -6,10 +6,10 @@ const inScope = client => client.url.startsWith(base);
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', event => event.waitUntil(Promise.all([self.clients.claim(), core.prune()])));
 
-async function closeCall(payload) {
-  await core.put(`closed:${payload.call_id}`, Date.now());
+async function closeCall(payload, owner) {
+  await core.put(`closed:${owner}:${payload.call_id}`, Date.now());
   const notifications = await self.registration.getNotifications({ tag: core.tag(payload) });
-  notifications.forEach(notification => notification.close());
+  notifications.filter(notification => notification.data?.owner === owner).forEach(notification => notification.close());
 }
 function foreground(client, payload) {
   return new Promise(resolve => {
@@ -21,10 +21,11 @@ function foreground(client, payload) {
     client.postMessage({ type: 'messenger-notification', payload }, [channel.port2]);
   });
 }
-async function deliver(payload, source) {
+async function deliver(payload, source, owner) {
   const binding = await core.get('binding');
   if (!binding?.user_id || (payload?.device_id && payload.device_id !== binding.device_id)) return;
   const pushed = source === 'push';
+  if (!pushed && binding.user_id !== owner) return;
   if (pushed && !binding.device_id) return;
   let quiet = false;
   if (!core.valid(payload)) {
@@ -40,8 +41,8 @@ async function deliver(payload, source) {
     quiet = true;
   }
   if (payload.kind === 'call-closed') {
-    if (!pushed) { await closeCall(payload); return; }
-    await core.put(`closed:${payload.call_id}`, Date.now());
+    if (!pushed) { await closeCall(payload, binding.user_id); return; }
+    await core.put(`closed:${binding.user_id}:${payload.call_id}`, Date.now());
     payload = { ...payload, sender_name: payload.sender_name || 'myhostage', body: 'Call no longer ringing' };
     quiet = true;
   }
@@ -55,7 +56,7 @@ async function deliver(payload, source) {
     payload = { kind: 'update', sender_name: 'myhostage', body: 'Open Messenger for updates' }; quiet = true;
   }
   if (payload.kind === 'message' && preferences?.show_message_preview === false) payload = { ...payload, body: 'New message' };
-  if (payload.call_id && payload.kind !== 'call-closed' && await core.get(`closed:${payload.call_id}`)) {
+  if (payload.call_id && payload.kind !== 'call-closed' && await core.get(`closed:${binding.user_id}:${payload.call_id}`)) {
     if (!pushed) return;
     payload = { ...payload, kind: 'call-closed', body: 'Call no longer ringing' }; quiet = true;
   }
@@ -71,7 +72,7 @@ async function deliver(payload, source) {
   if (!fresh && !pushed) return;
   // An endpoint can be disabled while the delivery is in flight.
   const current = await core.get('binding');
-  if (current?.user_id !== binding.user_id || (payload.device_id && current.device_id !== payload.device_id)) return;
+  if (current?.user_id !== binding.user_id || current.device_id !== binding.device_id) return;
   if (self.Notification.permission !== 'granted') return;
   try { await self.registration.showNotification(payload.sender_name, {
     body: payload.body, tag: payload.kind === 'update' ? 'messenger-update' : core.tag(payload), renotify: false,
@@ -88,7 +89,7 @@ async function deliver(payload, source) {
     if (fresh && payload.id) await core.put(`event:${binding.user_id}:${payload.id}`, undefined);
     throw cause;
   }
-  if (payload.call_id && payload.kind !== 'call-closed') setTimeout(() => void closeCall(payload), Math.max(0, Date.parse(payload.expires_at) - Date.now()));
+  if (payload.call_id && payload.kind !== 'call-closed') setTimeout(() => void closeCall(payload, binding.user_id), Math.max(0, Date.parse(payload.expires_at) - Date.now()));
 }
 self.addEventListener('push', event => {
   let payload;
@@ -97,8 +98,8 @@ self.addEventListener('push', event => {
 });
 self.addEventListener('message', event => {
   if (!event.source || !inScope(event.source)) return;
-  const operation = event.data?.type === 'deliver-notification' ? deliver(event.data.payload, 'page')
-    : event.data?.type === 'clear-notifications' ? self.registration.getNotifications().then(items => items.forEach(item => item.close()))
+  const operation = event.data?.type === 'deliver-notification' ? deliver(event.data.payload, 'page', event.data.owner)
+    : event.data?.type === 'clear-notifications' && core.uuid(event.data.owner) ? self.registration.getNotifications().then(items => items.filter(item => item.data?.owner === event.data.owner).forEach(item => item.close()))
     : Promise.resolve();
   event.waitUntil(operation.then(() => event.ports[0]?.postMessage('handled')).catch(() => event.ports[0]?.postMessage('failed')));
 });
