@@ -3,14 +3,17 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createServer } from 'vite';
+import { createConnection } from 'node:net';
 import react from '@vitejs/plugin-react';
 const states=new Map();
+const backendErrors=[];
 const appPath=process.env.NOTIFICATION_BASE_PATH || '/video/';
 // A real loopback backend is necessary: WebKit does not reliably expose requests
 // controlled by a service worker to Playwright's network interception APIs.
 const server=await createServer({configFile:false,root:process.cwd(),base:appPath,cacheDir:path.resolve('.runtime/vite-notification-'+appPath.replace(/\W/g,'_')),plugins:[react(),{name:'notification-backend',configureServer(server){
   server.middlewares.use(async(request,response,next)=>{
     if(!request.url?.startsWith('/rest/v1/rpc/'))return next();
+    try {
     const id=/notification-fixture=([^;]+)/.exec(request.headers.cookie || '')?.[1];
     const state=states.get(id);if(!state){response.statusCode=403;response.end();return;}
     const chunks=[];for await(const chunk of request)chunks.push(chunk);
@@ -33,6 +36,12 @@ const server=await createServer({configFile:false,root:process.cwd(),base:appPat
       if(action==='accept'){state.accepts++;status=400;result={code:'P0001',message:'Fixture media not captured'};}
     }else if(action==='inbox')result={conversations:[],unread:0};
     response.statusCode=status;response.setHeader('Content-Type','application/json');response.end(JSON.stringify(result));
+    } catch(cause) {
+      // A browser may close this page while its POST body is still arriving.
+      // Connect does not await async middleware, so handle that rejection here.
+      if(request.aborted||response.destroyed||['ECONNRESET','EPIPE'].includes(cause.code)){response.destroy();return;}
+      backendErrors.push(cause.message);next(cause);
+    }
   });
 }}],envPrefix:[],resolve:{alias:{'@':path.resolve('src')}},define:{'import.meta.env.VITE_SUPABASE_URL':'window.location.origin','import.meta.env.VITE_SUPABASE_ANON_KEY':JSON.stringify('isolated-fixture')},server:{host:'127.0.0.1',port:0}});
 // Closing any page/context can reset an idle loopback connection. This is a
@@ -40,6 +49,23 @@ const server=await createServer({configFile:false,root:process.cwd(),base:appPat
 // still verify actual requests; unexpected server errors must still fail.
 server.httpServer.on('connection',socket=>socket.on('error',cause=>{if(!['ECONNRESET','EPIPE'].includes(cause.code))throw cause;}));
 await server.listen();
+async function checkAbortedRequest() {
+  const fixture=randomUUID();states.set(fixture,{events:[],feedRequests:[]});
+  const port=server.httpServer.address().port;
+  try {
+    await new Promise((resolve,reject)=>{
+      const socket=createConnection({host:'127.0.0.1',port},()=>{
+        socket.write(`POST /rest/v1/rpc/messenger_notifications_rpc HTTP/1.1\r\nHost: 127.0.0.1\r\nCookie: notification-fixture=${fixture}\r\nContent-Length: 1000\r\nContent-Type: application/json\r\n\r\n{`,()=>setTimeout(()=>socket.destroy(),40));
+      });
+      socket.on('error',reject);socket.on('close',resolve);
+    });
+    const response=await fetch(`http://127.0.0.1:${port}/rest/v1/rpc/messenger_notifications_rpc`,{method:'POST',headers:{Cookie:`notification-fixture=${fixture}`,'Content-Type':'application/json'},body:JSON.stringify({p_action:'events',p_data:{}})});
+    assert.equal(response.status,200);assert.deepEqual((await response.json()).events,[]);
+    await new Promise(resolve=>setTimeout(resolve,50));assert.deepEqual(backendErrors,[]);
+    console.log('PASS aborted HTTP request leaves the fixture alive and the next RPC usable');
+  } finally {states.delete(fixture);}
+}
+if(process.env.NOTIFICATION_HTTP_ABORT_ONLY==='1') {await checkAbortedRequest();await server.close();process.exit(0);}
 const engines=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const engine=process.env.BROWSER_ENGINE || 'chromium';
 const browser=await engines[engine].launch({headless:true,...(engine==='chromium'?{channel:process.env.BROWSER_CHANNEL || 'msedge'}:{})});
@@ -81,6 +107,7 @@ async function setup(viewport={width:1280,height:900},{permission='default',mute
   return {page,context,state,errors,check,core};
 }
 try {
+  await checkAbortedRequest();
   for(const [name,viewport] of [['desktop',{width:1280,height:900}],['tablet',{width:768,height:1024}],['mobile',{width:390,height:844}]]) {
     const {page,state,check,errors,core}=await setup(viewport);
     assert.equal(await page.evaluate(()=>window.__permissionRequests),0);
@@ -190,3 +217,4 @@ try {
   throw cause;
 } finally {await Promise.all(contexts.map(context=>context.close()));await browser.close();await server.close();}
 console.log(`${checks} notification browser groups passed`);
+assert.deepEqual(backendErrors,[],'unexpected fixture backend errors must fail the suite');

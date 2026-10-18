@@ -160,6 +160,10 @@ and Compose configuration before the existing production deployment.
   with simulated permission/enrollment. They exercise desktop/tablet/phone cards,
   grouping, conversation suppression, routing, two tabs, denied permission,
   preference failures, voice/video incoming cards and full-dialog safety.
+- A direct partial-POST cancellation regression reproduces WebKit's normal page
+  disconnect: both socket errors and the aborted async body read are handled.
+  The server must stay alive and answer the next RPC. Unexpected backend errors
+  remain test failures. This check runs before browser installation in CI.
 - Existing message/call engine, relay, audio, authentication and media regression
   suites remain required. CI includes the new SQL, worker, browser, Docker and
   Compose checks.

@@ -36,7 +36,9 @@ jobs:
         run: npm audit --audit-level=moderate
 
       - name: Security and feature regressions
-        run: npm run test:core
+        run: |
+          npm run test:core
+          NOTIFICATION_HTTP_ABORT_ONLY=1 node tests/messenger-notifications-ui.mjs
 
       - name: Build frontend
         run: npm run build
