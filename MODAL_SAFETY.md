@@ -1,6 +1,9 @@
 # Modal safety inventory
 
-Messenger incoming-call dialogs use TaskModal. The stable fullscreen call
+Messenger foreground incoming alerts use a lightweight compact notification card.
+Its Answer/Decline buttons call the existing engine; opening the complete incoming
+call interface from the card or a system notification retains TaskModal. A card
+never dismisses a call on an outside tap or Escape. The stable fullscreen call
 container uses useModalLayer, including for the CSS fullscreen fallback.
 Overlay taps and Escape never hang up or dismiss an invitation. Browser-native
 fullscreen exit restores the floating layout through fullscreenchange; the

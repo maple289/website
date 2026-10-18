@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const overlays = ['media-worker', 'file-preview-worker', 'analytics-collector', 'email-dispatcher'];
+const overlays = ['media-worker', 'file-preview-worker', 'analytics-collector', 'email-dispatcher', 'push-dispatcher'];
 const result = spawnSync('docker', ['compose', ...overlays.flatMap(name => ['-f', `deploy/${name}.compose.yml`]), 'config', '--format', 'json'], {
   encoding: 'utf8',
   env: { ...process.env, STREAMLY_PROJECT_ROOT: process.cwd(), SERVICE_ROLE_KEY: 'isolated-fixture', GLOBAL_S3_BUCKET: 'fixture', STORAGE_TENANT_ID: 'fixture' },

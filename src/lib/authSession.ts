@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { supabase, supabaseAnonKey } from './supabase';
+import { detachNotificationDevice } from './notifications';
 import { announceSignedIn, beginSignOutBarrier, clearLocalSession, enableSessionPersistence, savedSession, sessionIsSignedOut, sessionRevision, waitForSignOutBarrier } from './authSessionStorage';
 
 let cleanup: Promise<void> = Promise.resolve();
@@ -20,6 +21,8 @@ export async function installSession(tokens: { access_token: string; refresh_tok
 }
 export function signOutSession() {
   const session = savedSession();
+  // Revoke this browser's push binding using the same captured session as logout.
+  const pushCleanup = detachNotificationDevice(session?.access_token, session?.user.id);
   const releaseBarrier = beginSignOutBarrier();
   clearLocalSession();
   refresh = null;
@@ -33,7 +36,7 @@ export function signOutSession() {
   // A delayed global logout must finish before a new login can be installed,
   // otherwise it could revoke the newly created session too.
   void revocation.finally(releaseBarrier).catch(() => undefined);
-  cleanup = Promise.all([localCleanup, revocation]).then(() => undefined);
+  cleanup = Promise.all([localCleanup, revocation, pushCleanup]).then(() => undefined);
 }
 async function activeSession(): Promise<Session> {
   if (sessionIsSignedOut()) throw new Error('Please sign in again.');

@@ -6,6 +6,7 @@ import { ArrowLeft, KeyRound, Loader as Loader2, ShieldCheck, Eye, EyeOff, Lock,
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { MessageBell } from '@/components/MessageBell';
+import { NotificationSettings } from '@/components/NotificationSettings';
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -256,6 +257,7 @@ export function SettingsPage() {
             </fieldset>
           </form>}
         </div>
+        <NotificationSettings />
       </main>
     </div>
   );

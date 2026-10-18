@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Eye, EyeOff, Maximize2, Mic, MicOff, Minimize2, MonitorUp, Move, Phone, PhoneOff, Settings2, Video, VideoOff, Volume2, VolumeX } from 'lucide-react';
 import { useCalls } from '@/context/CallContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { TaskModal } from '@/components/TaskModal';
 import { useModalLayer } from '@/hooks/useModalLayer';
@@ -177,19 +178,47 @@ function ActiveCall({ call, state, engine }: { call: CallInfo; state: CallState;
   </section>;
 }
 
+function ExpiredNotificationCall({ close }: { close: () => void }) {
+  const [checked, setChecked] = useState(false);
+  useEffect(() => { const timer = window.setTimeout(() => setChecked(true), 3500); return () => window.clearTimeout(timer); }, []);
+  return <section className="call-panel call-floating" aria-label="Incoming call status"><p role="status">{checked ? 'This call is no longer ringing. Open Messenger to see its status.' : 'Checking incoming call…'}</p><button onClick={close}>Close</button></section>;
+}
 export function CallPanel() {
   const { state, engine } = useCalls();
+  const { managed, settings, loading: notificationLoading, mutedConversations } = useNotifications();
+  const [visible, setVisible] = useState(!document.hidden && document.hasFocus());
+  const [openedCall, setOpenedCall] = useState(() => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('call'));
+  useEffect(() => {
+    const visibility = () => setVisible(!document.hidden && document.hasFocus());
+    const changed = () => { visibility(); setOpenedCall(new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('call')); };
+    const open = (event: Event) => setOpenedCall((event as CustomEvent<string>).detail);
+    document.addEventListener('visibilitychange', visibility); window.addEventListener('hashchange', changed); window.addEventListener('focus', visibility); window.addEventListener('blur', visibility); window.addEventListener('messenger-open-call', open);
+    return () => { document.removeEventListener('visibilitychange', visibility); window.removeEventListener('hashchange', changed); window.removeEventListener('focus', visibility); window.removeEventListener('blur', visibility); window.removeEventListener('messenger-open-call', open); };
+  }, []);
   const incoming = state.inbox.find(c => c.state !== 'ended' && c.my_state === 'invited');
-  const ringtone = useCallRingtone(incoming && !state.call && !state.busy && engine ? incoming.id : null, !!engine);
+  const legacyAlert = !managed || (!settings && !notificationLoading);
+  const allowed = legacyAlert || (!!settings && !!incoming && !mutedConversations.includes(incoming.conversation_id) && (incoming.media === 'video' ? settings.preferences.notify_video_calls : settings.preferences.notify_voice_calls));
+  const showIncoming = !!incoming && !state.call && (!managed || ((visible || state.busy) && (allowed || openedCall === incoming.id)));
+  const fullIncoming = legacyAlert || openedCall === incoming?.id || state.busy;
+  const ringtone = useCallRingtone(showIncoming && allowed && (legacyAlert || settings?.preferences.sound_enabled) && !state.busy && engine ? incoming!.id : null, !!engine);
   if (!engine) return null;
   return <>
     {/* A global call surface escapes parent clipping and other tasks' inert backgrounds. */}
-    {incoming && !state.call && createPortal(<div className="fluent-app call-overlay"><TaskModal className="call-incoming" aria-labelledby="incoming-call-title" aria-busy={state.busy}>
+    {showIncoming && incoming && fullIncoming && createPortal(<div className="fluent-app call-overlay"><TaskModal className="call-incoming" aria-labelledby="incoming-call-title" aria-busy={state.busy}>
       {incoming.media === 'video' ? <Video size={30} /> : <Phone size={30} />}<h2 id="incoming-call-title">{incoming.caller_name}</h2><p>Incoming {incoming.media} call{incoming.members.length > 2 ? ` · ${incoming.name}` : ''}</p>
       <button data-call-sound-control className="call-ring-control" disabled={state.busy} onClick={ringtone.blocked && !ringtone.muted ? ringtone.unlock : ringtone.toggle}>{ringtone.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}{ringtone.muted ? 'Unmute ringing' : ringtone.blocked ? 'Enable call sound' : 'Mute ringing'}</button>
       {state.error && <p className="call-error" role="alert">{state.error}</p>}<div className="call-controls"><button disabled={state.busy} onClick={() => void engine.decline(incoming)}>Decline</button><button className="call-accept" disabled={state.busy} onClick={() => void engine.accept(incoming)}>{state.busy ? 'Connecting…' : 'Accept'}</button></div>
     </TaskModal></div>, document.body)}
+    {showIncoming && incoming && !fullIncoming && createPortal(<div className="messenger-notification-stack messenger-notification-call"><section className="messenger-notification-card" aria-label={`Incoming ${incoming.media} call from ${incoming.caller_name}`} role="status">
+      <span className="messenger-notification-avatar" aria-hidden="true">{incoming.media === 'video' ? <Video size={20} /> : <Phone size={20} />}</span>
+      <div className="messenger-notification-content"><button className="messenger-notification-open" disabled={state.busy} onClick={() => setOpenedCall(incoming.id)}><strong>{incoming.caller_name}</strong><small>Incoming {incoming.media === 'video' ? 'Video' : 'Voice'} Call</small></button>
+        {state.error && <p role="alert">{state.error}</p>}
+        <div className="messenger-notification-actions"><button disabled={state.busy} onClick={() => void engine.decline(incoming)}>Decline</button><button className="notification-answer" disabled={state.busy} onClick={() => void engine.accept(incoming)}>{state.busy ? 'Connecting…' : 'Answer'}</button></div>
+        <button data-call-sound-control disabled={state.busy || !settings?.preferences.sound_enabled} className="messenger-notification-open" onClick={ringtone.blocked && !ringtone.muted ? ringtone.unlock : ringtone.toggle}><small>{ringtone.muted ? 'Unmute ringing' : ringtone.blocked ? 'Enable call sound' : 'Mute ringing'}</small></button>
+      </div>
+    </section></div>, document.body)}
     {state.call && createPortal(<ActiveCall key={state.call.id} call={state.call} state={state} engine={engine} />, document.body)}
+    {managed && visible && openedCall && !incoming && !state.call && !state.busy && new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('call') === openedCall && createPortal(<ExpiredNotificationCall key={openedCall} close={() => setOpenedCall(null)} />, document.body)}
     {!state.call && !incoming && (state.busy || state.error) && <section className="call-panel call-floating" aria-label="Call status"><p role="status">{state.busy ? 'Preparing call…' : state.error}</p>{state.error && !state.busy && <button onClick={() => engine.clearError()}>Close</button>}</section>}
   </>;
 }

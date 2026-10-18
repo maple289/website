@@ -43,6 +43,17 @@ export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
 # Raw provider errors may contain repository URLs; keep them out of journals.
 restic snapshots >/dev/null 2>&1 || { echo "Encrypted repository verification failed." >&2; exit 1; }
 docker compose --env-file "$runtime_dir/.env" -f "$runtime_dir/docker-compose.yml" exec -T db pg_dumpall -U postgres > "$spool/postgres.sql"
+
+# The push signing key lives outside PostgreSQL in a private persistent volume.
+# Include it only inside this protected, encrypted full-backup spool. Never print
+# its contents or place it in application/public configuration.
+export STREAMLY_PROJECT_ROOT="$project_root"
+push_container=$(docker compose --env-file "$runtime_dir/.env" -f "$runtime_dir/docker-compose.yml" \
+  -f "$project_root/deploy/push-dispatcher.compose.yml" ps -q push-dispatcher)
+if [ -n "$push_container" ]; then
+  docker cp "$push_container:/var/lib/push/vapid.pem" "$spool/messenger-push-vapid.pem"
+  chmod 600 "$spool/messenger-push-vapid.pem"
+fi
 date -u +%FT%TZ > "$spool/captured-at-utc"
 git -C "$project_root" rev-parse HEAD > "$spool/source-sha"
 if [ -n "${STREAMLY_INFRA_BACKUP_DIR:-}" ]; then

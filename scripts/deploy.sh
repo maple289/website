@@ -29,6 +29,7 @@ runtime_stack() {
     -f "$project_root/deploy/file-preview-worker.compose.yml" \
     -f "$project_root/deploy/analytics-collector.compose.yml" \
     -f "$project_root/deploy/email-dispatcher.compose.yml" \
+    -f "$project_root/deploy/push-dispatcher.compose.yml" \
     -f "$project_root/deploy/messenger.compose.yml" "$@"
 }
 # Kong can retain a Docker DNS address after an upstream is recreated.
@@ -53,7 +54,7 @@ SQL
 }
 # Build the decoder before changing upload policies. A failed build must not
 # switch the database to a queue that has no worker image.
-runtime_stack build media-worker file-preview-worker analytics-collector
+runtime_stack build media-worker file-preview-worker analytics-collector push-dispatcher
 runtime_stack up -d db
 
 attempt=0
@@ -86,7 +87,7 @@ export STREAMLY_REALTIME_SEED=false
 enforce_private_realtime
 runtime_stack up -d
 runtime_stack restart functions realtime email-dispatcher
-runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector email-dispatcher
+runtime_stack up -d --wait --wait-timeout 180 media-worker file-preview-worker analytics-collector email-dispatcher push-dispatcher
 api_containers_after=$(runtime_stack ps -q rest auth storage functions realtime | sort)
 if [ "$api_containers_before" != "$api_containers_after" ]; then
   echo "Refreshing the API gateway after backend container replacement."

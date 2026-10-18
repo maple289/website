@@ -60,16 +60,17 @@ jobs:
       - name: Firefox public preview and player regressions
         env:
           BROWSER_ENGINE: firefox
-        run: node scripts/run-ui-regressions.mjs public-previews public-consumption video-player-recovery media-double-tap video-preview-replacement
+        run: node scripts/run-ui-regressions.mjs public-previews public-consumption video-player-recovery media-double-tap video-preview-replacement messenger-notifications-ui
 
       - name: WebKit player recovery regressions
         env:
           BROWSER_ENGINE: webkit
-        run: node scripts/run-ui-regressions.mjs public-consumption video-player-recovery media-double-tap video-preview-replacement
+        run: node scripts/run-ui-regressions.mjs public-consumption video-player-recovery media-double-tap video-preview-replacement messenger-notifications-ui
 
       - name: Email and reconciliation regressions
         run: |
-          python -m pip install requests==2.32.5
+          python -m pip install -r services/push-dispatcher/requirements.txt
+          python tests/push-dispatcher.py
           python tests/email-dispatcher.py
           python tests/storage-integrity.py
           python tests/production-diagnostics.py
@@ -78,6 +79,11 @@ jobs:
           sh -n scripts/backup-database.sh
           sh -n scripts/deploy.sh
           sh -n docker/start-web.sh
+
+      - name: Validate push worker image
+        run: |
+          docker build -t streamly-push-validation:ci services/push-dispatcher
+          docker run --rm --network none --read-only -v /var/lib/push --entrypoint python streamly-push-validation:ci -c "from dispatcher import load_key; from pathlib import Path; p=Path('/var/lib/push/vapid.pem'); k=load_key(p); assert len(k)==87 and k==load_key(p); assert p.stat().st_mode & 0o777 == 0o600"
 
       - name: Validate Docker image
         run: |

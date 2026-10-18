@@ -10,7 +10,9 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BarChart3, Clapperboard, FolderOpen, Home, Images, Menu, MessageCircle, Search, Settings, Upload, Video, X, ShieldCheck } from 'lucide-react';
 import { MessengerProvider } from '@/context/MessengerContext';
 import { CallProvider } from '@/context/CallContext';
+import { NotificationProvider } from '@/context/NotificationContext';
 import { CallPanel } from '@/components/CallPanel';
+import { retainNotificationDestination } from '@/lib/notifications';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -36,7 +38,7 @@ function App() {
   if (shared) return <TemporarySharePage token={shared.token} />;
   return (
     <div className="fluent-app"><AuthProvider>
-      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><CallProvider><ErrorBoundary compact><AppContent /></ErrorBoundary><CallPanel /></CallProvider></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
+      <DeleteConfirmationProvider><FileClipboardProvider><ReactionProvider><MessengerProvider><CallProvider><NotificationProvider><ErrorBoundary compact><AppContent /></ErrorBoundary><CallPanel /></NotificationProvider></CallProvider></MessengerProvider></ReactionProvider></FileClipboardProvider></DeleteConfirmationProvider>
     </AuthProvider></div>
   );
 }
@@ -90,7 +92,9 @@ function AppContent() {
       setRoute('home');
     }
     if (!loading && !user && (route === 'admin' || route === 'settings' || route === 'statistics' || route === 'messages')) {
-      window.location.hash = '';
+      const notification = route === 'messages' && retainNotificationDestination();
+      window.location.hash = notification ? '#/login' : '';
+      if (notification) { setAuthMode('signin'); setAuthOpen(true); }
       setRoute('home');
     }
   }, [user, loading, route]);
