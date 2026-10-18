@@ -151,9 +151,11 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
       try {
         await ensureBinding();
         if (cancelled) return;
-        const result = await notificationRequest<{ cursor: number; events: MessengerNotification[] }>('events', cursor.current === null ? { since: startedAt } : { after: cursor.current });
+        const result = await notificationRequest<{ cursor: number; events: MessengerNotification[]; active_calls?: string[] }>('events', cursor.current === null ? { since: startedAt } : { after: cursor.current });
         if (cancelled) return;
         const registration = await getWorker();
+        if (registration?.active) await workerMessage(registration.active, { type: 'reconcile-call-notifications', owner: userId,
+          active_calls: Array.isArray(result.active_calls) ? result.active_calls.filter(id => /^[0-9a-f-]{36}$/i.test(id)) : undefined });
         for (let payload of result.events) {
           if (cancelled) return;
           const core = await notificationCore(), binding = await core.get<NotificationBinding>('binding');

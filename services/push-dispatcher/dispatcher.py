@@ -68,6 +68,10 @@ def ttl_for(job, now=None):
 
 
 def deliver(job, key_path, sender=webpush):
+    # Call cleanup is page/SW reconciliation, never a replacement or silent push.
+    # All real pushes must remain user-visible (especially on Safari).
+    if job["payload"].get("kind") == "call-closed":
+        return "discard"
     if not endpoint_allowed(job["subscription"].get("endpoint")):
         return "expired"
     ttl = ttl_for(job)
@@ -77,8 +81,7 @@ def deliver(job, key_path, sender=webpush):
     if len(payload.encode()) > 3000:
         return "discard"
     kind = job["payload"]["kind"]
-    # No topic replacement of call-open by call-close: SW processes their IDs
-    # and timestamps in either arrival order. Message grouping is in the SW.
+    # The SW groups message/call invitations by conversation/call ID.
     with PushSession() as session:
         try:
             response = sender(subscription_info=job["subscription"], data=payload,

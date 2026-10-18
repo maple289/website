@@ -52,6 +52,8 @@ class PushTests(unittest.TestCase):
             self.assertEqual(dispatcher.deliver(job, 'unused', sender), 'discard')
             job['subscription']['endpoint'] = 'https://localhost/secrets'
             self.assertEqual(dispatcher.deliver(job, 'unused', sender), 'expired')
+            job = self.job(); job['payload']['kind'] = 'call-closed'
+            self.assertEqual(dispatcher.deliver(job, 'unused', sender), 'discard')
             sender.assert_not_called()
 
     def test_provider_errors_cleanup_only_expired_devices(self):

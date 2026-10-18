@@ -6,7 +6,6 @@ import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 const states=new Map();
 const appPath=process.env.NOTIFICATION_BASE_PATH || '/video/';
-let shuttingDown=false;
 // A real loopback backend is necessary: WebKit does not reliably expose requests
 // controlled by a service worker to Playwright's network interception APIs.
 const server=await createServer({configFile:false,root:process.cwd(),base:appPath,cacheDir:path.resolve('.runtime/vite-notification-'+appPath.replace(/\W/g,'_')),plugins:[react(),{name:'notification-backend',configureServer(server){
@@ -22,7 +21,7 @@ const server=await createServer({configFile:false,root:process.cwd(),base:appPat
         if(action==='preferences') {if(state.fail){status=400;result={code:'P0001',message:'Fixture save failed'};}else state.preferences={...state.preferences,...data};}
         if(status===200)result=state.invalidSettings?[]:{preferences:state.preferences,available:true,public_key:key,muted_conversations:state.mutedConversations};
       }
-      if(action==='events'){state.feedRequests.push(data);if(state.failEvents){status=503;result={message:'Fixture offline'};}else result={cursor:state.events.length,events:state.events.slice(data.after??0)};}
+      if(action==='events'){state.feedRequests.push(data);if(state.failEvents){status=503;result={message:'Fixture offline'};}else result={cursor:state.events.length,events:state.events.slice(data.after??0),active_calls:state.incoming?[state.incoming.id]:[]};}
       if(action==='subscribe'){state.subscriptions++;result={id:device};}
       if(action==='device')result={enabled:true};
       if(action==='delivery-claim')result=state.deviceInvalid?{action:'local',payload:state.events.find(event=>event.id===data.id)}:state.pushOwnedIds?.has(data.id)?{action:'push'}:{action:'page',lease:device,payload:state.events.find(event=>event.id===data.id)};
@@ -36,9 +35,10 @@ const server=await createServer({configFile:false,root:process.cwd(),base:appPat
     response.statusCode=status;response.setHeader('Content-Type','application/json');response.end(JSON.stringify(result));
   });
 }}],envPrefix:[],resolve:{alias:{'@':path.resolve('src')}},define:{'import.meta.env.VITE_SUPABASE_URL':'window.location.origin','import.meta.env.VITE_SUPABASE_ANON_KEY':JSON.stringify('isolated-fixture')},server:{host:'127.0.0.1',port:0}});
-// WebKit can reset loopback sockets as its contexts close. Ignore only expected
-// disconnects during teardown; transport errors during assertions still fail.
-server.httpServer.on('connection',socket=>socket.on('error',cause=>{if(!shuttingDown||!['ECONNRESET','EPIPE'].includes(cause.code))throw cause;}));
+// Closing any page/context can reset an idle loopback connection. This is a
+// normal client disconnect, including between test cases. HTTP/UI assertions
+// still verify actual requests; unexpected server errors must still fail.
+server.httpServer.on('connection',socket=>socket.on('error',cause=>{if(!['ECONNRESET','EPIPE'].includes(cause.code))throw cause;}));
 await server.listen();
 const engines=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const engine=process.env.BROWSER_ENGINE || 'chromium';
@@ -188,5 +188,5 @@ try {
   console.log('Notification fixture diagnostic',JSON.stringify(diagnosticState));
   if(diagnosticPage&&!diagnosticPage.isClosed())console.log(await diagnosticPage.evaluate(async()=>({visibility:document.visibilityState,focus:document.hasFocus(),binding:await window.MyhostageNotifications?.get('binding'),text:document.body.innerText})));
   throw cause;
-} finally {shuttingDown=true;await Promise.all(contexts.map(context=>context.close()));await browser.close();await server.close();}
+} finally {await Promise.all(contexts.map(context=>context.close()));await browser.close();await server.close();}
 console.log(`${checks} notification browser groups passed`);

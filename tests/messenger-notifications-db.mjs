@@ -43,7 +43,7 @@ try {
     await sql('INSERT INTO auth.users(id) VALUES($1)',[id]);await sql('INSERT INTO profiles VALUES($1,$2,NULL,$3)',[id,name,name+'@test.invalid']);
   }
   await sql('INSERT INTO auth.sessions VALUES($1,$2)',[sid,b]);
-  for(const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql','20261011030000_messenger_remove_deleted_cards.sql','20261017010000_messenger_notifications.sql'])
+  for(const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql','20261011030000_messenger_remove_deleted_cards.sql','20261017010000_messenger_notifications.sql','20261018010000_messenger_call_notification_cleanup.sql'])
     await db.exec(await readFile(new URL('../supabase/migrations/'+name,import.meta.url),'utf8'));
   console.log('PASS notification migration applies alongside real Messenger/call migrations');
   await actor('', 'anon');await assert.rejects(notify('settings'),/permission denied/);
@@ -118,18 +118,20 @@ try {
   console.log('PASS authenticated page lease, ACK validation, suspended-tab push fallback and foreground exclusivity');
   await actor(a);const incoming=await call('start',null,{conversation_id:cid,session_id:randomUUID(),client_id:randomUUID(),media:'video'});
   await actor(b);events=await notify('events',{after:0});assert.equal(events.events.filter(e=>e.kind==='video').length,1);assert.equal(events.events.filter(e=>e.kind==='message').length,3,'call timeline does not create a message notification');
+  assert.deepEqual(events.active_calls,[incoming.id]);
   await notify('preferences',{notify_video_calls:false});assert.equal((await notify('events',{after:0})).events.some(e=>e.kind==='video'),false);
   const recipientSession=randomUUID();await notify('preferences',{notify_video_calls:true});await call('accept',incoming.id,{session_id:recipientSession});
   events=await notify('events',{after:0});assert.equal(events.events.some(e=>e.kind==='video'),false);assert.equal(events.events.filter(e=>e.kind==='call-closed').length,1);
+  assert.deepEqual(events.active_calls,[],'answer on another device removes the active incoming alert');
   await call('end',incoming.id,{session_id:recipientSession});
   assert.equal((await claim()).length,0,'a foreground-only/cancelled invitation needs no terminal OS push');await actor(a);
   const voice=await call('start',null,{conversation_id:cid,session_id:randomUUID(),client_id:randomUUID(),media:'voice'});
   jobs=await claim();assert.equal(jobs.length,1);assert.equal(jobs[0].payload.kind,'voice');
   await worker('complete',{id:jobs[0].id,lease:jobs[0].lease,status:'sent'});
   await admin();await sql("UPDATE messenger_calls SET started_at=now()-interval '46 seconds' WHERE id=$1",[voice.id]);
-  await claim();jobs=await claim();assert.equal(jobs.length,1);assert.equal(jobs[0].payload.kind,'call-closed');assert.equal(jobs[0].payload.body,'Call no longer ringing');
-  await worker('complete',{id:jobs[0].id,lease:jobs[0].lease,status:'sent'});
+  await claim();jobs=await claim();assert.equal(jobs.length,0,'ended calls never send a replacement or silent close-only push');
   await actor(b);events=await notify('events',{after:0});assert.equal(events.events.some(e=>e.kind==='voice'),false);assert.equal(events.events.filter(e=>e.kind==='call-closed').length,2);
+  assert.deepEqual(events.active_calls,[]);assert.deepEqual((await notify('events')).active_calls,[],'resume reconciliation does not depend on receiving the old close event');
   console.log('PASS call event deduplication, answer-on-another-device closure and server timeout reconciliation');
   await notify('disable',{id:d1.id});await send(cid,'After logout');assert.equal((await claim()).length,0);
   await actor(b);await notify('subscribe',{subscription:subscription('phone')});

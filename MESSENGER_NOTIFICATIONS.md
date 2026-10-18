@@ -55,6 +55,10 @@ well as realtime inbox updates; it does not depend on inbox pagination.
 ## Storage and authorization
 
 Migration: `20261017010000_messenger_notifications.sql`.
+Upgrade: `20261018010000_messenger_call_notification_cleanup.sql` keeps the
+published base migration intact and updates call-alert cleanup for installations
+that already applied it. It adds active-call metadata to the event feed without
+adding tables or modifying call/message content.
 
 | Table | Purpose |
 | --- | --- |
@@ -128,7 +132,7 @@ Database-only backups do not contain the private volume key.
 ## Verification and limits
 
 Local verification on Windows (2026-10-18): type-check, ESLint and production
-build passed; eight PostgreSQL notification groups, ten service-worker groups,
+build passed; eight PostgreSQL notification groups, eleven service-worker groups,
 and five Python encryption/dispatcher tests passed. Notification browser tests
 passed in Windows Edge (11 groups, `/video/`), Firefox (11 groups, `/video/`;
 the earlier 10-group suite also passed at the root path), and Windows WebKit
@@ -167,14 +171,20 @@ Focus/Do Not Disturb, and the OS control delivery/sound/display. iOS web push is
 not a native CallKit/VoIP wakeup service. Answering still requires the page and
 the existing microphone/camera permission flow.
 
-Call invitations expire after the existing 45 seconds. An awake page closes
-obsolete call notifications. For devices sent an invitation push, a terminal
-push quietly replaces the same notification tag with "Call no longer ringing".
-It must remain user-visible, rather than being a silent close-only push. Expired
-or reordered invitations also display this terminal status. Foreground-only or
-cancelled-before-delivery calls do not generate terminal pushes. An awake-worker
-expiry timer is best effort. A sleeping/offline OS can retain an old alert or delay its
-cleanup; web APIs cannot guarantee remote removal or a wakeup at an exact time.
+Call invitations expire after the existing 45 seconds. Call-ended events NEVER
+send Web Push: both the database dispatcher and Python sender exclude them.
+An awake page delivers the close event directly and reconciles existing alerts
+against the server's authenticated active-call IDs, including after resume or
+when it missed the original close event. The service worker closes those alerts
+without showing a replacement. Activation and an awake-worker expiry timer also
+clean up expired alerts. These mechanisms are best effort while the app/worker
+can run. A fully suspended/offline browser can retain an old alert until the next
+execution opportunity; Web Push cannot guarantee silent remote dismissal.
+Safari specifically requires every delivered push to show a notification and
+can revoke subscriptions for silent, close-only pushes. We do not send those.
+If an original invitation itself arrives after expiry/cancellation, Safari still
+requires a visible effect; that rare in-flight invitation is a quiet "Missed call"
+instead of resuming ringing. It is not a separately sent call-ended update.
 The page always rechecks the existing authenticated call state and cannot answer
 an ended call. A stale call link displays its unavailable state. A provider
 request already accepted cannot be recalled if preferences change or a lease ACK
@@ -190,7 +200,7 @@ See [WebKit's user-visible push requirement](https://webkit.org/blog/12945/meet-
 - PWA: `index.html`, `public/notifications-sw.js`,
   `public/notification-core.js`, `public/manifest.webmanifest`, and the three
   `public/icons/` PNG exports of the existing logo.
-- Backend/deploy: the SQL migration above, `services/push-dispatcher/dispatcher.py`,
+- Backend/deploy: the two SQL migrations above, `services/push-dispatcher/dispatcher.py`,
   its `Dockerfile` and `requirements.txt`, `deploy/push-dispatcher.compose.yml`,
   `scripts/deploy.sh`, `scripts/backup-full.sh`.
 - Checks/documentation: `tests/messenger-notifications-db.mjs`,
