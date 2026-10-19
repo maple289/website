@@ -9,4 +9,6 @@ const session=guest?null:{access_token:'fixture',refresh_token:'fixture',token_t
   user:{id:'11111111-1111-4111-8111-111111111111',email:'fixture@example.test'}} as Session;
 supabase.auth.getSession=async()=>({data:{session},error:null});
 supabase.auth.onAuthStateChange=()=>({data:{subscription:{unsubscribe(){}}}}) as ReturnType<typeof supabase.auth.onAuthStateChange>;
-createRoot(document.getElementById('root')!).render(<App />);
+const root=createRoot(document.getElementById('root')!);
+window.addEventListener('fixture-unmount',()=>root.unmount(),{once:true});
+root.render(<App />);

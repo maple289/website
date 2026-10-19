@@ -63,8 +63,8 @@ jobs:
 
       - name: Messenger group sharing browser compatibility
         run: |
-          BROWSER_ENGINE=firefox node scripts/run-ui-regressions.mjs messenger-group-sharing-ui
-          BROWSER_ENGINE=webkit node scripts/run-ui-regressions.mjs messenger-group-sharing-ui
+          BROWSER_ENGINE=firefox node scripts/run-ui-regressions.mjs messenger-group-sharing-ui media-group-filter
+          BROWSER_ENGINE=webkit node scripts/run-ui-regressions.mjs messenger-group-sharing-ui media-group-filter
 
       - name: Browser and transfer regressions
         env:

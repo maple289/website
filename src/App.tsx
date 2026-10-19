@@ -29,6 +29,8 @@ import { InitialPasswordPage } from '@/components/InitialPasswordPage';
 import { FileManager } from '@/components/FileManager';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ExternalFileServerLink } from '@/components/ExternalFileServerLink';
+import { MediaGroupFilter } from '@/components/MediaGroupFilter';
+import { useMediaGroups } from '@/hooks/useMediaGroups';
 
 const UserStatistics = lazy(() => import('@/components/UserStatistics').then(module => ({ default: module.UserStatistics })));
 const Messenger = lazy(() => import('@/components/Messenger').then(module => ({ default: module.Messenger })));
@@ -74,6 +76,8 @@ function AppContent() {
   const [showUpload, setShowUpload] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const homeTab = route === 'public-photos' ? 'photos' : 'videos';
+  const mediaGroups = useMediaGroups(passwordSetup ? undefined : user?.id);
+  const isDiscovery = route === 'home' || route === 'public-videos' || route === 'public-photos';
 
   useEffect(() => {
     const onHash = () => {
@@ -204,6 +208,7 @@ function AppContent() {
             <NavItem icon={<Home size={20} />} label="Home" active={route === 'home' || route === 'public-videos' || route === 'public-photos'} onClick={() => navigate('home')} />
             <NavItem icon={<Video size={20} />} label="My Videos" active={route === 'library'} onClick={() => navigate('library')} />
             <NavItem icon={<Images size={20} />} label="My Photos" active={route === 'photos'} onClick={() => navigate('photos')} />
+            {isDiscovery && <MediaGroupFilter groups={mediaGroups.groups} selected={mediaGroups.group?.id ?? ''} loading={mediaGroups.loading} error={mediaGroups.error} onRetry={() => void mediaGroups.reload()} onSelect={id => { mediaGroups.select(id); setSidebarOpen(false); }} />}
             <NavItem icon={<FolderOpen size={20} />} label="File Storage" active={route === 'files'} onClick={() => navigate('files')} />
             <ExternalFileServerLink key={user.id} />
             <NavItem icon={<MessageCircle size={20} />} label="Messages" active={route === 'messages'} onClick={() => navigate('messages')} />
@@ -228,7 +233,7 @@ function AppContent() {
         <div className="fluent-section-nav"><MediaTabs active={publicTab} onSelect={openPublicSection} /></div>
         <ErrorBoundary key={route} compact>
         {route === 'messages' ? isAuthed && <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading Messages…</p>}><Messenger key={user.id} /></Suspense> : isStatisticsRoute ? isAuthed ? <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading your statistics…</p>}><UserStatistics key={user.id} /></Suspense> : <p role="status" className="p-8 text-center text-slate-600">Please sign in to view your statistics.</p>
-          : isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage tab={homeTab} searchTerm={search} /></FileDropArea>}
+          : isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage key={`${user?.id ?? 'guest'}:${mediaGroups.group?.id ?? 'public'}`} tab={homeTab} searchTerm={search} group={mediaGroups.group} /></FileDropArea>}
         </ErrorBoundary>
       </main>
 

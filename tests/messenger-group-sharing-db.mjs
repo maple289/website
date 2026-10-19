@@ -59,6 +59,7 @@ try {
  }
  for (const name of ['20261008010000_messenger.sql','20261008030000_messenger_rpc_integrity.sql','20261008040000_messenger_scoped_deletion.sql','20261008050000_messenger_calls.sql','20261011010000_messenger_camera_state.sql','20261011020000_messenger_people.sql','20261011030000_messenger_remove_deleted_cards.sql','20261017010000_messenger_notifications.sql','20261018010000_messenger_call_notification_cleanup.sql','20260924040000_add_media_reactions.sql','20261012030000_reauthorized_video_playback.sql','20261019010000_messenger_group_sharing.sql','20261019020000_shared_image_gateway.sql'])
    await db.exec(await readFile(new URL('../supabase/migrations/'+name,import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261019030000_media_group_filter.sql',import.meta.url),'utf8'));
  await sql("INSERT INTO videos VALUES($1,$2,'private','ready',$3,$4)",[video,owner,owner+'/video.mp4',owner+'/video-preview.webp']);
  await sql("INSERT INTO photos VALUES($1,$2,'private',$3,$4,$5,'Photo.jpg','image/jpeg')",[photo,owner,owner+'/photo.jpg',owner+'/photo-preview.webp',owner+'/photo-thumb.webp']);
  for (const name of ['photo.jpg','photo-preview.webp','photo-thumb.webp','video-preview.webp']) await sql("INSERT INTO storage.objects(bucket_id,name) VALUES('user-images',$1)",[`media/${owner}/${name}`]);
@@ -79,6 +80,9 @@ try {
  }
  await actor(member);
  assert.equal(await readable('videos',video),1); assert.equal(await readable('photos',photo),1);
+ assert.deepEqual((await sql('SELECT media_filter_groups() value'))[0].value,[{id:cid,name:'Family edited'}]);
+ for(const [kind,id] of [['video',video],['photo',photo]]) assert.deepEqual((await sql('SELECT group_media_ids($1,$2) value',[kind,cid]))[0].value,[id]);
+ await assert.rejects(sql('SELECT group_media_ids($1,$2) value',['file',cid]),/Invalid media type/);
  assert.deepEqual((await sql("SELECT shared_media_ids('video') value"))[0].value,[video]);
  assert.equal((await sql("SELECT count(*)::int n FROM storage.objects WHERE bucket_id='user-images'"))[0].n,0,'group grant must not permit Storage signing/raw URL access');
  await sql("SELECT set_media_reaction('photo',$1,'love')",[photo]);
@@ -86,8 +90,14 @@ try {
  await assert.rejects(sql('SELECT * FROM media_shares'),/permission denied/);
  await assert.rejects(sql('SELECT resolve_shared_image($1,$2,$3)',[`media/${owner}/photo.jpg`,member,sessions.get(member)]),/permission denied/);
  await actor(outsider); assert.equal(await readable('videos',video),0); assert.equal(await readable('photos',photo),0);
+ assert.deepEqual((await sql('SELECT media_filter_groups() value'))[0].value,[]);
+ await assert.rejects(sql('SELECT group_media_ids($1,$2) value',['video',cid]),/Group unavailable/);
  await assert.rejects(sql("SELECT set_media_reaction('photo',$1,'love')",[photo]),/access denied/);
  await actor('', 'anon'); assert.equal(await readable('videos',video),0); assert.equal(await readable('photos',photo),0);
+ await assert.rejects(sql('SELECT media_filter_groups()'),/permission denied/);
+ await assert.rejects(sql('SELECT group_media_ids($1,$2)',['photo',cid]),/permission denied/);
+ await actor(siteAdmin); assert.deepEqual((await sql('SELECT media_filter_groups() value'))[0].value,[]);
+ await assert.rejects(sql('SELECT group_media_ids($1,$2)',['video',cid]),/Group unavailable/);
  pass('video/photo cards, metadata/search and reactions enforce current membership; recipient cannot change grants or issue capabilities');
  await root(); const imagePaths=['photo.jpg','photo-preview.webp','photo-thumb.webp','video-preview.webp'].map(p=>`media/${owner}/${p}`);
  for(const path of imagePaths) assert.ok((await sql('SELECT resolve_shared_image($1,$2,$3) value',[path,member,sessions.get(member)]))[0].value);
@@ -98,17 +108,24 @@ try {
  const directAccess=async()=>[(await sql('SELECT check_shared_image($1) value',['a'.repeat(64)]))[0].value!==null,(await sql('SELECT check_video_playback($1,$2) value',['b'.repeat(64),video]))[0].value];
  assert.deepEqual(await directAccess(),[true,true]);
  await actor(owner);await chat('remove-member',cid,{user_id:member});await actor(member);
+ assert.deepEqual((await sql('SELECT media_filter_groups() value'))[0].value,[]);
+ await assert.rejects(sql('SELECT group_media_ids($1,$2)',['video',cid]),/Group unavailable/);
  assert.equal(await readable('videos',video),0); assert.equal(await readable('photos',photo),0);
  await root();assert.deepEqual(await directAccess(),[false,false]);
  for(const path of imagePaths) assert.equal((await sql('SELECT resolve_shared_image($1,$2,$3) value',[path,member,sessions.get(member)]))[0].value,null);
  await actor(owner);await chat('add-member',cid,{user_id:member});await actor(member);assert.equal(await readable('videos',video),1);
+ assert.deepEqual((await sql('SELECT group_media_ids($1,$2) value',['video',cid]))[0].value,[video]);
  await root();assert.deepEqual(await directAccess(),[true,true]);
  await sql('UPDATE auth.sessions SET not_after=now()-interval \'1 second\' WHERE user_id=$1',[member]); assert.deepEqual(await directAccess(),[false,false]);
  await sql('UPDATE auth.sessions SET not_after=NULL WHERE user_id=$1',[member]);
  pass('original, thumbnail, preview and saved video/image capabilities revoke immediately on removal/session expiry; joining restores group access');
  await actor(owner); const otherGroup=(await chat('create',null,{kind:'group',text:'Other',members:[outsider]})).id;
+ assert.deepEqual((await sql('SELECT group_media_ids($1,$2) value',['video',otherGroup]))[0].value,[],'no unrelated group/owned/private/public fallback');
  await share('photo',photo,'save',{users:[outsider],groups:[cid],visibility:'private'});
  await actor(outsider);assert.equal(await readable('photos',photo),1);
+ assert.deepEqual((await sql('SELECT group_media_ids($1,$2) value',['photo',otherGroup]))[0].value,[],'person grant must not appear in unrelated group');
+ await assert.rejects(sql('SELECT group_media_ids($1,$2)',['photo',cid]),/Group unavailable/);
+ pass('discovery lists current member groups only; video/photo filters isolate exact group assignments; removal revokes and rejoining restores; anonymous/nonmember/site-admin enumeration denied');
  await actor(owner);await assert.rejects(share('photo',photo,'save',{users:[],groups:[otherGroup,randomUUID()],visibility:'public'}),/group is unavailable/);
  const oldSharing=await share('photo',photo,'get');
  await share('photo',photo,'save',{users:[outsider],groups:[cid,otherGroup],visibility:'private'});
@@ -156,6 +173,8 @@ try {
  const events=await sql("SELECT * FROM realtime.audit WHERE payload->>'kind'='group-deleted'");
  assert.deepEqual(new Set(events.map(e=>e.topic)),new Set([owner,member].map(id=>'messenger:user:'+id)));assert.ok(events.every(e=>e.private));
  await actor(member);assert.ok(!(await chat('inbox')).conversations.some(c=>c.id===cid));
+ assert.deepEqual((await sql('SELECT media_filter_groups() value'))[0].value,[]);
+ await assert.rejects(sql('SELECT group_media_ids($1,$2)',['photo',cid]),/Group unavailable/);
  assert.ok(!(await sql("SELECT messenger_notifications_rpc('events','{}') value"))[0].value.active_conversations.includes(cid));
  await assert.rejects(chat('conversation',cid),/denied/);
  await actor(outsider);assert.equal(await readable('photos',photo),1); // Independent person grant survives.

@@ -1,50 +1,28 @@
 import { useGalleryView } from '@/hooks/useGalleryView';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Film, FolderOpen, Image as ImageIcon, Loader as Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/types';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { MediaVideoCard } from '@/components/MediaVideoCard';
 import { PublicPhotoGallery } from '@/components/PublicPhotoGallery';
 import { GalleryError, GalleryToolbar } from '@/components/GalleryToolbar';
-import { useAuth } from '@/hooks/useAuth';
+import { useDiscoveryMedia } from '@/hooks/useDiscoveryMedia';
+import type { MediaGroup } from '@/hooks/useMediaGroups';
 
 type Tab = 'videos' | 'photos';
 
 type HomePageProps = {
   tab: Tab;
   searchTerm: string;
+  group?: MediaGroup | null;
 };
 
-export function HomePage({ tab, searchTerm }: HomePageProps) {
-  const { user } = useAuth();
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState(true);
+export function HomePage({ tab, searchTerm, group }: HomePageProps) {
+  const { items: videos, loading, error, load } = useDiscoveryMedia<Video>('video', group?.id, tab === 'videos');
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const loadVersion = useRef(0);
-
-  const load = useCallback(async (quiet = false) => {
-    if (tab !== 'videos') return;
-    const version = ++loadVersion.current;
-    if (!quiet) setLoading(true);
-    const { data, error } = await supabase
-      .from('videos')
-      .select('*')
-      .eq('visibility', 'public')
-      .order('created_at', { ascending: false });
-    if (version !== loadVersion.current) return;
-    setError(error ? 'Could not load public videos. Please try again.' : null);
-    if (!error) setVideos(data ?? []);
-    setLoading(false);
-  }, [tab]);
-
-  useEffect(() => { const versionRef = loadVersion; void load(true); return () => { versionRef.current++; }; }, [load, user?.id]);
   useEffect(() => {
-    const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'video') void load(); };
-    window.addEventListener('media-uploaded', refresh);
-    return () => window.removeEventListener('media-uploaded', refresh);
-  }, [load]);
+    if (playingVideo && !loading && !videos.some(video => video.id === playingVideo.id)) setPlayingVideo(null);
+  }, [videos, loading, playingVideo]);
 
   // Auto-refresh while any public video is still processing
   useEffect(() => {
@@ -60,7 +38,7 @@ export function HomePage({ tab, searchTerm }: HomePageProps) {
     <div className="mg-page">
       {tab === 'videos' ? (
         <section className="py-5">
-          <GalleryToolbar title="Discover videos" scope="Public Library" subtitle="Explore videos shared with everyone." view={view} />
+          <GalleryToolbar title="Discover videos" scope={group ? `Group: ${group.name}` : 'Public Library'} subtitle={group ? `Videos shared with ${group.name}.` : 'Explore videos shared with everyone.'} view={view} />
           {error && <GalleryError message={error} onRetry={() => void load()} />}
 
           {loading ? (
@@ -68,8 +46,8 @@ export function HomePage({ tab, searchTerm }: HomePageProps) {
           ) : !error && filtered.length === 0 ? (
             <div className="mg-empty rounded-2xl border border-dashed py-24 text-center">
               <Film className="mx-auto mb-4 text-[#707070]" size={40} />
-              <p className="text-lg font-medium">{searchTerm ? 'No matching videos' : 'No public videos yet'}</p>
-              <p className="mt-2 text-sm text-[#888]">{searchTerm ? 'Try a different search term.' : 'Videos marked as public by users will appear here.'}</p>
+              <p className="text-lg font-medium">{searchTerm ? 'No matching videos' : group ? 'No videos shared with this group yet' : 'No public videos yet'}</p>
+              <p className="mt-2 text-sm text-[#888]">{searchTerm ? 'Try a different search term.' : group ? 'Videos assigned to this group will appear here.' : 'Videos marked as public by users will appear here.'}</p>
             </div>
           ) : (
             <div className="mg-grid" data-density={view.density}>
@@ -80,7 +58,7 @@ export function HomePage({ tab, searchTerm }: HomePageProps) {
           )}
         </section>
       ) : (
-        <PublicPhotoGallery searchTerm={searchTerm} />
+        <PublicPhotoGallery searchTerm={searchTerm} group={group} />
       )}
 
       {playingVideo && (

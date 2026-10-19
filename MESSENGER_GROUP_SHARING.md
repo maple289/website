@@ -5,6 +5,35 @@ No changes to video players, PiP/fullscreen, WebRTC signaling, TURN or network
 configuration are required. Library videos/photos are references, never copied
 into Messenger attachments.
 
+## Main gallery group filter
+
+The main Videos/Photos pages have a **Messenger group** dropdown in the left
+navigation (mobile menu drawer). **NONE** is the first option and queries all
+public media. Selecting a group shows only media explicitly assigned to that
+group, including its public and private assignments. The selection follows the
+Videos/Photos tabs; My Videos/My Photos keep their existing personal library scope.
+No media is moved, copied or changed by filtering.
+
+Migration `20261019030000_media_group_filter.sql` adds two read-only,
+authenticated RPCs: `media_filter_groups()` lists all current member groups,
+including those with no media; `group_media_ids(type,group)` returns that group's
+assigned IDs. Both require an active account, and the latter rechecks current
+membership even for site administrators. Final media SELECTs retain RLS. No new
+tables or access grants are introduced. Empty/error results never fall back to
+unrelated public/private content.
+
+`MediaGroupFilter.tsx`, `useMediaGroups.ts`, `useDiscoveryMedia.ts`, `App.tsx`,
+`HomePage.tsx` and `PublicPhotoGallery.tsx` implement the selector, account-scoped
+state and shared discovery query. Membership/media changes, reconnect, focus and
+returning to the page refresh the filter; a removed/deleted group resets to NONE.
+Old requests cannot replace results after switching groups/accounts. Private
+photos display a Private badge and use the existing protected image gateway.
+
+The PostgreSQL regression covers filter isolation, invalid/anonymous/nonmember
+requests and membership changes. `media-group-filter.mjs` exercises desktop/mobile
+discovery, Videos/Photos tab continuity, NONE/public, empty/error/retry, late
+responses, removed-group reset and guest behavior in Chromium, Firefox and WebKit.
+
 ## Actions and authorization
 
 Messages menu: **Create Group**. Group menu: **Edit Group**, **Manage Members**
