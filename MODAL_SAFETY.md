@@ -1,5 +1,14 @@
 # Modal safety inventory
 
+Messenger Edit Group / Manage Members retain `ChatDialog` / `TaskModal` and
+`useGuardedClose` for the group-name draft. Keep Editing preserves the form.
+The Site Administrator group directory also uses `ChatDialog` / `TaskModal`;
+permanent deletion opens the shared named confirmation above it. Outside/Escape
+never closes either layer. `MediaShareModal` uses `TaskModal`, guarded Cancel for
+unsaved visibility/person/group choices, a synchronous save guard and disabled
+pending controls. Removing saved access opens the shared confirmation, retaining
+errors there and preserving the underlying form on Cancel.
+
 Messenger foreground incoming alerts use a lightweight compact notification card.
 Its Answer/Decline buttons call the existing engine; opening the complete incoming
 call interface from the card or a system notification retains TaskModal. A card

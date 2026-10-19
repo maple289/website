@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+const source=await readFile(new URL('../src/lib/messengerVisibility.ts',import.meta.url),'utf8'),module={};
+new Function('exports',ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(module);
+const visibility=new module.MessageVisibility(),row={id:'message',conversation_id:'group',deleted:false,deleting:false,reply:null};
+const oldSnapshot=visibility.conversationRevision();
+visibility.revokeConversation('group');assert.deepEqual(visibility.messages([row]),[]);
+visibility.restoreSnapshot(['group'],oldSnapshot);assert.equal(visibility.conversationUnavailable('group'),true);
+console.log('PASS delayed pre-removal inbox/history snapshot cannot resurrect a revoked group/message');
+const freshSnapshot=visibility.conversationRevision();visibility.restoreSnapshot(['group'],freshSnapshot);
+assert.equal(visibility.conversationUnavailable('group'),false);assert.equal(visibility.messages([row]).length,1);
+console.log('PASS fresh authorized reconnect snapshot restores a group after re-addition even when its realtime event was missed');
+visibility.remove(row.id,'everyone');visibility.revokeConversation('group');visibility.restoreConversation('group');assert.deepEqual(visibility.messages([row]),[]);
+console.log('PASS restored membership never restores individually deleted message cards');

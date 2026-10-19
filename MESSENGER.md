@@ -40,6 +40,10 @@ introduced.
 
 ## Accounts, groups and blocking
 
+Group menus, owner/site-administrator permanent deletion and dynamic private
+video/photo group grants are described in `MESSENGER_GROUP_SHARING.md`.
+Messenger group Admin and Site Administrator are separate permissions.
+
 The existing Supabase account session is the only identity. Database functions
 derive the actor from `auth.uid()` and reject inactive, banned, deleted or
 password-setup-required accounts. Browser-provided member IDs choose recipients;

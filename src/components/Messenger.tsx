@@ -12,6 +12,9 @@ import { attachmentEntry, ChatRequestError, chatError, chatPreview, chatReaction
 import { BlockedUsers, ChatDialog, ConversationSearch, EditMessage, GroupInformation, NewConversation, SharedChatFiles } from './MessengerDialogs';
 import './Messenger.css';
 import { MessengerPeople } from './MessengerPeople';
+import { AdminGroups } from './MessengerDialogs';
+import { useAdmin } from '@/hooks/useAdmin';
+import { useDeleteGroup } from '@/hooks/useDeleteGroup';
 
 const FilePreview = lazy(() => import('./FilePreview').then(module => ({ default: module.FilePreview })));
 type Draft = { text: string; reply: ChatMessage | null; attachments: PendingAttachment[]; nonce: string; uncertain: boolean };
@@ -19,9 +22,11 @@ const newDraft = (): Draft => ({ text: '', reply: null, attachments: [], nonce: 
 const currentConversation = () => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('conversation') ?? '';
 
 export function Messenger() {
+  const { isAdmin } = useAdmin();
   const { user } = useAuth(), { conversations, connection, error, revision, refresh, visibility } = useMessenger();
   const [selected, setSelected] = useState(currentConversation), [query, setQuery] = useState(''), [list, setList] = useState<Conversation[]>(conversations), [more, setMore] = useState(conversations.length === 50), [listLoading, setListLoading] = useState(false), [listError, setListError] = useState('');
   const [newChat, setNewChat] = useState(false), [blocked, setBlocked] = useState(false);
+  const [newGroup, setNewGroup] = useState(false), [adminGroups, setAdminGroups] = useState(false);
   const drafts = useRef(new Map<string, Draft>());
   const personPending = useRef(false), [personBusy, setPersonBusy] = useState(false), [personError, setPersonError] = useState('');
   const choosePerson = async (id: string) => {
@@ -36,15 +41,16 @@ export function Messenger() {
   };
   useEffect(() => { const change = () => setSelected(currentConversation()); window.addEventListener('hashchange', change); window.addEventListener('popstate', change); return () => { window.removeEventListener('hashchange', change); window.removeEventListener('popstate', change); }; }, []);
   useEffect(() => { let active = true; setListError('');
+    const epoch = visibility.conversationRevision();
     if (!query.trim()) { setListLoading(false); setList(conversations); setMore(conversations.length === 50); return; }
     setListLoading(true);
-    const timer = window.setTimeout(() => { void chatRequest<{ conversations: Conversation[] }>('inbox', null, { query }).then(data => { if (active) { setList(data.conversations); setMore(data.conversations.length === 50); } }).catch(cause => { if (active) setListError(chatError(cause)); }).finally(() => { if (active) setListLoading(false); }); }, 300);
+    const timer = window.setTimeout(() => { void chatRequest<{ conversations: Conversation[] }>('inbox', null, { query }).then(data => { if (active) { visibility.restoreSnapshot(data.conversations.map(item => item.id), epoch); setList(data.conversations); setMore(data.conversations.length === 50); } }).catch(cause => { if (active) setListError(chatError(cause)); }).finally(() => { if (active) setListLoading(false); }); }, 300);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [query, conversations]);
-  const loadMore = async () => { if (listLoading) return; setListLoading(true); try { const data = await chatRequest<{ conversations: Conversation[] }>('inbox', null, { query, offset: list.length }); setList(current => [...new Map([...current, ...data.conversations].map(item => [item.id, item])).values()]); setMore(data.conversations.length === 50); } catch (cause) { setListError(chatError(cause)); } finally { setListLoading(false); } };
+  }, [query, conversations, visibility]);
+  const loadMore = async () => { if (listLoading) return; const epoch = visibility.conversationRevision(); setListLoading(true); try { const data = await chatRequest<{ conversations: Conversation[] }>('inbox', null, { query, offset: list.length }); visibility.restoreSnapshot(data.conversations.map(item => item.id), epoch); setList(current => [...new Map([...current, ...data.conversations].map(item => [item.id, item])).values()]); setMore(data.conversations.length === 50); } catch (cause) { setListError(chatError(cause)); } finally { setListLoading(false); } };
   if (!user) return null;
-  const visibleList = list.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }));
-  return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations · <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
+  const visibleList = list.filter(item => !visibility.conversationUnavailable(item.id)).map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }));
+  return <section className={`messenger ${selected ? 'chat-has-selection' : ''}`} aria-label="Messages"><header className="chat-page-header"><div><h1>Messages</h1><p>Private conversations · <span role="status">{connection}</span></p></div><button className="chat-primary" onClick={() => setNewChat(true)}><Plus size={18} /><span>New message</span></button><ContentContextMenu name="Messages" actions={[{ id: 'create-group', label: 'Create Group', icon: <Users size={17} />, run: () => setNewGroup(true) }, ...(isAdmin ? [{ id: 'admin-groups', label: 'Manage all groups (Site Administrator)', run: () => setAdminGroups(true) }] : []), { id: 'blocked', label: 'Blocked users', icon: <ShieldOff size={17} />, run: () => setBlocked(true) }]} /></header>
     {error && <p className="chat-error chat-service-error" role="alert">{error} <button onClick={() => void refresh()}>Retry</button></p>}
     <div className="chat-workspace"><aside className="chat-conversation-list" aria-label="Conversations"><section className="chat-sidebar-conversations" aria-label="Conversations and groups"><h2 className="chat-sidebar-heading">Conversations / Groups</h2><label className="chat-search"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} /></label><div className="chat-inbox-items">
       {visibleList.map(item => <button key={item.id} className={`chat-inbox-item ${selected === item.id ? 'is-active' : ''}`} aria-current={selected === item.id ? 'page' : undefined} onClick={() => openConversation(item.id)}><span className="chat-avatar">{item.kind === 'group' ? <Users size={19} /> : item.name[0]?.toUpperCase()}<i data-online={item.members.some(member => member.id !== user.id && member.online)} /></span><span className="chat-inbox-text"><strong>{item.name}{item.muted && <BellOff size={13} />}</strong><span>{item.latest?.body || (item.latest?.attachments.length ? 'Sent an attachment' : 'No messages yet')}</span></span>{item.unread > 0 && <span className="chat-count">{item.unread > 99 ? '99+' : item.unread}</span>}</button>)}
@@ -54,11 +60,15 @@ export function Messenger() {
       {selected ? <ConversationPane key={selected} id={selected} revision={revision} drafts={drafts.current} /> : <div className="chat-welcome"><MessageCircle size={48} /><h2>Your conversations</h2><p>Select a conversation or start a new message.</p><button className="chat-primary" onClick={() => setNewChat(true)}>New conversation</button></div>}
     </div>
     {newChat && <NewConversation close={() => setNewChat(false)} created={id => { setNewChat(false); openConversation(id); void refresh(); }} />}
+    {newGroup && <NewConversation initialGroup close={() => setNewGroup(false)} created={id => { setNewGroup(false); openConversation(id); void refresh(); }} />}
+    {adminGroups && <AdminGroups close={() => setAdminGroups(false)} changed={refresh} />}
     {blocked && <BlockedUsers close={() => setBlocked(false)} changed={refresh} />}
   </section>;
 }
 
 function ConversationPane({ id, revision, drafts }: { id: string; revision: number; drafts: Map<string, Draft> }) {
+  const deleteGroup = useDeleteGroup();
+  const [groupMode, setGroupMode] = useState<'info' | 'edit' | 'members'>('info');
   const { state: calls, engine } = useCalls();
   const { user } = useAuth(), { refresh, typing, setTyping, visibility, removeMessage } = useMessenger(), { requestDelete } = useDeleteConfirmation();
   const [conversation, setConversation] = useState<Conversation | null>(null), [messages, setMessages] = useState<ChatMessage[]>([]), [error, setError] = useState(''), [initial, setInitial] = useState(true), [hasOlder, setHasOlder] = useState(true), [olderBusy, setOlderBusy] = useState(false), [away, setAway] = useState(false);
@@ -71,6 +81,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
   const sync = useCallback(async () => {
     if (fetching.current) { refreshAgain.current = true; return; }
     fetching.current = true;
+    const epoch = visibility.conversationRevision();
     const bottom = atBottom.current;
     try {
       const previous = loaded.current;
@@ -99,6 +110,8 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
         updateDraft(current => ({ ...current, reply: null }));
       }
       setPreview(current => current && previous.some(item => item.attachments.some(attachment => attachment.id === current.id)) && !rows.some(item => item.attachments.some(attachment => attachment.id === current.id)) ? null : current);
+      visibility.restoreSnapshot([id], epoch);
+      if (visibility.conversationUnavailable(id)) { setConversation(null); replaceMessages([]); setPreview(null); setDialog(null); setEdit(null); drafts.delete(id); openConversation(); return; }
       setConversation(info); replaceMessages(rows); setError(''); setInitial(false);
       if (!previous.length || resetWindow) setHasOlder(latest.length === 50);
       if (bottom) requestAnimationFrame(() => { viewport.current?.scrollTo({ top: viewport.current.scrollHeight }); markRead(); });
@@ -115,6 +128,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
   }; }, [id, sync, setTyping, drafts]);
   useEffect(() => {
     const previous = loaded.current, rows = visibility.messages(previous);
+    if (visibility.conversationUnavailable(id) && conversation) { setConversation(null); replaceMessages([]); setPreview(null); setDialog(null); setEdit(null); drafts.delete(id); openConversation(); return; }
     replaceMessages(rows);
     setPreview(current => current && ((current.message_id && visibility.has(current.message_id)) || (previous.some(item => item.attachments.some(attachment => attachment.id === current.id)) && !rows.some(item => item.attachments.some(attachment => attachment.id === current.id)))) ? null : current);
     setEdit(current => current && visibility.has(current.id) ? null : current);
@@ -212,7 +226,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
       // Capture the retry identity outside onConfirm. A lost response/retry cannot
       // clear new messages or delete a subsequently reopened chat.
       const clientId = chatRequestId();
-      const canEveryone = clear ? !group || conversation.role !== 'member' : group && conversation.role !== 'member';
+      const canEveryone = clear ? !group || conversation.role !== 'member' : group && (conversation.role === 'owner' || conversation.can_delete_group === true);
       void requestDelete({ title: clear ? 'Clear messages' : 'Delete chat', message: `${clear ? 'Clear the message history in' : 'Delete the chat'} "${conversation.name}"?`,
         choices: [{ id: 'self', label: clear ? 'Clear for myself' : 'Delete for myself', details: clear
           ? `Hide ${counts.own_count} existing messages and their attachments only for you. Other participants keep their messages. New messages remain visible.`
@@ -238,7 +252,12 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
     if (other.blocked) { void chatRequest('unblock', null, { user_id: other.id }).then(changed).catch(cause => setError(chatError(cause))); return; }
     void requestDelete({ title: 'Block user', message: `Block "${other.name}"?`, details: 'Direct messaging will be disabled in both directions. Existing messages remain, and shared group conversations are unaffected.', confirmLabel: 'Block User', onConfirm: async () => { await chatRequest('block', null, { user_id: other.id }); await changed(); } }); };
   const actions: ContentAction[] = conversation ? [
-    { id: 'info', label: conversation.kind === 'group' ? 'Group information & members' : 'View profile', icon: <Users size={17} />, run: () => setDialog('info') },
+    { id: 'info', label: conversation.kind === 'group' ? 'Group information & members' : 'View profile', icon: <Users size={17} />, run: () => { setGroupMode('info'); setDialog('info'); } },
+    ...(conversation.kind === 'group' && conversation.role !== 'member' ? [
+      { id: 'edit-group', label: 'Edit Group', icon: <Pencil size={17} />, run: () => { setGroupMode('edit'); setDialog('info'); } },
+      { id: 'manage-members', label: 'Manage Members', icon: <Users size={17} />, run: () => { setGroupMode('members'); setDialog('info'); } },
+    ] : []),
+    ...(conversation.kind === 'group' && (conversation.role === 'owner' || conversation.can_delete_group) ? [{ id: 'delete-group', label: 'Delete Group with Content', danger: true, icon: <Trash2 size={17} />, run: () => { void deleteGroup(conversation, conversation.role !== 'owner', async () => { drafts.delete(id); openConversation(); await refresh(); }); } }] : []),
     { id: 'search', label: 'Search conversation', icon: <Search size={17} />, run: () => setDialog('search') },
     { id: 'files', label: 'Shared media & files', icon: <FileSearch size={17} />, run: () => setDialog('files') },
     { id: 'mute', label: conversation.muted ? 'Unmute notifications' : 'Mute notifications', icon: <BellOff size={17} />, run: () => { void chatRequest('mute', id, { muted: !conversation.muted }).then(changed).catch(cause => setError(chatError(cause))); } },
@@ -268,7 +287,7 @@ function ConversationPane({ id, revision, drafts }: { id: string; revision: numb
       <div className="chat-composer-row"><input ref={filePicker} type="file" multiple hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(files); }} /><button type="button" aria-label="Attach files" title="Attach files (100 MB each)" disabled={!conversation.can_send || sending || draft.uncertain} onClick={() => filePicker.current?.click()}><Paperclip size={21} /></button><textarea ref={input} aria-label="Message" placeholder="Type a message…" rows={1} maxLength={10000} value={draft.text} disabled={!conversation.can_send || sending || draft.uncertain} onChange={event => { updateDraft(current => ({ ...current, text: event.target.value })); setTyping(id, !!event.target.value); }} onBlur={() => setTyping(id, false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); void send(); } }} /><button type="submit" className="chat-send" disabled={!conversation.can_send || sending || draft.attachments.some(item => item.state === 'uploading') || (!draft.text.trim() && !draft.attachments.some(item => item.state === 'ready'))} aria-label={draft.uncertain ? 'Retry Send' : 'Send message'} title={draft.uncertain ? 'Retry Send' : 'Send message'}>{sending ? <LoaderCircle size={21} className="animate-spin" /> : <Send size={21} />}{draft.uncertain && <span>Retry Send</span>}</button></div>
     </form>}
     {edit && <EditMessage message={edit} close={() => setEdit(null)} saved={() => void changed()} />}
-    {dialog === 'info' && conversation && (conversation.kind === 'group' ? <GroupInformation conversation={conversation} close={() => setDialog(null)} changed={changed} /> : <ChatDialog title="Profile" close={() => setDialog(null)}><div className="chat-dialog-body"><h3>{other?.name || 'Deleted user'}</h3><p>{other?.online ? 'Online' : 'Offline'}</p>{other?.last_seen && <p>Last seen {new Date(other.last_seen).toLocaleString()}</p>}</div><footer><button onClick={() => setDialog(null)}>Close</button></footer></ChatDialog>)}
+    {dialog === 'info' && conversation && (conversation.kind === 'group' ? <GroupInformation mode={groupMode} conversation={conversation} close={() => setDialog(null)} changed={changed} /> : <ChatDialog title="Profile" close={() => setDialog(null)}><div className="chat-dialog-body"><h3>{other?.name || 'Deleted user'}</h3><p>{other?.online ? 'Online' : 'Offline'}</p>{other?.last_seen && <p>Last seen {new Date(other.last_seen).toLocaleString()}</p>}</div><footer><button onClick={() => setDialog(null)}>Close</button></footer></ChatDialog>)}
     {dialog === 'search' && conversation && <ConversationSearch conversation={conversation} revision={revision} close={() => setDialog(null)} reply={message => updateDraft(current => ({ ...current, reply: message }))} />}
     {dialog === 'files' && conversation && <SharedChatFiles conversation={conversation} revision={revision} close={() => setDialog(null)} preview={setPreview} download={attachment => void download(attachment)} />}
     {preview && entry && !(preview.message_id && visibility.has(preview.message_id)) && <Suspense fallback={<p role="status">Loading preview…</p>}><FilePreview entry={entry} onClose={() => setPreview(null)} onDownload={() => void download(preview)} requestPreview={chatPreview} loadVideo={chatVideo} trackViews={false} /></Suspense>}

@@ -4,10 +4,13 @@ import { AlertCircle, CheckCircle2, Film, Globe, LoaderCircle, Lock, Play } from
 import type { Video } from '@/lib/types';
 import { formatBytes, timeAgo } from '@/lib/types';
 import { StorageImage } from '@/components/StorageImage';
+import { useContext } from 'react';
+import { AuthContext } from '@/context/AuthContext';
 
 function VideoPoster({ video }: { video: Video }) {
+  const user = useContext(AuthContext)?.user;
   const placeholder = <div className="mg-placeholder"><Film size={32} /></div>;
-  return <StorageImage storagePath={video.preview_path} legacyUrl={video.preview_url} publicAccess={video.visibility === 'public'} alt={video.file_name}
+  return <StorageImage storagePath={video.preview_path} legacyUrl={video.visibility === 'public' || user?.id === video.owner_id ? video.preview_url : null} publicAccess={video.visibility === 'public'} alt={video.file_name}
     loading="lazy" className="mg-image" fallback={placeholder} />;
 }
 

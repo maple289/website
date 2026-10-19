@@ -2,6 +2,7 @@ import { useContext, useEffect, useState, type ImgHTMLAttributes, type ReactNode
 import { AuthContext } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { resolveBucketPath } from '@/lib/storageSettings';
+import { sharedImageUrl } from '@/lib/sharedMedia';
 
 type StorageImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   storagePath?: string | null;
@@ -21,7 +22,8 @@ export function StorageImage({ storagePath, legacyUrl, publicAccess = false, fal
   useEffect(() => {
     const retry = () => setRevision(value => value + 1);
     window.addEventListener('storage-settings-changed', retry);
-    return () => window.removeEventListener('storage-settings-changed', retry);
+    window.addEventListener('media-access-changed', retry);
+    return () => { window.removeEventListener('storage-settings-changed', retry); window.removeEventListener('media-access-changed', retry); };
   }, []);
 
   useEffect(() => {
@@ -31,12 +33,15 @@ export function StorageImage({ storagePath, legacyUrl, publicAccess = false, fal
     setImage(current => current.key === key && current.source ? current : { key, source: storagePath ? null : legacyUrl ?? null, loading: !!storagePath });
     const load = async () => {
       if (!storagePath) return;
+      let shared = false;
       try {
         const fullPath = await resolveBucketPath(storagePath, 'images');
         const { data, error } = await supabase.storage.from('user-images').createSignedUrl(fullPath, 3600);
-        if (active) setImage({ key, source: error ? legacyUrl ?? null : data?.signedUrl ?? legacyUrl ?? null, loading: false });
+        shared = !!token && (!!error || !data?.signedUrl);
+        const source = !error && data?.signedUrl ? data.signedUrl : shared ? await sharedImageUrl(fullPath) : legacyUrl ?? null;
+        if (active) setImage({ key, source, loading: false });
       } catch {
-        if (active) setImage({ key, source: legacyUrl ?? null, loading: false });
+        if (active) setImage({ key, source: shared ? null : legacyUrl ?? null, loading: false });
       }
     };
     void load();

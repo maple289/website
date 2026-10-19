@@ -29,15 +29,20 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     const version = ++loadVersion.current;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     if (!user) {
       setPhotos([]);
       setLoading(false);
       return;
     }
-    const { data, error: loadError } = await supabase.from('photos').select('*').eq('owner_id', user.id).order('created_at', { ascending: false });
+    const { data: shared, error: shareError } = await supabase.rpc('shared_media_ids', { p_type: 'photo' });
+    if (version !== loadVersion.current) return;
+    if (shareError) { setError('Could not load shared photos.'); setLoading(false); return; }
+    const ids = Array.isArray(shared) ? shared.filter((id: unknown) => typeof id === 'string' && /^[a-f0-9-]{36}$/i.test(id)) : [];
+    const query = supabase.from('photos').select('*');
+    const { data, error: loadError } = await (ids.length ? query.or(`owner_id.eq.${user.id},id.in.(${ids.join(',')})`) : query.eq('owner_id', user.id)).order('created_at', { ascending: false });
     if (version !== loadVersion.current) return;
     setError(loadError ? 'Could not load your photos.' : null);
     if (!loadError) setPhotos(data ?? []);
@@ -45,6 +50,12 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   }, [user]);
 
   useEffect(() => { const versionRef = loadVersion; void load(); return () => { versionRef.current++; }; }, [load]);
+  useEffect(() => {
+    const changed = () => { void load(true); };
+    const refresh = () => { void load(true); };
+    window.addEventListener('media-access-changed', changed); window.addEventListener('focus', refresh);
+    return () => { window.removeEventListener('media-access-changed', changed); window.removeEventListener('focus', refresh); };
+  }, [load, user?.id]);
 
   useEffect(() => {
     const refresh = (event: Event) => { if ((event as CustomEvent).detail === 'photo') void load(); };
@@ -72,7 +83,7 @@ export function PhotoLibrary({ searchTerm }: { searchTerm: string }) {
   return (
     <FileDropArea mediaKind="photo" appearance="media" message="Drop photos here to upload" enabled={!!user && !showUpload && !editingPhoto && viewingIndex === null} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div className="mg-page">
-      <GalleryToolbar title="My Photos" scope="Personal Library" subtitle={`${filteredPhotos.length} ${filteredPhotos.length === 1 ? 'photo' : 'photos'} · Your photos, organized in one place.`} view={view} allowFilter actions={
+      <GalleryToolbar title="My Photos" scope="Personal & Shared Library" subtitle={`${filteredPhotos.length} ${filteredPhotos.length === 1 ? 'photo' : 'photos'} · Your uploads and photos shared with you or your groups.`} view={view} allowFilter actions={
         <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="fluent-primary mg-upload"><Upload size={18} />Upload photo</button>
       } />
       {success && <div role="status" className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}

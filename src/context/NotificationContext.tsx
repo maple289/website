@@ -51,7 +51,7 @@ function MessageCard({ item, close }: { item: MessengerNotification; close: () =
   </article>;
 }
 function NotificationSession({ userId, publish }: { userId: string; publish: (owner: string, value: Value) => void }) {
-  const { revision, conversations } = useMessenger();
+  const { revision, conversations, visibility } = useMessenger();
   const [settings, setSettings] = useState<NotificationSettings | null>(null), [loading, setLoading] = useState(true), [pending, setPending] = useState(false), [error, setError] = useState('');
   const [deviceEnabled, setDeviceEnabled] = useState(false), [permission, setPermission] = useState<Value['permission']>(pushCapability() ? Notification.permission : 'unsupported');
   const [cards, setCards] = useState<MessengerNotification[]>([]);
@@ -113,10 +113,11 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
       if (cancelled || document.hidden || !document.hasFocus() || sessionIsSignedOut()) return false;
       const core = await notificationCore();
       if (!core.valid(payload)) return true;
+      if (visibility.conversationUnavailable(payload.conversation_id)) return true;
       const binding = await core.get<NotificationBinding>('binding');
       if (cancelled || binding?.user_id !== userId || (payload.device_id && binding.device_id !== payload.device_id)) return false;
       if (!await core.claim(payload.id, userId)) return true;
-      if (cancelled || sessionIsSignedOut()) return true;
+      if (cancelled || sessionIsSignedOut() || visibility.conversationUnavailable(payload.conversation_id)) return true;
       if (payload.kind !== 'message') { window.dispatchEvent(new CustomEvent('messenger-call', { detail: 'call-state' })); return true; }
       const pref = settingsRef.current?.preferences;
       if (pref?.notify_messages === false) return true;
@@ -151,9 +152,14 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
       try {
         await ensureBinding();
         if (cancelled) return;
-        const result = await notificationRequest<{ cursor: number; events: MessengerNotification[]; active_calls?: string[] }>('events', cursor.current === null ? { since: startedAt } : { after: cursor.current });
+        const result = await notificationRequest<{ cursor: number; events: MessengerNotification[]; active_calls?: string[]; active_conversations?: string[] }>('events', cursor.current === null ? { since: startedAt } : { after: cursor.current });
         if (cancelled) return;
         const registration = await getWorker();
+        if (Array.isArray(result.active_conversations)) {
+          const active = result.active_conversations.filter(id => /^[0-9a-f-]{36}$/i.test(id));
+          setCards(current => current.filter(card => active.includes(card.conversation_id)));
+          if (registration?.active) await workerMessage(registration.active, { type: 'reconcile-conversation-notifications', owner: userId, active_conversations: active });
+        }
         if (registration?.active) await workerMessage(registration.active, { type: 'reconcile-call-notifications', owner: userId,
           active_calls: Array.isArray(result.active_calls) ? result.active_calls.filter(id => /^[0-9a-f-]{36}$/i.test(id)) : undefined });
         for (let payload of result.events) {
@@ -204,7 +210,7 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
       window.removeEventListener(authSessionEvent, signedOut);
       void audio.current?.close().catch(() => undefined); audio.current = null;
     };
-  }, [userId, sound]);
+  }, [userId, sound, visibility]);
   useEffect(() => { pollRef.current(); settingsRefreshRef.current(); }, [revision]);
 
   const update = useCallback(async (changes: Partial<NotificationPreferences>) => {
@@ -254,6 +260,6 @@ function NotificationSession({ userId, publish }: { userId: string; publish: (ow
   }, [userId]);
   useEffect(() => { publish(userId, { managed: true, mutedConversations: [...new Set([...(settings?.muted_conversations ?? []), ...conversations.filter(item => item.muted).map(item => item.id)])], settings, loading, pending, error, permission, deviceEnabled, update, enable, disable }); }, [publish, userId, conversations, settings, loading, pending, error, permission, deviceEnabled, update, enable, disable]);
   return userId && cards.length ? createPortal(<div className="messenger-notification-stack" aria-live="polite" aria-relevant="additions">
-    {cards.map(item => <MessageCard key={item.id} item={item} close={() => setCards(current => current.filter(card => card.id !== item.id))} />)}
+    {cards.filter(item => !visibility.conversationUnavailable(item.conversation_id)).map(item => <MessageCard key={item.id} item={item} close={() => setCards(current => current.filter(card => card.id !== item.id))} />)}
   </div>, document.body) : null;
 }

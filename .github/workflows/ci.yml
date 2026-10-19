@@ -61,6 +61,11 @@ jobs:
           BROWSER_ENGINE=firefox node tests/messenger-notifications-ui.mjs
           BROWSER_ENGINE=webkit node tests/messenger-notifications-ui.mjs
 
+      - name: Messenger group sharing browser compatibility
+        run: |
+          BROWSER_ENGINE=firefox node scripts/run-ui-regressions.mjs messenger-group-sharing-ui
+          BROWSER_ENGINE=webkit node scripts/run-ui-regressions.mjs messenger-group-sharing-ui
+
       - name: Browser and transfer regressions
         env:
           BROWSER_CHANNEL: chromium

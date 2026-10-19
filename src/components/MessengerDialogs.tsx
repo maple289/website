@@ -9,13 +9,16 @@ import { chatRequest, chatError, chatSize, attachmentEntry, type ChatUser, type 
 import { filePreviewKind } from '@/lib/filePreviews';
 import { useAuth } from '@/hooks/useAuth';
 import { useMessenger } from '@/context/MessengerContext';
+import { supabase } from '@/lib/supabase';
+import { authenticatedRequest } from '@/lib/authSession';
+import { useDeleteGroup } from '@/hooks/useDeleteGroup';
 
 export function ChatDialog({ title, close, children, busy = false }: { title: string; close: () => void; children: ReactNode; busy?: boolean }) {
   return <TaskModal aria-label={title} className="chat-modal"><section className="chat-dialog"><header><h2>{title}</h2><button type="button" aria-label="Close" disabled={busy} onClick={close}><X size={20} /></button></header>{children}</section></TaskModal>;
 }
 const UserSearch = MessengerPeople;
-export function NewConversation({ close, created }: { close: () => void; created: (id: string) => void }) {
-  const [group, setGroup] = useState(false), [name, setName] = useState(''), [selected, setSelected] = useState<ChatUser[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('');
+export function NewConversation({ close, created, initialGroup = false }: { close: () => void; created: (id: string) => void; initialGroup?: boolean }) {
+  const [group, setGroup] = useState(initialGroup), [name, setName] = useState(''), [selected, setSelected] = useState<ChatUser[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const pending = useRef(false), guarded = useGuardedClose(close, group || !!name || !!selected.length, busy);
   const submit = async (person?: ChatUser) => {
     if (pending.current) return;
@@ -38,7 +41,7 @@ export function EditMessage({ message, close, saved }: { message: ChatMessage; c
     try { await chatRequest('edit', message.conversation_id, { id: message.id, text }); saved(); close(); } catch (cause) { setError(chatError(cause)); } finally { pending.current = false; setBusy(false); } };
   return <ChatDialog title="Edit message" close={guard} busy={busy}><div className="chat-dialog-body"><label>Message<textarea value={text} disabled={busy} maxLength={10000} rows={5} onChange={event => setText(event.target.value)} /></label>{error && <p className="chat-error" role="alert">{error}</p>}</div><footer><button disabled={busy} onClick={guard}>Cancel</button><button disabled={busy || (!text.trim() && !message.attachments.length)} className="chat-primary" onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</button></footer></ChatDialog>;
 }
-export function GroupInformation({ conversation, close, changed }: { conversation: Conversation; close: () => void; changed: () => Promise<void> }) {
+export function GroupInformation({ conversation, close, changed, mode = 'info' }: { conversation: Conversation; close: () => void; changed: () => Promise<void>; mode?: 'info' | 'edit' | 'members' }) {
   const { user } = useAuth(), { requestDelete } = useDeleteConfirmation();
   const [name, setName] = useState(conversation.name), [original, setOriginal] = useState(conversation.name), [members, setMembers] = useState(conversation.members), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const pending = useRef(false), guard = useGuardedClose(close, name !== original, busy);
@@ -51,16 +54,39 @@ export function GroupInformation({ conversation, close, changed }: { conversatio
     catch (cause) { setError(chatError(cause)); }
     finally { pending.current = false; setBusy(false); }
   };
-  const remove = (target: ChatUser) => { void requestDelete({ title: 'Remove group member', message: `Remove "${target.name}" from "${conversation.name}"?`, details: 'This revokes access to this conversation and its attachments. Messages already sent remain in the group.', confirmLabel: 'Remove Member', onConfirm: async () => { await chatRequest('remove-member', conversation.id, { user_id: target.id }); await reload(); } }); };
-  return <ChatDialog title="Group information & members" close={guard} busy={busy}><div className="chat-dialog-body"><label>Group name<input disabled={!manages || busy} maxLength={100} value={name} onChange={event => setName(event.target.value)} /></label>
+  const remove = (target: ChatUser) => { void requestDelete({ title: 'Remove group member', message: `Remove "${target.name}" from "${conversation.name}"?`, details: 'This revokes group-based access to the conversation, its attachments and shared library media. Other media grants still apply. Messages already sent remain in the group.', confirmLabel: 'Remove Member', onConfirm: async () => { await chatRequest('remove-member', conversation.id, { user_id: target.id }); await reload(); } }); };
+  return <ChatDialog title={mode === 'edit' ? 'Edit Group' : mode === 'members' ? 'Manage Members' : 'Group information & members'} close={guard} busy={busy}><div className="chat-dialog-body"><label>Group name<input autoFocus={mode === 'edit'} disabled={!manages || busy} maxLength={100} value={name} onChange={event => setName(event.target.value)} /></label>
     {manages && <button disabled={busy || name === original || !name.trim()} className="chat-primary" onClick={() => void run('group-name', { text: name })}>Save name</button>}
-    <p className="chat-help">New members can read the existing conversation history. Leaving or removal revokes future access. If the owner leaves, ownership passes to the oldest administrator or member.</p>
+    <p className="chat-help">New members can read the existing conversation history and group-shared media. Leaving or removal revokes group access. Only the owner or a site administrator can delete the group for everyone. If the owner leaves, ownership passes to the oldest group administrator or member.</p>
     <div className="chat-members">{members.map(item => <div key={item.id}><span className="chat-avatar">{item.name[0]?.toUpperCase()}</span><span><strong>{item.name}{item.id === user?.id ? ' (you)' : ''}</strong><small>{item.role} · {item.online ? 'Online' : 'Offline'}</small></span>
       {conversation.role === 'owner' && item.role !== 'owner' && <select aria-label={`Role for ${item.name}`} disabled={busy} value={item.role} onChange={event => void run('member-role', { user_id: item.id, role: event.target.value })}><option value="member">Member</option><option value="admin">Admin</option></select>}
       {manages && item.id !== user?.id && item.role !== 'owner' && (item.role !== 'admin' || conversation.role === 'owner') && <button disabled={busy} className="chat-danger" onClick={() => remove(item)}>Remove</button>}
     </div>)}</div>
     {manages && !busy && <UserSearch excluded={members.map(item => item.id)} onSelect={item => void run('add-member', { user_id: item.id })} />}
     {error && <p role="alert" className="chat-error">{error}</p>}</div><footer><button disabled={busy} onClick={guard}>Close</button></footer></ChatDialog>;
+}
+export function AdminGroups({ close, changed }: { close: () => void; changed: () => Promise<void> }) {
+  const [query, setQuery] = useState(''), [groups, setGroups] = useState<{ id: string; name: string; owner: string; is_owner: boolean; member_count: number }[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [more, setMore] = useState(false), [revision, setRevision] = useState(0);
+  const remove = useDeleteGroup(), generation = useRef(0), pending = useRef(false);
+  useEffect(() => { const version = ++generation.current; setLoading(true); setError(''); setGroups([]);
+    const timer = window.setTimeout(() => { void authenticatedRequest(() => supabase.rpc('messenger_groups_rpc', { p_action: 'admin-list', p_data: { query } })).then(({ data, error }) => {
+      if (version !== generation.current) return;
+      if (error || !Array.isArray(data)) setError('Could not load groups. Site administrator access is required.');
+      else { setGroups(data); setMore(data.length === 50); } setLoading(false);
+    }).catch(() => { if (version === generation.current) { setError('Could not load groups. Please try again.'); setLoading(false); } }); }, 200);
+    return () => { generation.current = version + 1; window.clearTimeout(timer); };
+  }, [query, revision]);
+  const loadMore = async () => { if (pending.current) return; pending.current = true; const version = generation.current; setLoading(true);
+    try { const { data, error } = await authenticatedRequest(() => supabase.rpc('messenger_groups_rpc', { p_action: 'admin-list', p_data: { query, offset: groups.length } }));
+      if (version !== generation.current) return;
+      if (error || !Array.isArray(data)) setError('Could not load more groups.'); else { setGroups(current => [...current, ...data]); setMore(data.length === 50); }
+    } catch { if (version === generation.current) setError('Could not load more groups. Please try again.');
+    } finally { pending.current = false; if (version === generation.current) setLoading(false); }
+  };
+  return <ChatDialog title="Site administrator: Manage all groups" close={close}><div className="chat-dialog-body"><p>Administrator deletion affects every member. It preserves original library videos and photos.</p><label>Search groups<input value={query} maxLength={100} onChange={e => setQuery(e.target.value)} /></label>
+    {groups.map(g => <div key={g.id} className="mb-3 rounded-xl border p-3"><strong>{g.name}</strong><p>Owner: {g.owner || 'Unavailable'} · {g.member_count} members</p><button className="chat-danger" onClick={() => void remove(g, !g.is_owner, async () => { setGroups(current => current.filter(item => item.id !== g.id)); setRevision(n => n + 1); await changed(); })}>Delete Group with Content — {g.name}</button></div>)}
+    {loading && <p role="status">Loading groups…</p>}{!loading && !groups.length && !error && <p>No matching groups.</p>}{more && !loading && <button onClick={() => void loadMore()}>More groups</button>}{error && <p role="alert" className="chat-error">{error}</p>}
+  </div><footer><button onClick={close}>Close</button></footer></ChatDialog>;
 }
 export function ConversationSearch({ conversation, revision, close, reply }: { conversation: Conversation; revision: number; close: () => void; reply: (message: ChatMessage) => void }) {
   const { visibility } = useMessenger();

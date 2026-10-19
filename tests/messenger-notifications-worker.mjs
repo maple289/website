@@ -59,6 +59,12 @@ assert.equal(shown.findLast(item=>item.data?.call_id===alreadyAnswered.call_id).
 shown.findLast(item=>item.data?.call_id===stillRinging.call_id).data.expires_at=new Date(Date.now()-1000).toISOString();
 await emit('activate');assert.equal(shown.findLast(item=>item.data?.call_id===stillRinging.call_id).closed,true);
 console.log('PASS resume reconciliation keeps active calls, closes ended/expired alerts and never shows another notification');
+const removedGroup=make(),keptGroup={...make(),conversation_id:randomUUID()};await push(removedGroup);await push(keptGroup);count=shown.length;
+await emit('message',{source:windowClient(),data:{type:'reconcile-conversation-notifications',owner:randomUUID(),active_conversations:[]},ports:[]});
+assert.equal(shown.findLast(item=>item.data?.id===keptGroup.id).closed,false);
+await emit('message',{source:windowClient(),data:{type:'reconcile-conversation-notifications',owner,active_conversations:[keptGroup.conversation_id]},ports:[]});
+assert.equal(shown.findLast(item=>item.data?.id===removedGroup.id).closed,true);assert.equal(shown.findLast(item=>item.data?.id===keptGroup.id).closed,false);assert.equal(shown.length,count);
+console.log('PASS removed/deleted group reconciliation closes only that account’s inaccessible alerts without replacement');
 const click=shown[0];const notification={data:click.data,close:()=>{click.closed=true;}};
 windows=[windowClient()];await emit('notificationclick',{notification});assert.equal(opened.length,0);assert.equal(navigated.length,0);assert.equal(messages.at(-1).type,'open-messenger-notification');
 windows=[];await emit('notificationclick',{notification});assert.equal(opened.length,1);assert.equal(opened[0],`https://myhostage.test/video/#/messages?conversation=${conversation}&notification=1`);

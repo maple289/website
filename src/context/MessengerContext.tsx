@@ -5,9 +5,9 @@ import { ChatRequestError, chatRequest, chatRequestId, chatOperation, chatError,
 import { MessageVisibility, type MessageDeleteScope } from '@/lib/messengerVisibility';
 
 type Typing = { conversation_id: string; user_id: string; expires_at: number };
-type MessengerValue = { conversations: Conversation[]; unread: number; connection: string; error: string; revision: number; refresh: () => Promise<void>; sessionId: string; typing: Typing[]; setTyping: (conversation: string, active: boolean) => void; visibility: MessageVisibility; removeMessage: (id: string, scope: MessageDeleteScope) => void };
+type MessengerValue = { conversations: Conversation[]; unread: number; connection: string; error: string; revision: number; refresh: () => Promise<void>; sessionId: string; typing: Typing[]; setTyping: (conversation: string, active: boolean) => void; visibility: MessageVisibility; removeMessage: (id: string, scope: MessageDeleteScope) => void; removeConversation: (id: string) => void };
 const MessengerContext = createContext<MessengerValue | null>(null);
-const emptyValue: MessengerValue = { conversations: [], unread: 0, connection: 'Connecting', error: '', revision: 0, refresh: async () => {}, sessionId: '', typing: [], setTyping: () => {}, visibility: new MessageVisibility(), removeMessage: () => {} };
+const emptyValue: MessengerValue = { conversations: [], unread: 0, connection: 'Connecting', error: '', revision: 0, refresh: async () => {}, sessionId: '', typing: [], setTyping: () => {}, visibility: new MessageVisibility(), removeMessage: () => {}, removeConversation: () => {} };
 // eslint-disable-next-line react-refresh/only-export-components
 export function useMessenger() { const value = useContext(MessengerContext); if (!value) throw new Error('MessengerProvider is required'); return value; }
 
@@ -30,6 +30,18 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
   const [connection, setConnection] = useState('Connecting'), [error, setError] = useState(''), [revision, setRevision] = useState(0), [typing, setTypingState] = useState<Typing[]>([]);
   const [sessionId] = useState(chatRequestId);
   const [visibility] = useState(() => new MessageVisibility());
+  const currentConversations = useRef(conversations); currentConversations.current = conversations;
+  const removeConversation = useCallback((id: string) => {
+    if (!visibility.conversationUnavailable(id)) {
+      const count = currentConversations.current.find(item => item.id === id)?.unread ?? 0;
+      setUnread(value => Math.max(0, value - count));
+    }
+    visibility.revokeConversation(id);
+    setConversations(current => current.filter(item => item.id !== id));
+    setTypingState(current => current.filter(item => item.conversation_id !== id));
+    setRevision(value => value + 1);
+    window.dispatchEvent(new Event('media-access-changed'));
+  }, [visibility]);
   const removeMessage = useCallback((id: string, scope: MessageDeleteScope) => {
     visibility.remove(id, scope);
     setConversations(current => current.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null })));
@@ -40,9 +52,13 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     if (!active || !alive.current) return;
     if (fetching.current) { again.current = true; return; }
     fetching.current = true;
+    const epoch = visibility.conversationRevision();
     try {
       const result = await chatRequest<{ conversations: Conversation[]; unread: number }>('inbox');
-      if (alive.current) { setConversations(result.conversations.map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }))); setUnread(result.unread); setError(''); setRevision(value => value + 1); }
+      if (alive.current) {
+        if (epoch === visibility.conversationRevision()) { visibility.restoreSnapshot(result.conversations.map(item => item.id), epoch); setUnread(result.unread); }
+        setConversations(result.conversations.filter(item => !visibility.conversationUnavailable(item.id)).map(item => ({ ...item, latest: item.latest ? visibility.messages([item.latest])[0] ?? null : null }))); setError(''); setRevision(value => value + 1);
+      }
     } catch (cause) { if (alive.current) { setError(chatError(cause)); if (cause instanceof ChatRequestError && cause.code === '42501') { setConversations([]); setUnread(0); setTypingState([]); setRevision(value => value + 1); } } }
     finally { fetching.current = false; if (again.current && alive.current) { again.current = false; window.setTimeout(() => void refresh(), 150); } }
   }, [active, visibility]);
@@ -53,10 +69,14 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     const channel = supabase.channel(`messenger:user:${userId}`, { config: { private: true, broadcast: { self: false } } })
       .on('broadcast', { event: 'changed' }, ({ payload }: { payload: ChatEvent }) => {
         if (cancelled || !payload?.conversation_id) return;
+        if (payload.kind === 'group-deleted' || (payload.kind === 'group-access' && payload.revoked)) {
+          removeConversation(payload.conversation_id);
+        } else if (payload.kind === 'group-access') visibility.restoreConversation(payload.conversation_id);
+        if (payload.kind === 'media-access' || (payload.kind === 'group-access' && !payload.revoked)) window.dispatchEvent(new Event('media-access-changed'));
         // Only the authenticated user's private channel delivers these events.
         // hidden reaches that user's sessions; deleted reaches every member.
         if (payload.message_id && (payload.kind === 'deleted' || payload.kind === 'hidden')) removeMessage(payload.message_id, payload.kind === 'deleted' ? 'everyone' : 'self');
-        if (payload.kind?.startsWith('call-')) window.dispatchEvent(new CustomEvent('messenger-call', { detail: payload.kind }));
+        if (payload.kind?.startsWith('call-') || payload.kind === 'group-deleted' || (payload.kind === 'group-access' && payload.revoked)) window.dispatchEvent(new CustomEvent('messenger-call', { detail: payload.kind }));
         if (payload.kind === 'call-signal') return;
         window.clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 120);
       })
@@ -86,13 +106,13 @@ function MessengerSession({ active, token, userId, publish }: { active: boolean;
     };
     // Token refresh updates the existing connection in the separate effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, userId, sessionId, refresh, removeMessage]);
+  }, [active, userId, sessionId, refresh, removeMessage, removeConversation]);
   useEffect(() => { if (active) void supabase.realtime.setAuth(token).catch(() => undefined); }, [active, token]);
   const setTyping = useCallback((conversation: string, value: boolean) => {
     if (!active || !alive.current || (value && Date.now() - lastTyping.current < 3000)) return;
     lastTyping.current = Date.now();
     void chatOperation('typing', { conversation_id: conversation, session_id: sessionId, typing: value }).catch(() => undefined);
   }, [active, sessionId]);
-  useEffect(() => { publish(userId, { conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping, visibility, removeMessage }); }, [publish, userId, conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping, visibility, removeMessage]);
+  useEffect(() => { publish(userId, { conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping, visibility, removeMessage, removeConversation }); }, [publish, userId, conversations, unread, connection, error, revision, refresh, sessionId, typing, setTyping, visibility, removeMessage, removeConversation]);
   return null;
 }

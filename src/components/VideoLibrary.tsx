@@ -35,21 +35,29 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
       setLoading(false);
       return;
     }
-    const { data, error } = await supabase
-      .from('videos')
-      .select('*')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false });
+    const { data: shared, error: shareError } = await supabase.rpc('shared_media_ids', { p_type: 'video' });
+    if (version !== loadVersion.current) return;
+    if (shareError) { setError('Could not load shared videos.'); setLoading(false); return; }
+    const ids = Array.isArray(shared) ? shared.filter((id: unknown) => typeof id === 'string' && /^[a-f0-9-]{36}$/i.test(id)) : [];
+    const query = supabase.from('videos').select('*');
+    const { data, error } = await (ids.length ? query.or(`owner_id.eq.${user.id},id.in.(${ids.join(',')})`) : query.eq('owner_id', user.id)).order('created_at', { ascending: false });
     if (version !== loadVersion.current) return;
     if (error) {
       setError('Could not load your videos.');
     } else {
       setVideos(data ?? []);
+      setPlayingVideo(current => current && !data?.some(v => v.id === current.id) ? null : current);
     }
     setLoading(false);
   }, [user]);
 
   useEffect(() => { const versionRef = loadVersion; void load(); return () => { versionRef.current++; }; }, [load]);
+  useEffect(() => {
+    const changed = () => { void load(true); };
+    const refresh = () => { void load(true); };
+    window.addEventListener('media-access-changed', changed); window.addEventListener('focus', refresh);
+    return () => { window.removeEventListener('media-access-changed', changed); window.removeEventListener('focus', refresh); };
+  }, [load, user?.id]);
 
   // Auto-refresh while any video is still processing
   useEffect(() => {
@@ -82,7 +90,7 @@ export function VideoLibrary({ searchTerm }: { searchTerm: string }) {
   return (
     <FileDropArea mediaKind="video" appearance="media" message="Drop videos here to upload" enabled={!!user && !showUpload && !editingVideo && !playingVideo && !deletingVideo} onFiles={(files) => { setDroppedFiles(files); setShowUpload(true); }}>
     <div className="mg-page">
-      <GalleryToolbar title="My Videos" scope="Personal Library" subtitle={`${filteredVideos.length} ${filteredVideos.length === 1 ? 'video' : 'videos'} · Your uploaded videos and processing status.`} view={view} allowFilter actions={
+      <GalleryToolbar title="My Videos" scope="Personal & Shared Library" subtitle={`${filteredVideos.length} ${filteredVideos.length === 1 ? 'video' : 'videos'} · Your uploads and videos shared with you or your groups.`} view={view} allowFilter actions={
         <button onClick={() => { setDroppedFiles([]); setShowUpload(true); }} className="fluent-primary mg-upload"><Upload size={18} />Upload video</button>
       } />
       {error && <GalleryError message={error} onRetry={() => void load()} />}

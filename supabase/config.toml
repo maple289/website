@@ -6,6 +6,10 @@ verify_jwt = true
 # every request. Video elements cannot attach an Authorization header.
 verify_jwt = false
 
+[functions.serve-shared-image]
+# Capability GETs reauthorize session/membership inside the handler.
+verify_jwt = false
+
 [functions.approve-registration]
 verify_jwt = true
 

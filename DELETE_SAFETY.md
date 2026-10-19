@@ -1,5 +1,23 @@
 # Delete-action inventory
 
+Messenger **Delete Group with Content** (conversation menu and Site Administrator
+group directory) uses `useDeleteGroup`, which calls `messenger_groups_rpc('delete')`
+only inside `useDeleteConfirmation.onConfirm`. The named, permanent-for-everyone
+warning distinguishes administrator deletion and preserves library videos/photos.
+The shared provider blocks outside/Escape dismissal and duplicate pending requests;
+errors remain for Cancel/retry. A stable request ID makes uncertain retries safe.
+Server authorization requires an active authenticated owner or site administrator;
+group admins cannot delete for everyone, including through the older Delete Chat API.
+The transaction scrubs Messenger attachments into existing cleanup queues, cascades
+group records/notification delivery jobs/media grants, and broadcasts before members
+are removed. Only Messenger attachment paths enter physical cleanup, never library
+media. Text-free deletion receipts remain for retry safety.
+
+Video/photo People + Groups sharing uses `MediaShareModal`. Removing saved person,
+group or public access requires the same shared confirmation; the atomic owner-only
+RPC runs inside its `onConfirm`. Unchanged grants retain their timestamps. Cancel
+preserves draft choices; errors keep the confirmation open; successful saves close.
+
 Admin Statistics Reset All Statistics uses `useDeleteConfirmation`; only its
 `onConfirm` invokes `admin_reset_statistics`. This changes a reporting timestamp,
 preserves content and raw analytics, and writes a private reset audit entry.
@@ -142,7 +160,8 @@ server authorization stay in the existing confirmed RPC. Clear Messages counts
 the affected history and captures its last sequence before confirmation; later
 messages survive. Direct-chat deletion for oneself hides only that inbox entry,
 preserves history and permits a new message to restore the chat. Group deletion
-for oneself leaves the group; group deletion for everyone requires Owner/Admin.
+for oneself leaves the group; group deletion for everyone requires the Owner or a
+Site Administrator. A Messenger group Admin is not a Site Administrator.
 All scope choices use the shared confirmation and mutate only inside `onConfirm`.
 Saved hide state, history cutoffs and text-free request receipts make retries safe.
 Everyone deletion atomically revokes attachment/preview access, removes reactions

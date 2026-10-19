@@ -11,6 +11,12 @@ async function closeCall(payload, owner) {
   const notifications = await self.registration.getNotifications({ tag: core.tag(payload) });
   notifications.filter(notification => notification.data?.owner === owner).forEach(notification => notification.close());
 }
+async function reconcileConversations(owner, active) {
+  const binding = await core.get('binding');
+  if (binding?.user_id !== owner || !Array.isArray(active) || !active.every(core.uuid)) return;
+  const notifications = await self.registration.getNotifications();
+  notifications.filter(item => item.data?.owner === owner && core.uuid(item.data?.conversation_id) && !active.includes(item.data.conversation_id)).forEach(item => item.close());
+}
 async function reconcileCalls(owner, activeCalls) {
   if (!self.Notification || self.Notification.permission !== 'granted' || !self.registration.getNotifications) return;
   const binding = await core.get('binding');
@@ -113,6 +119,7 @@ self.addEventListener('message', event => {
   if (!event.source || !inScope(event.source)) return;
   const operation = event.data?.type === 'deliver-notification' ? deliver(event.data.payload, 'page', event.data.owner)
     : event.data?.type === 'reconcile-call-notifications' && core.uuid(event.data.owner) ? reconcileCalls(event.data.owner, event.data.active_calls)
+    : event.data?.type === 'reconcile-conversation-notifications' && core.uuid(event.data.owner) ? reconcileConversations(event.data.owner, event.data.active_conversations)
     : event.data?.type === 'clear-notifications' && core.uuid(event.data.owner) ? self.registration.getNotifications().then(items => items.filter(item => item.data?.owner === event.data.owner).forEach(item => item.close()))
     : Promise.resolve();
   event.waitUntil(operation.then(() => event.ports[0]?.postMessage('handled')).catch(() => event.ports[0]?.postMessage('failed')));
