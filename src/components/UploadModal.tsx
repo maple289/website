@@ -7,6 +7,7 @@ import { Film, Loader as Loader2, Lock, Globe, Upload, X, Image as ImageIcon, Re
 import { useAuth } from '@/hooks/useAuth';
 import { isSupportedImage } from '@/lib/imageStorage';
 import { uploadVideo } from '@/lib/mediaUploads';
+import type { MediaGroup } from '@/hooks/useMediaGroups';
 
 
 type UploadModalProps = {
@@ -14,9 +15,10 @@ type UploadModalProps = {
   onUploaded: () => void;
   initialFiles?: File[];
   onItemUploaded?: () => void;
+  group?: MediaGroup | null;
 };
 
-export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded }: UploadModalProps) {
+export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded, group }: UploadModalProps) {
   const { user } = useAuth();
   const [batchFiles, setBatchFiles] = useState<File[]>(initialFiles ?? []);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +33,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
   const [phase, setPhase] = useState('Uploading');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
+  const pending = useRef(false);
 
 
   const close = useGuardedClose(onClose, !!file || !!fileName || !!previewImage || visibility !== 'private', uploading);
@@ -97,6 +100,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pending.current) return;
     setError(null);
     if (!file || !user) {
       setError('Please select a video file.');
@@ -107,17 +111,17 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
       return;
     }
 
-    setUploading(true);
+    pending.current = true; setUploading(true);
     setUploadProgress(0);
     try {
-      await uploadVideo({ file, user, fileName, visibility, previewImage, onProgress: setUploadProgress, onPhase: setPhase });
+      await uploadVideo({ file, user, fileName, visibility, groupId: group?.id, previewImage, onProgress: setUploadProgress, onPhase: setPhase });
       if (!onItemUploaded) window.dispatchEvent(new CustomEvent('media-uploaded', { detail: 'video' }));
       onUploaded();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed.'); }
-    finally { setUploading(false); }
+    finally { pending.current = false; setUploading(false); }
   };
 
-  if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="video" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
+  if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="video" visibility={visibility} group={group} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
     <TaskModal aria-label="Upload video" className="fixed inset-0 z-60 flex items-center justify-center p-4">
@@ -132,6 +136,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-7 pt-5">
+          {group && <p role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">Upload to group: <strong>{group.name}</strong>. You remain the owner. Current group members can access this private video after processing.</p>}
           {/* File drop zone */}
           {!file ? (
             <div
@@ -203,7 +208,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
                 <input ref={previewInputRef} type="file" accept={PHOTO_ACCEPT} className="hidden" onChange={(e) => e.target.files?.[0] && handlePreviewSelect(e.target.files[0])} />
               </div>
 
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Visibility</label>
+              {!group && <><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Visibility</label>
               <div className="mb-5 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setVisibility('private')} className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition ${visibility === 'private' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999] hover:border-[#4a4a4a]'}`}>
                   <Lock size={15} /> Private
@@ -212,7 +217,7 @@ export function UploadModal({ onClose, onUploaded, initialFiles, onItemUploaded 
                   <Globe size={15} /> Public
                 </button>
               </div>
-              <p className="mb-5 text-xs text-[#6a6a6a]">Private videos are only visible to you. Public videos appear in the public gallery for everyone.</p>
+              <p className="mb-5 text-xs text-[#6a6a6a]">Private videos are only visible to you. Public videos appear in the public gallery for everyone.</p></>}
             </>
           )}
 

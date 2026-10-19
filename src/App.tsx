@@ -30,7 +30,7 @@ import { FileManager } from '@/components/FileManager';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ExternalFileServerLink } from '@/components/ExternalFileServerLink';
 import { MediaGroupFilter } from '@/components/MediaGroupFilter';
-import { useMediaGroups } from '@/hooks/useMediaGroups';
+import { useMediaGroups, type MediaGroup } from '@/hooks/useMediaGroups';
 
 const UserStatistics = lazy(() => import('@/components/UserStatistics').then(module => ({ default: module.UserStatistics })));
 const Messenger = lazy(() => import('@/components/Messenger').then(module => ({ default: module.Messenger })));
@@ -78,6 +78,21 @@ function AppContent() {
   const homeTab = route === 'public-photos' ? 'photos' : 'videos';
   const mediaGroups = useMediaGroups(passwordSetup ? undefined : user?.id);
   const isDiscovery = route === 'home' || route === 'public-videos' || route === 'public-photos';
+  const [uploadTarget, setUploadTarget] = useState<{ owner: string; group: MediaGroup | null } | null>(null);
+  const openMediaUpload = (kind: 'video' | 'photo', files: File[] = []) => {
+    if (!user) return;
+    // Capture the destination before showing the modal. Background membership
+    // refreshes must never silently redirect an in-flight upload to NONE.
+    setUploadTarget({ owner: user.id, group: isDiscovery ? mediaGroups.group : null });
+    setSidebarOpen(false);
+    setDroppedMedia(files);
+    if (kind === 'photo') setShowPhotoUpload(true); else setShowUpload(true);
+  };
+  const finishMediaUpload = (kind: 'video' | 'photo') => {
+    if (kind === 'photo') setShowPhotoUpload(false); else setShowUpload(false);
+    const destination = kind === 'photo' ? 'photos' : 'library';
+    if (!uploadTarget?.group && route !== destination) navigate(destination);
+  };
 
   useEffect(() => {
     const onHash = () => {
@@ -186,7 +201,7 @@ function AppContent() {
             {hasMediaControls && <button aria-label={mobileSearchOpen ? 'Close search' : 'Search'} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)} className="rounded-full p-3 hover:bg-[#272727] md:hidden">{mobileSearchOpen ? <X size={21} /> : <Search size={21} />}</button>}
             {isAuthed && hasMediaControls && (
                 <button
-                  onClick={() => { setDroppedMedia([]); if (uploadsPhoto) setShowPhotoUpload(true); else setShowUpload(true); }}
+                  onClick={() => openMediaUpload(uploadsPhoto ? 'photo' : 'video')}
                   aria-label={uploadsPhoto ? 'Upload photo' : 'Upload video'}
                   className="fluent-header-upload flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition"
                 >
@@ -223,7 +238,7 @@ function AppContent() {
             <div className="mb-3 text-blue-600"><Upload size={20} /></div>
             <p className="text-sm font-medium">Share your story</p>
             <p className="mt-1 text-xs leading-5 text-slate-600">Keep your memories private or share them with everyone.</p>
-            <button onClick={() => { setDroppedMedia([]); if (uploadsPhoto) setShowPhotoUpload(true); else setShowUpload(true); }} className="mt-3 min-h-11 text-sm font-semibold text-blue-700">Upload {uploadsPhoto ? 'photos' : 'videos'}</button>
+            <button onClick={() => openMediaUpload(uploadsPhoto ? 'photo' : 'video')} className="mt-3 min-h-11 text-sm font-semibold text-blue-700">Upload {uploadsPhoto ? 'photos' : 'videos'}</button>
           </div>
         </aside>
       )}
@@ -233,7 +248,7 @@ function AppContent() {
         <div className="fluent-section-nav"><MediaTabs active={publicTab} onSelect={openPublicSection} /></div>
         <ErrorBoundary key={route} compact>
         {route === 'messages' ? isAuthed && <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading Messages…</p>}><Messenger key={user.id} /></Suspense> : isStatisticsRoute ? isAuthed ? <Suspense fallback={<p role="status" className="p-8 text-center text-slate-600">Loading your statistics…</p>}><UserStatistics key={user.id} /></Suspense> : <p role="status" className="p-8 text-center text-slate-600">Please sign in to view your statistics.</p>
-          : isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => { setDroppedMedia(files); if (homeTab === 'photos') setShowPhotoUpload(true); else setShowUpload(true); }}><HomePage key={`${user?.id ?? 'guest'}:${mediaGroups.group?.id ?? 'public'}`} tab={homeTab} searchTerm={search} group={mediaGroups.group} /></FileDropArea>}
+          : isFilesRoute ? !loading && (route === 'public-files' || isAuthed) && <FileManager key={`${route}:${user?.id ?? 'guest'}`} publicOnly={route === 'public-files'} searchTerm={search} onSearchTermChange={setSearch} /> : route === 'library' && isAuthed ? <VideoLibrary searchTerm={search} /> : route === 'photos' && isAuthed ? <PhotoLibrary searchTerm={search} /> : <FileDropArea mediaKind={homeTab === 'photos' ? 'photo' : 'video'} appearance="media" message={homeTab === 'photos' ? 'Drop photos here to upload' : 'Drop videos here to upload'} enabled={isAuthed && !showUpload && !showPhotoUpload} onFiles={(files) => openMediaUpload(homeTab === 'photos' ? 'photo' : 'video', files)}><HomePage key={`${user?.id ?? 'guest'}:${mediaGroups.group?.id ?? 'public'}`} tab={homeTab} searchTerm={search} group={mediaGroups.group} /></FileDropArea>}
         </ErrorBoundary>
       </main>
 
@@ -241,13 +256,13 @@ function AppContent() {
       <AuthModal open={authOpen} initialMode={authMode} onClose={() => setAuthOpen(false)} />
 
       {/* Upload modal */}
-      {showUpload && isAuthed && (
-        <div className={hasMediaControls ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal initialFiles={droppedMedia} onClose={() => setShowUpload(false)} onUploaded={() => { setShowUpload(false); if (route !== 'library') navigate('library'); }} /></div></div>
+      {showUpload && isAuthed && uploadTarget?.owner === user.id && (
+        <div className={hasMediaControls ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><UploadModal key={`${user.id}:${uploadTarget.group?.id ?? 'personal'}`} initialFiles={droppedMedia} group={uploadTarget.group} onClose={() => setShowUpload(false)} onUploaded={() => finishMediaUpload('video')} /></div></div>
       )}
 
       {/* Photo upload modal */}
-      {showPhotoUpload && isAuthed && (
-        <div className={hasMediaControls ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal initialFiles={droppedMedia} onClose={() => setShowPhotoUpload(false)} onUploaded={() => { setShowPhotoUpload(false); if (route !== 'photos') navigate('photos'); }} /></div></div>
+      {showPhotoUpload && isAuthed && uploadTarget?.owner === user.id && (
+        <div className={hasMediaControls ? 'media-page mg-overlay-root' : ''}><div className="mg-dialog"><PhotoUploadModal key={`${user.id}:${uploadTarget.group?.id ?? 'personal'}`} initialFiles={droppedMedia} group={uploadTarget.group} onClose={() => setShowPhotoUpload(false)} onUploaded={() => finishMediaUpload('photo')} /></div></div>
       )}
 
     </div>

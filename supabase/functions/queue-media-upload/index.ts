@@ -20,11 +20,15 @@ Deno.serve(async req => {
       || !["private","public"].includes(body.visibility)) return json({error:"Invalid upload request."},400);
     if ((body.kind === "preview" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.target_video_id ?? ""))
       || (body.kind !== "preview" && body.target_video_id != null)) return json({error:"Invalid preview target."},400);
-    const {data,error}=await client.rpc("queue_media_upload",{p_id:body.id,p_owner:user.id,p_kind:body.kind,
-      p_name:body.file_name,p_visibility:body.visibility,p_preview:body.has_preview===true,p_video:body.target_video_id??null});
+    if (body.group_id != null && (body.kind === "preview" || body.visibility !== "private"
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.group_id))) return json({error:"Invalid group upload destination."},400);
+    const {data,error}=body.group_id != null
+      ? await client.rpc("queue_group_media_upload",{p_id:body.id,p_owner:user.id,p_kind:body.kind,p_name:body.file_name,p_group:body.group_id,p_preview:body.has_preview===true})
+      : await client.rpc("queue_media_upload",{p_id:body.id,p_owner:user.id,p_kind:body.kind,
+        p_name:body.file_name,p_visibility:body.visibility,p_preview:body.has_preview===true,p_video:body.target_video_id??null});
     if(error) {
       console.error(JSON.stringify({operation:"queue_media_upload",code:error.code}));
-      const useful=["Too many pending uploads.","Upload is incomplete","Video not found"].find(v=>error.message.startsWith(v));
+      const useful=["Too many pending uploads.","Upload is incomplete","Video not found","Group unavailable"].find(v=>error.message.startsWith(v));
       return json({error:useful ? error.message : "Could not queue the upload. Please try again."},409);
     }
     return json({id:data,status:"queued"},202);

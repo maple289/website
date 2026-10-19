@@ -8,6 +8,7 @@ import { PublicPhotoGallery } from '@/components/PublicPhotoGallery';
 import { GalleryError, GalleryToolbar } from '@/components/GalleryToolbar';
 import { useDiscoveryMedia } from '@/hooks/useDiscoveryMedia';
 import type { MediaGroup } from '@/hooks/useMediaGroups';
+import { VideoProcessingJobs } from '@/components/VideoProcessingJobs';
 
 type Tab = 'videos' | 'photos';
 
@@ -40,6 +41,7 @@ export function HomePage({ tab, searchTerm, group }: HomePageProps) {
         <section className="py-5">
           <GalleryToolbar title="Discover videos" scope={group ? `Group: ${group.name}` : 'Public Library'} subtitle={group ? `Videos shared with ${group.name}.` : 'Explore videos shared with everyone.'} view={view} />
           {error && <GalleryError message={error} onRetry={() => void load()} />}
+          {group && <VideoProcessingJobs key={group.id} groupId={group.id} searchTerm={searchTerm} visibleIds={videos.map(video => video.id)} />}
 
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-[#ff3d46]" /></div>

@@ -34,6 +34,40 @@ requests and membership changes. `media-group-filter.mjs` exercises desktop/mobi
 discovery, Videos/Photos tab continuity, NONE/public, empty/error/retry, late
 responses, removed-group reset and guest behavior in Chromium, Firefox and WebKit.
 
+### Upload directly to the selected group
+
+Header/sidebar uploads and main-gallery drag-and-drop capture the current group
+when the dialog opens. Single and batch video/photo uploads show the group name,
+remain private, retain the uploader as owner, and stay on that group gallery after
+acceptance. NONE and personal-library uploads keep the ordinary personal flow.
+An account switch hides the previous account's upload form. Background membership
+refresh cannot silently change an open form's destination.
+
+`20261019040000_group_media_uploads.sql` adds `media_upload_jobs.upload_group_id`
+and a private-only group constraint/index. The verified-user queue Edge function
+passes group requests to service-only `queue_group_media_upload`; ordinary uploads
+still use `queue_media_upload`. The server derives the owner from the authenticated
+token, validates current group membership, and rejects changes to an existing
+job's destination. Preview replacement never accepts a group target.
+
+The existing validated publisher/worker remains in place. A completion trigger
+rechecks membership/account state under the group's membership-mutation lock and
+inserts the media grant in the publication transaction. Grant failure, removal or
+group deletion rolls back the media row and job completion together. The job's
+destination UUID intentionally survives group deletion so a pending group upload
+cannot silently publish as personal content. Completed originals remain intact
+when a group is deleted; only their group grants cascade. Existing cleanup only
+handles new unpublished upload objects, as before.
+
+Group video galleries show the uploader's processing jobs for that group only;
+the existing polling/refresh path adds finalized videos without a page reload.
+Photos appear after processing. Tests cover the real Edge queue and SQL publisher,
+idempotent acceptance/publication, forged identity/role/target rejection,
+membership revocation, injected grant failure rollback and ordinary uploads.
+Browser tests cover header/sidebar/picker/drop, single/batch videos/photos,
+private defaults, no personal redirect, completion refresh, rejection in the form,
+destination stability during membership refresh and duplicate-submit protection.
+
 ## Actions and authorization
 
 Messages menu: **Create Group**. Group menu: **Edit Group**, **Manage Members**

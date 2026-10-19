@@ -3,10 +3,11 @@ import { TaskModal } from '@/components/TaskModal';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { uploadPhoto, uploadVideo } from '@/lib/mediaUploads';
+import type { MediaGroup } from '@/hooks/useMediaGroups';
 
 type Item = { file: File; status: 'Waiting' | 'Validating' | 'Uploading' | 'Processing' | 'Completed' | 'Failed'; progress: number; message?: string };
-export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploaded }: {
-  files: File[]; kind: 'video' | 'photo'; visibility: 'private' | 'public'; onClose: () => void; onItemUploaded?: () => void;
+export function BatchUploadModal({ files, kind, visibility, group, onClose, onItemUploaded }: {
+  files: File[]; kind: 'video' | 'photo'; visibility: 'private' | 'public'; group?: MediaGroup | null; onClose: () => void; onItemUploaded?: () => void;
 }) {
   const { user } = useAuth();
   const [items, setItems] = useState<Item[]>(() => files.map((file) => { const error = mediaTypeError(file, kind); return { file, status: error ? 'Failed' : 'Waiting', progress: 0, message: error ?? undefined }; }));
@@ -25,7 +26,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
         try {
           if (!user) throw new Error('Please sign in to upload.');
           await validateMediaFile(file, kind);
-          const options = { file, user, fileName: file.name.replace(/\.[^.]+$/, ''), visibility, onProgress: (progress: number) => update(index, { progress }), onPhase: (status: 'Validating' | 'Uploading' | 'Processing') => update(index, { status }) };
+          const options = { file, user, fileName: file.name.replace(/\.[^.]+$/, ''), visibility, groupId: group?.id, onProgress: (progress: number) => update(index, { progress }), onPhase: (status: 'Validating' | 'Uploading' | 'Processing') => update(index, { status }) };
           let warning: string | null | undefined;
           if (kind === 'photo') warning = await uploadPhoto(options);
           else {
@@ -38,7 +39,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
       }
     };
     void Promise.all([worker(), worker()]);
-  }, [files, kind, user, visibility]);
+  }, [files, kind, user, visibility, group?.id]);
   useEffect(() => {
     if (!active) return;
     const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -47,7 +48,7 @@ export function BatchUploadModal({ files, kind, visibility, onClose, onItemUploa
   }, [active]);
   return <TaskModal className="fixed inset-0 z-80 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={`Upload ${kind}s`}>
     <div className="w-full max-w-lg rounded-2xl border border-[#3a3a3a] bg-[#181818] p-6 text-white shadow-2xl">
-      <h2 className="text-lg font-semibold">Upload {kind}s</h2><p className="mt-1 text-sm text-[#aaa]">{visibility === 'private' ? 'Private' : 'Public'} · {items.filter((item) => item.status === 'Completed').length} of {items.length} completed · {items.filter(item => item.status === 'Failed').length} failed</p>
+      <h2 className="text-lg font-semibold">Upload {kind}s</h2>{group && <p className="mt-2 text-sm">Upload to group: <strong>{group.name}</strong>. Private; you remain the owner.</p>}<p className="mt-1 text-sm text-[#aaa]">{group || visibility === 'private' ? 'Private' : 'Public'} · {items.filter((item) => item.status === 'Completed').length} of {items.length} completed · {items.filter(item => item.status === 'Failed').length} failed</p>
       <div className="my-5 max-h-[60vh] space-y-3 overflow-y-auto" aria-live="polite">{items.map((item, index) => <div key={index} className="rounded-xl border border-[#333] p-3">
         <p className="truncate text-sm font-medium" title={item.file.name}>{item.file.name}</p>
         <p className={`mt-1 text-xs ${item.status === 'Failed' ? 'text-red-300' : 'text-[#aaa]'}`}>{item.status}{item.status === 'Uploading' ? ` · ${item.progress}%` : ''}{item.message ? ` — ${item.message}` : ''}</p>

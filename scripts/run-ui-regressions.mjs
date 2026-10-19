@@ -8,6 +8,7 @@ const suites = {
   'messenger-notifications-ui': 'notification-test',
   'messenger-group-sharing-ui': 'upload-test',
   'media-group-filter': 'upload-test',
+  'media-uploads': 'upload-test',
   'messenger-call-layout': 'call-ui-test', 'messenger-call-audio-ui': 'call-ui-test',
   'messenger-people-ui': 'upload-test', 'messenger-deletion-ui': 'upload-test',
   'content-context': 'upload-test', 'public-navigation': 'upload-test',

@@ -9,7 +9,7 @@ import { ContentContextMenu, type ContentAction } from './ContentContextMenu';
 type Job = { id: string; file_name: string; status: 'queued' | 'processing' | 'complete' | 'error' | 'cancelling' | 'cancelled'; error: string | null; visibility: 'public' | 'private' };
 
 // Jobs are owner-only under RLS. Unvalidated uploads never enter public videos.
-export function VideoProcessingJobs({ searchTerm, visibleIds }: { searchTerm: string; visibleIds: string[] }) {
+export function VideoProcessingJobs({ searchTerm, visibleIds, groupId }: { searchTerm: string; visibleIds: string[]; groupId?: string }) {
   const { user } = useAuth();
   const { requestDelete } = useDeleteConfirmation();
   const ownerId = user?.id;
@@ -45,7 +45,10 @@ export function VideoProcessingJobs({ searchTerm, visibleIds }: { searchTerm: st
       if (busy || disposed) return;
       busy = true;
       try {
-        const query = () => supabase.from('media_upload_jobs').select('id,file_name,status,error,visibility').eq('owner_id', ownerId).eq('kind', 'video').order('created_at', { ascending: false });
+        const query = () => {
+          const rows = supabase.from('media_upload_jobs').select('id,file_name,status,error,visibility').eq('owner_id', ownerId).eq('kind', 'video');
+          return (groupId ? rows.eq('upload_group_id', groupId) : rows).order('created_at', { ascending: false });
+        };
         const [active, failed, recent] = await Promise.all([
           query().in('status', ['queued', 'processing', 'cancelling']).limit(30),
           query().in('status', ['error', 'cancelled']).limit(failureLimit + 1),
@@ -77,7 +80,7 @@ export function VideoProcessingJobs({ searchTerm, visibleIds }: { searchTerm: st
     window.addEventListener('media-processing', refresh);
     void load();
     return () => { disposed = true; clearTimeout(timer); window.removeEventListener('media-processing', refresh); window.removeEventListener('video-deleted', onDeleted); };
-  }, [ownerId, failureLimit]);
+  }, [ownerId, failureLimit, groupId]);
   if (!ownerId || (loadedOwner !== ownerId && !unavailable)) return null;
   // Completed jobs only signal a gallery refresh. They are not gallery items:
   // old completed jobs may outlive a deleted video or a filtered/paginated row.

@@ -1,5 +1,12 @@
 # Delete-action inventory
 
+Direct group media uploads add a destination/grant only, with no new delete caller.
+Existing rollback remains limited to newly staged, uncommitted upload paths.
+Group deletion removes completed media grants and preserves owned originals.
+Pending jobs retain destination intent; missing membership/group fails publication
+atomically rather than publishing elsewhere or deleting existing library content.
+Group processing cards reuse the existing confirmed retry/delete-upload controls.
+
 Messenger **Delete Group with Content** (conversation menu and Site Administrator
 group directory) uses `useDeleteGroup`, which calls `messenger_groups_rpc('delete')`
 only inside `useDeleteConfirmation.onConfirm`. The named, permanent-for-everyone

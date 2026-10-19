@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { dataUrlToBlob } from '@/lib/imageStorage';
 import { validateMediaFile } from '@/lib/mediaValidation';
 import { uploadFailureMessage } from '@/lib/uploadErrors';
-type Options = { file: File; user: { id: string; email?: string }; fileName: string; visibility: 'private' | 'public'; onProgress: (value: number) => void; previewImage?: string | null; onPhase?: (phase: 'Validating' | 'Uploading' | 'Processing') => void };
+type Options = { file: File; user: { id: string; email?: string }; fileName: string; visibility: 'private' | 'public'; groupId?: string; onProgress: (value: number) => void; previewImage?: string | null; onPhase?: (phase: 'Validating' | 'Uploading' | 'Processing') => void };
 
 export async function uploadObject(bucket: string, path: string, file: Blob, mimeType: string, onProgress: (value: number) => void): Promise<{ error: { message: string } | null }> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -84,7 +84,7 @@ async function validatedUpload(options: Options, kind: 'video' | 'photo' | 'prev
     enqueueAttempted = true;
     const response = await fetch(import.meta.env.VITE_SUPABASE_URL + '/functions/v1/queue-media-upload', {
       method: 'POST', headers: { 'Content-Type':'application/json', apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? '', Authorization:'Bearer '+session.access_token },
-      body: JSON.stringify({ id, kind, file_name:fileName.trim(), visibility, has_preview:!!options.previewImage, target_video_id:targetVideoId }),
+      body: JSON.stringify({ id, kind, file_name:fileName.trim(), visibility: options.groupId ? 'private' : visibility, group_id: options.groupId, has_preview:!!options.previewImage, target_video_id:targetVideoId }),
     });
     // An ambiguous network failure may have queued the job. Never remove its
     // input unless the backend explicitly rejected it.

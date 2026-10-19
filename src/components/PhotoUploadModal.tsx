@@ -6,15 +6,17 @@ import { useRef, useState } from 'react';
 import { Globe, Image as ImageIcon, Loader2, Lock, Upload, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { uploadPhoto } from '@/lib/mediaUploads';
+import type { MediaGroup } from '@/hooks/useMediaGroups';
 
 type PhotoUploadModalProps = {
   onClose: () => void;
   onUploaded: () => void;
   initialFiles?: File[];
   onItemUploaded?: () => void;
+  group?: MediaGroup | null;
 };
 
-export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUploaded }: PhotoUploadModalProps) {
+export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUploaded, group }: PhotoUploadModalProps) {
   const { user } = useAuth();
   const [batchFiles, setBatchFiles] = useState<File[]>(initialFiles ?? []);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +30,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
   const [progress, setProgress] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const pending = useRef(false);
 
 
   const close = useGuardedClose(onClose, !!file || !!fileName || visibility !== 'private', uploading);
@@ -54,22 +57,23 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (pending.current) return;
     if (!file || !user) return;
     if (!fileName.trim()) {
       setError('Please enter a photo name.');
       return;
     }
 
-    setUploading(true);
+    pending.current = true; setUploading(true); setError(null);
     try {
-      await uploadPhoto({ file, user, fileName, visibility, onProgress: setProgress, onPhase: setPhase });
+      await uploadPhoto({ file, user, fileName, visibility, groupId: group?.id, onProgress: setProgress, onPhase: setPhase });
       if (!onItemUploaded) window.dispatchEvent(new CustomEvent('media-uploaded', { detail: 'photo' }));
       onUploaded();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Upload failed.'); }
-    finally { setUploading(false); }
+    finally { pending.current = false; setUploading(false); }
   };
 
-  if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="photo" visibility={visibility} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
+  if (batchFiles.length) return <BatchUploadModal files={batchFiles} kind="photo" visibility={visibility} group={group} onClose={onUploaded} onItemUploaded={onItemUploaded} />;
 
   return (
     <TaskModal aria-label="Upload photos" className="fixed inset-0 z-60 flex items-center justify-center p-4">
@@ -84,6 +88,7 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
         </div>
 
         <form onSubmit={handleSubmit} action="#" className="px-6 pb-7 pt-5">
+          {group && <p role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">Upload to group: <strong>{group.name}</strong>. You remain the owner. Current group members can access this private photo after processing.</p>}
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -117,11 +122,11 @@ export function PhotoUploadModal({ onClose, onUploaded, initialFiles, onItemUplo
             <>
               <label className="mb-2 mt-5 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Photo Name</label>
               <input value={fileName} onChange={(event) => setFileName(event.target.value)} className="mb-4 h-11 w-full rounded-xl border border-[#3a3a3a] bg-[#121212] px-4 text-sm outline-none focus:border-[#4b86ff]" />
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Visibility</label>
+              {!group && <><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#9a9a9a]">Visibility</label>
               <div className="mb-5 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setVisibility('private')} className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium ${visibility === 'private' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999]'}`}><Lock size={15} /> Private</button>
                 <button type="button" onClick={() => setVisibility('public')} className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium ${visibility === 'public' ? 'border-[#ff3d46] bg-[#ff3d46]/10 text-[#ff737b]' : 'border-[#3a3a3a] text-[#999]'}`}><Globe size={15} /> Public</button>
-              </div>
+              </div></>}
             </>
           )}
 

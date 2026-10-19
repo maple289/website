@@ -1,5 +1,13 @@
 # Modal safety inventory
 
+Video/photo upload dialogs capture the selected discovery group and account at
+open, display the destination, and preserve TaskModal/useGuardedClose behavior.
+Group uploads are private; a membership refresh cannot silently redirect them.
+Single forms use a synchronous pending guard; batch uploads retain the existing
+worker/pending guard. Queue errors stay in the form, while successful group uploads
+close without navigating away from the selected gallery. Ordinary uploads retain
+their personal-library destination. Outside/Escape never closes either flow.
+
 Messenger Edit Group / Manage Members retain `ChatDialog` / `TaskModal` and
 `useGuardedClose` for the group-name draft. Keep Editing preserves the form.
 The Site Administrator group directory also uses `ChatDialog` / `TaskModal`;
