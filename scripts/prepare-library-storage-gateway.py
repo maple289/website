@@ -19,6 +19,13 @@ def prepare(current,fragment):
     fragment=fragment.strip('\n')+'\n'
     if not re.search(r'^- name: library-storage-signing$',fragment,re.M):
         raise ValueError('Expected the reviewed library gateway fragment')
+    versions=re.findall(r'^_format_version:[ \t]*[\'"]?(1\.1|2\.1|3\.0)[\'"]?[ \t]*$',current,re.M)
+    if len(versions)!=1:
+        raise ValueError('Expected one supported declarative format version')
+    if versions[0] in ('1.1','2.1'):
+        # Kong upgrades legacy route regexes on import. Supplying the 3.x
+        # prefix in a legacy document would prefix it twice and reject it.
+        fragment=fragment.replace("- '~/storage/v1/","- '/storage/v1/")
     addition=BEGIN+''.join('  '+line+'\n' for line in fragment.splitlines())+END
     if current.count(BEGIN) or current.count(END):
         if current.count(BEGIN)!=1 or current.count(END)!=1:

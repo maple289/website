@@ -125,6 +125,9 @@ without overwriting the original. Validate against the installed gateway, retain
 the original configuration backup, and install only during the controlled
 deployment. The helper preserves unrelated services and credentials byte-for-byte
 and refuses an unreviewed replacement of an existing library route.
+The helper preserves the installed declarative format version and adapts only
+the added route's regex prefix for legacy formats. Validate both the rendered
+configuration and startup template against the installed Kong runtime.
 
 Primary references:
 [Supabase downloads/signing](https://supabase.com/docs/guides/storage/serving/downloads),
