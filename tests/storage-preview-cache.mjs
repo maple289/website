@@ -59,6 +59,8 @@ try {
  assert.equal(messenger.cache_bucket,'file-previews');assert.equal(messenger.preview_path,messenger.id+'.pdf');
  assert.equal((await sql('SELECT * FROM claim_file_preview()'))[0].id,messenger.id,'Library drain does not claim waiting library jobs or stop Messenger');
  await sql("UPDATE file_preview_jobs SET status='ready' WHERE id=$1",[messenger.id]);
+ await sql('INSERT INTO file_preview_cleanup(path) VALUES($1)',[messenger.preview_path]);
+ await sql("INSERT INTO file_preview_cleanup(path) VALUES('unscoped-legacy-orphan.pdf')");
  await sql('DELETE FROM file_preview_jobs WHERE id=$1',[messenger.id]);
  assert.equal((await sql('SELECT * FROM file_preview_cleanup_candidates()')).length,1,'Only known Messenger cleanup runs while library is paused');
  await root();await db.exec('UPDATE streamly_internal.library_storage_control SET pause_preview_claims=true');

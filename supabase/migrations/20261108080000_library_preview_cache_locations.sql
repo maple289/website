@@ -10,9 +10,9 @@ ALTER TABLE public.file_preview_cleanup ADD COLUMN cache_bucket text NOT NULL DE
  CHECK(cache_bucket IN ('file-previews','cache'));
 ALTER TABLE public.file_preview_cleanup ADD COLUMN source_bucket text
  CHECK(source_bucket IN ('user-files','users','messenger-attachments'));
--- Existing unscoped receipts remain unscoped. Legacy Messenger RPCs insert only
--- path; new trigger-generated receipts explicitly capture their source scope.
-ALTER TABLE public.file_preview_cleanup ALTER COLUMN source_bucket SET DEFAULT 'messenger-attachments';
+-- Path-only legacy receipts remain unscoped, including the old orphan scanner.
+-- A concrete job-deletion trigger may later establish their exact scope. Never
+-- guess Messenger scope merely because a legacy caller omitted this column.
 ALTER TABLE streamly_internal.library_storage_control ADD COLUMN pause_preview_claims boolean NOT NULL DEFAULT false;
 CREATE OR REPLACE FUNCTION public.library_worker_control() RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
@@ -103,7 +103,9 @@ CREATE OR REPLACE FUNCTION public.enqueue_file_preview_cleanup() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
  INSERT INTO public.file_preview_cleanup(path,cache_bucket,source_bucket)
- VALUES(OLD.preview_path,OLD.cache_bucket,OLD.source_bucket) ON CONFLICT(path) DO NOTHING;
+ VALUES(OLD.preview_path,OLD.cache_bucket,OLD.source_bucket) ON CONFLICT(path) DO UPDATE
+ SET source_bucket=coalesce(public.file_preview_cleanup.source_bucket,EXCLUDED.source_bucket)
+ WHERE public.file_preview_cleanup.cache_bucket=EXCLUDED.cache_bucket;
  INSERT INTO public.file_preview_cleanup(path,cache_bucket,source_bucket)
  SELECT c.new_cache_key,'cache',OLD.source_bucket FROM streamly_internal.prepared_preview_copies c WHERE c.job_id=OLD.id
  ON CONFLICT(path) DO NOTHING;
