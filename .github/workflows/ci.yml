@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Keep the browser host supported by the pinned Playwright 1.58 runtime.
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
