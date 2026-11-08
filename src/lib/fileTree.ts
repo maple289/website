@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { loadPublicFiles } from '@/lib/publicFiles';
+import { listFileObjects } from './fileStorage';
 
 export type FileEntry = {
   id?: string; location?: string; ancestors?: FileEntry[];
@@ -27,7 +28,7 @@ export async function loadFileChildren(path: string, userId: string, offset = 0)
     const rows = (data ?? []) as FileMetadata[];
     return { entries: rows.slice(0, 50).map(fromMetadata), nextOffset: offset + 50, hasMore: rows.length > 50 };
   }
-  const { data, error } = await supabase.storage.from('user-files').list(path, { limit: 100, offset, sortBy: { column: 'name', order: 'asc' } });
+  const { data, error } = await listFileObjects(path, 100, offset);
   if (error) throw error;
   const objects = (data ?? []).filter((item) => item.name !== '.folder' && item.name !== '.keep');
   const paths = objects.map((item) => `${path}/${item.name}`);

@@ -4,6 +4,8 @@ export type Video = {
   owner_email: string | null;
   file_name: string;
   storage_path: string;
+  storage_bucket?: 'user-videos' | 'users';
+  preview_bucket?: 'user-images' | 'users';
   preview_url: string | null;
   preview_path: string | null;
   visibility: 'public' | 'private';
@@ -33,6 +35,7 @@ export type Photo = {
   owner_email: string | null;
   file_name: string;
   storage_path: string;
+  storage_bucket?: 'user-images' | 'users';
   preview_path: string;
   thumbnail_path: string;
   visibility: 'public' | 'private';

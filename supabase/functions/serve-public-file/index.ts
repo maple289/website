@@ -24,13 +24,15 @@ Deno.serve(async (req: Request) => {
     // every request. Never accept a client-provided storage path or redirect.
     const { data: path, error } = await client.rpc("resolve_public_user_file", { p_id: id });
     if (error || !path) return new Response("File unavailable", { status: 404, headers });
-    const segments = path.split("/");
+    const { data: source, error: sourceError } = await client.rpc('get_file_preview_source', { p_path: path });
+    if (sourceError || !source || !['user-files','users'].includes(source.bucket)) return new Response("File unavailable", { status: 404, headers });
+    const segments = source.path.split("/");
     // Metadata is owner-writable. Do not let a crafted key escape this bucket
     // through URL dot-segment normalization when using the service credential.
     if (segments.some((part: string) => !part || part === "." || part === ".." || part.includes("\\"))) {
       return new Response("File unavailable", { status: 404, headers });
     }
-    const response = await fetch(`${base}/storage/v1/object/authenticated/user-files/${segments.map(encodeURIComponent).join("/")}`, {
+    const response = await fetch(`${base}/storage/v1/object/authenticated/${source.bucket}/${segments.map(encodeURIComponent).join("/")}`, {
       headers: { Authorization: `Bearer ${key}`, apikey: key }, redirect: "error",
     });
     if (!response.ok) return new Response("File unavailable", { status: 404, headers });

@@ -42,13 +42,10 @@ export function MediaContentMenu({ kind, item, onPreview, onEdit, onDelete, onCh
       if (!response.ok) throw new Error('Could not download the video.');
       saveBlob(await response.blob(), item.file_name);
     } else {
-      const path = await resolveBucketPath(item.storage_path, 'images');
-      const { data, error } = await supabase.storage.from('user-images').download(path);
-      if (error || !data) {
-        const response = await fetch(await sharedImageUrl(path), { cache: 'no-store' });
-        if (!response.ok) throw new Error('Could not download the photo.');
-        saveBlob(await response.blob(), item.file_name);
-      } else saveBlob(data, item.file_name);
+      const path = await resolveBucketPath(item.storage_path, 'images', item.storage_bucket);
+      const response = await fetch(await sharedImageUrl(path), { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not download the photo.');
+      saveBlob(await response.blob(), item.file_name);
     }
   };
   const visibility = async () => {

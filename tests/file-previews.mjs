@@ -26,7 +26,7 @@ try {
         const body = request.method() === 'POST' ? request.postDataJSON() : {};
         if (operation === 'list_public_user_files') return route.fulfill({ json: body.p_folder ? entries : [{ id: folderId, name: 'Documents', path: 'public/' + folderId, isFolder: true, size: 0, mimeType: '', favorite: false, trashedAt: null, updatedAt: new Date().toISOString() }] });
         if (operation === 'user_file_metadata') return route.fulfill({ json: entries.map(e => ({ object_path: e.path, is_folder: false, file_size: e.size, mime_type: e.mimeType, is_favorite: false, trashed_at: null, updated_at: e.updatedAt, created_at: e.updatedAt })) });
-        if (url.pathname.includes('/storage/v1/object/list/user-files')) return route.fulfill({ json: body.prefix === owner ? [{ name: 'Documents', id: null }] : entries.map(e => ({ name: e.name, id: e.id, metadata: { size: e.size, mimetype: e.mimeType } })) });
+        if (url.pathname.includes('/storage/v1/object/list/user-files') || url.pathname.endsWith('/rpc/file_manager_objects')) return route.fulfill({ json: (body.p_folder ?? body.prefix) === owner ? [{ name: 'Documents', id: null }] : entries.map(e => ({ name: e.name, id: e.id, metadata: { size: e.size, mimetype: e.mimeType } })) });
         if (operation !== 'file-preview') return route.fulfill({ json: [] });
         const entry = entries.find(e => url.searchParams.get('id') === e.id || url.searchParams.get('path') === e.path);
         assert.ok(entry); assert.equal(url.searchParams.has('id'), guest); assert.equal(url.searchParams.has('path'), !guest);

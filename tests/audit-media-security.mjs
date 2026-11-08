@@ -23,6 +23,7 @@ try {
     INSERT INTO profiles VALUES('${owner}','user'),('${adminId}','admin');
     INSERT INTO storage_settings VALUES(1,'','',3);
     INSERT INTO videos VALUES('${videoId}','${owner}','ready','private','${owner}/original.mp4',NULL,'video/mp4','Original.mp4');`);
+  await db.exec("ALTER TABLE videos ADD COLUMN storage_bucket text NOT NULL DEFAULT 'user-videos'");
   await db.exec(await fs.readFile('supabase/migrations/20261012020000_guard_storage_prefix_changes.sql','utf8'));
   await db.exec(await fs.readFile('supabase/migrations/20261012030000_reauthorized_video_playback.sql','utf8'));
   await assert.rejects(db.exec("UPDATE storage_settings SET videos_base_path='changed'"), /Storage prefixes cannot change/);

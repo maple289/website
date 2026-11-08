@@ -5,18 +5,19 @@ import { readFile } from 'node:fs/promises';
 import { webcrypto } from 'node:crypto';
 import ts from 'typescript';
 const source=await readFile(new URL('../supabase/functions/serve-shared-image/index.ts',import.meta.url),'utf8');
-let handler,allowed=true,session=true,saveFailure=false,streamed=0,authenticated=0;
+let handler,allowed=true,session=true,saveFailure=false,streamed=0,authenticated=0,publicAllowed=true;
 const owner='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',sid='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',path=`media/${owner}/photo.jpg`,rows=new Map();
 const hash=async text=>Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(text))).toString('hex');
 const validToken='header.'+Buffer.from(JSON.stringify({session_id:sid})).toString('base64url')+'.signature';
-const resource={path:owner+'/photo.jpg',name:'Original photo.jpg',mime:'image/jpeg'};
+const resource={path:owner+'/photo.jpg',object_path:path,bucket:'user-images',name:'Original photo.jpg',mime:'image/jpeg'};
 const admin={
  rpc:async(name,args)=>{
   if(name==='resolve_shared_image'){
    assert.equal(args.p_user,owner);assert.equal(args.p_session,sid);
    return {data:allowed&&session&&args.p_path===path?resource:null,error:null};
   }
-  if(name==='check_shared_image')return {data:allowed&&session&&rows.has(args.p_hash)?{...resource,object_path:rows.get(args.p_hash).object_path}:null,error:null};
+  if(name==='check_shared_image')return {data:allowed&&session&&rows.has(args.p_hash)?resource:null,error:null};
+  if(name==='resolve_public_library_image')return {data:publicAllowed&&args.p_path===path&&args.p_bucket==='user-images'?resource:null,error:null};
   if(name==='claim_public_request')return {data:true,error:null};
   throw Error('Unexpected RPC '+name);
  },
@@ -28,7 +29,7 @@ const admin={
  }
 };
 const createClient=(_base,key)=>key==='private-server-key'?admin:{auth:{getUser:async token=>{authenticated++;return token===validToken?{data:{user:{id:owner}},error:null}:{data:{user:null},error:{message:'denied'}};}}};
-const storage=async(url,options)=>{streamed++;assert.equal(url,`http://backend.test/storage/v1/object/authenticated/user-images/${path}`);assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer private-server-key');return new Response(options.method==='HEAD'?null:'image bytes',{headers:{'Content-Type':'image/jpeg'}});};
+const storage=async(url,options)=>{streamed++;assert.equal(url,`http://backend.test/storage/v1/object/authenticated/${resource.bucket}/${resource.object_path}`);assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer private-server-key');return new Response(options.method==='HEAD'||options.headers['If-None-Match']==='"fixture"'?null:'image bytes',{status:options.headers['If-None-Match']==='"fixture"'?304:200,headers:{'Content-Type':'image/jpeg',ETag:'"fixture"'}});};
 const env={SUPABASE_URL:'http://backend.test',SUPABASE_SERVICE_ROLE_KEY:'private-server-key',SUPABASE_ANON_KEY:'public-key',SUPABASE_PUBLIC_URL:'https://myhostage.test'};
 const compiled=ts.transpileModule(source.replace(/^import .*;\r?\n/gm,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 new Function('Deno','createClient','fetch','crypto',compiled)({serve:fn=>handler=fn,env:{get:name=>env[name]}},createClient,storage,webcrypto);
@@ -55,3 +56,16 @@ session=true;assert.equal((await request('access='+'f'.repeat(64))).status,403);
 saveFailure=true;assert.equal((await request('path='+encodeURIComponent(path),{headers})).status,503);
 assert.ok(authenticated>=4);
 console.log('PASS saved URL reauthorizes on GET/HEAD; removed group/session blocks Storage; no signed redirect or cache; save failure never issues a capability');
+const publicQuery='public=1&bucket=user-images&path='+encodeURIComponent(path),authBefore=authenticated;
+response=await request(publicQuery);assert.equal(response.status,200);assert.equal(await response.text(),'image bytes');
+assert.equal(authenticated,authBefore,'Public images must not depend on an Auth session');
+assert.equal(response.headers.get('Cache-Control'),'public, max-age=0, must-revalidate');assert.equal(response.headers.get('ETag'),'"fixture"');
+response=await request(publicQuery,{headers:{'If-None-Match':'"fixture"'}});assert.equal(response.status,304);assert.equal(await response.text(),'');
+publicAllowed=false;const streamedBeforeRevocation=streamed;
+response=await request(publicQuery,{headers:{'If-None-Match':'"fixture"'}});assert.equal(response.status,403);assert.match(response.headers.get('Cache-Control'),/no-store/);
+assert.equal(streamed,streamedBeforeRevocation,'Visibility must be checked before conditional-cache responses');
+publicAllowed=true;resource.bucket='users';resource.object_path=owner+'/photos/current/preview.webp';
+response=await request(publicQuery);assert.equal(response.status,200,'Legacy public alias streams the current users-bucket object');
+assert.equal((await request(publicQuery.replace('bucket=user-images','bucket=messenger-attachments'))).status,404);
+assert.equal((await request(publicQuery+'&access='+'a'.repeat(64))).status,404);
+console.log('PASS anonymous images, current-bucket aliases and ETag revalidation work; visibility revocation precedes caching and unexpected buckets are rejected');

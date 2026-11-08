@@ -18,7 +18,7 @@ const owner='11111111-1111-4111-8111-111111111111';
 const person={id:owner,email:'preview-fixture@example.test'} as User;
 const consumption = new URLSearchParams(location.search).has('consumption');
 const mediaGestures = new URLSearchParams(location.search).has('mediaGestures');
-let session:Session|null=null, failed=false, nonce=0;
+let session:Session|null=null, nonce=0;
 const video={id:'22222222-2222-4222-8222-222222222222',owner_id:owner,file_name:'Public video',visibility:'public',preview_path:`${owner}/video-previews/poster.webp`,processing_status:'ready',file_size:1024,created_at:new Date().toISOString(),duration_seconds:12} as Video;
 const photo={id:'33333333-3333-4333-8333-333333333333',owner_id:owner,file_name:'Public photo',visibility:'public',storage_path:`${owner}/photos/original.png`,preview_path:`${owner}/photos/preview.webp`,thumbnail_path:`${owner}/photos/thumbnail.webp`,file_size:100,created_at:new Date().toISOString()} as Photo;
 const files=[{id:'44444444-4444-4444-8444-444444444444',name:'public-image.png',path:'public-image.png',isFolder:false,size:100,mimeType:'image/png',updatedAt:'2026-10-13',favorite:false,trashedAt:null},
@@ -38,8 +38,10 @@ window.fetch=async(input,init)=>{
     return Response.json(value,{headers:{'Cache-Control':'no-store'}});
   }
   if(url.pathname.startsWith('/storage/v1/object/sign/')&&init?.method==='POST'){
-    const fail=failed;failed=false;
-    return Response.json({signedURL:`/object/sign/user-images/${url.pathname.split('/user-images/')[1]}?token=fixture-${++nonce}${fail?'&fail=1':''}`});
+    return Response.json({signedURL:`/object/sign/user-images/${url.pathname.split('/user-images/')[1]}?token=fixture-${++nonce}`});
+  }
+  if(url.pathname==='/functions/v1/serve-shared-image'&&!url.searchParams.has('public')){
+    return Response.json({url:`${url.origin}/functions/v1/serve-shared-image?public=1&bucket=user-images&path=${encodeURIComponent(url.searchParams.get('path')||'')}`});
   }
   return originalFetch(input,init);
 };
@@ -51,7 +53,7 @@ function Harness(){
   return <div className="fluent-app media-page"><AuthContext.Provider value={auth}><DeleteConfirmationProvider><ReactionProvider><nav style={{display:'flex',gap:12,padding:16,flexWrap:'wrap'}}>
     <button onClick={()=>change(!signedIn)}>{signedIn?'Fixture sign out':'Fixture sign in'}</button>
     {['videos','photos','files','owned'].map(r=><button key={r} onClick={()=>{setRoute(r);window.location.hash=r==='files'?'#/public-files':r==='photos'?'#/public-photos':'#/public-videos';}}>{r}</button>)}
-    <button onClick={()=>{failed=true;video.preview_path=`${owner}/video-previews/retry-${Date.now()}.webp`;window.dispatchEvent(new CustomEvent('media-uploaded',{detail:'video'}));}}>Simulate failed video image</button>
+    <button onClick={()=>{video.preview_path=`${owner}/video-previews/retry-${Date.now()}.webp`;window.dispatchEvent(new CustomEvent('media-uploaded',{detail:'video'}));}}>Simulate failed video image</button>
     <output>{signedIn?'Authenticated fixture':'Anonymous fixture'}</output>
   </nav>
   {consumption && <div style={{height:500}} aria-hidden="true"/>}

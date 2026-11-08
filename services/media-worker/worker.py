@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import quote
 import requests
@@ -35,6 +36,7 @@ def check_cancelled(job_id, claim_token=None):
         raise LostClaim('Processing was interrupted. Retry processing or delete this upload.')
     if not rows or rows[0]['status'] in ('cancelling','cancelled'):
         raise CancelledUpload('Video deletion requested.')
+    return rows[0]['status']
 
 def api(method, path, **kwargs):
     headers = {**HEADERS, **kwargs.pop('headers',{})}
@@ -87,8 +89,30 @@ def cleanup_failed_uploads():
         except Exception:
             LOG.error(json.dumps({'operation':'unpublished_media_cleanup','bucket':item['bucket_id'],'result':'error'}))
 
-def download(path, destination, maximum):
-    with requests.get(URL+'/storage/v1/object/authenticated/media-staging/'+quote(path,safe='/'),
+
+def cleanup_finalized_video_sources():
+    # Only the new, sole-final publication contract is eligible. Failed/retry
+    # inputs and uncatalogued TUS state never enter this server-owned queue.
+    for item in api('POST','/rest/v1/rpc/finalized_video_source_cleanup_candidates',json={}) or []:
+        name=item.get('name')
+        parts=name.split('/') if isinstance(name,str) else []
+        bucket=item.get('bucket_id')
+        if bucket=='staging' and parts[:1]==['uploads']: parts=parts[1:]
+        elif bucket!='media-staging': parts=[]
+        try:
+            valid=(len(parts)==3
+                   and all(str(uuid.UUID(value))==value for value in parts[:2])
+                   and parts[2] in ('source','preview'))
+        except (ValueError,AttributeError): valid=False
+        if not valid:
+            LOG.error(json.dumps({'operation':'finalized_source_cleanup','result':'invalid_candidate'}))
+            continue
+        try: remove(bucket,[item['name']])
+        except Exception:
+            LOG.error(json.dumps({'operation':'finalized_source_cleanup','result':'error'}))
+
+def download(path, destination, maximum, bucket='media-staging'):
+    with requests.get(URL+'/storage/v1/object/authenticated/'+bucket+'/'+quote(path,safe='/'),
                       headers=HEADERS,stream=True,timeout=(10,120)) as response:
         response.raise_for_status()
         total=0
@@ -146,11 +170,30 @@ def validate(kind,source,directory,job_id=None,claim_token=None,target_video_bit
     if process.returncode or metadata.get('error'): raise ValueError(metadata.get('error','Media validation failed.'))
     return metadata
 
+def job_storage_location(job):
+    owner,jid=job['owner_id'],job['id']
+    if any(str(uuid.UUID(value))!=value for value in (owner,jid)) or job['kind'] not in ('video','photo','preview'):
+        raise ValueError('Invalid media processing identity.')
+    if job['kind']=='preview' and str(uuid.UUID(job['target_video_id']))!=job['target_video_id']:
+        raise ValueError('Invalid preview target.')
+    bucket=job.get('input_bucket','media-staging')
+    expected=owner+'/'+jid
+    if bucket=='staging': expected='uploads/'+expected
+    elif bucket!='media-staging': raise ValueError('Invalid media staging bucket.')
+    if job.get('input_prefix',expected)!=expected:
+        raise ValueError('Media staging does not match its job.')
+    layout=job.get('output_layout',1)
+    if type(layout) is not int or layout not in (1,2):
+        raise ValueError('Unsupported media output layout.')
+    return bucket,expected,layout
+
+
 def process(job):
     jid,owner,kind=job['id'],job['owner_id'],job['kind']
     claim=job.get('claim_token')
-    def check(): check_cancelled(jid,claim)
-    prefix=owner+'/'+jid
+    def check(): return check_cancelled(jid,claim)
+    prefix=None
+    source_bucket=None
     created=[]
     published=False
     publication_attempted=False
@@ -158,10 +201,14 @@ def process(job):
     cancelled=False
     lease_lost=False
     try:
+        source_bucket,prefix,layout=job_storage_location(job)
+        def download_input(path,destination,maximum):
+            if source_bucket=='media-staging': return download(path,destination,maximum)
+            return download(path,destination,maximum,bucket=source_bucket)
         with work_directory() as temporary:
             directory=Path(temporary)
             source=directory/'source'
-            size=download(prefix+'/source',source,10*1024**3 if kind=='video' else 25*1024**2)
+            size=download_input(prefix+'/source',source,10*1024**3 if kind=='video' else 25*1024**2)
             check()
             if kind == 'video':
                 config=api('GET','/rest/v1/storage_settings?id=eq.1&select=target_video_bitrate_mbps')
@@ -174,49 +221,55 @@ def process(job):
             rows=api('GET','/rest/v1/storage_settings?id=eq.1&select=videos_base_path,images_base_path') or [{}]
             settings=rows[0]
             def full(path,bucket):
+                if bucket=='users': return path
                 base=(settings.get('videos_base_path' if bucket=='user-videos' else 'images_base_path') or '').strip('/')
                 return base+'/'+path if base else path
             users=api('GET','/rest/v1/profiles?id=eq.'+owner+'&select=email')
             if not users: raise ValueError('Upload owner no longer exists.')
             record={'id':jid,'owner_id':owner,'owner_email':users[0]['email'],'file_name':job['file_name'],
                     'visibility':job['visibility'],'file_size':size,'mime_type':metadata['mime_type']}
+            image_bucket='users' if layout==2 else 'user-images'
+            video_bucket='users' if layout==2 else 'user-videos'
             if kind=='preview':
-                path=owner+'/video-previews/'+job['target_video_id']+'/'+jid+'.webp'
-                upload('user-images',full(path,'user-images'),directory/'preview.webp','image/webp',created)
+                path=owner+('/videos/' if layout==2 else '/video-previews/')+job['target_video_id']+'/'+jid+'.webp'
+                upload(image_bucket,full(path,image_bucket),directory/'preview.webp','image/webp',created)
                 result={'path':path}
+                if layout==2: result['bucket']='users'
             elif kind=='photo':
                 base=owner+'/photos/'+jid
-                original=base+'/original.'+metadata['extension']
+                original=base+('/photo.' if layout==2 else '/original.')+metadata['extension']
                 for path,name,mime in [(original,'source',metadata['mime_type']),(base+'/preview.webp','preview.webp','image/webp'),(base+'/thumbnail.webp','thumbnail.webp','image/webp')]:
-                    upload('user-images',full(path,'user-images'),directory/name,mime,created)
+                    upload(image_bucket,full(path,image_bucket),directory/name,mime,created)
                 record.update(storage_path=original,preview_path=base+'/preview.webp',thumbnail_path=base+'/thumbnail.webp',width=metadata['width'],height=metadata['height'])
+                if layout==2: record['storage_bucket']='users'
                 result={'id':jid}
             else:
                 base=owner+'/videos/'+jid
-                original=base+'/original.'+metadata['extension']
-                processed=base+'/stream.mp4'
-                preview=owner+'/video-previews/'+jid+'/preview.webp'
+                processed=base+'/video.mp4'
+                preview=base+'/thumbnail.webp' if layout==2 else owner+'/video-previews/'+jid+'/preview.webp'
                 if job['has_preview']:
                     custom=directory/'custom'
                     custom.mkdir()
-                    download(prefix+'/preview',custom/'source',25*1024**2)
+                    download_input(prefix+'/preview',custom/'source',25*1024**2)
                     validate('photo',custom/'source',custom,jid,claim)
                     preview_source=custom/'preview.webp'
                 else: preview_source=directory/'preview.webp'
-                upload('user-videos',full(original,'user-videos'),source,metadata['mime_type'],created)
-                upload('user-videos',full(processed,'user-videos'),directory/'stream.mp4','video/mp4',created)
-                upload('user-images',full(preview,'user-images'),preview_source,'image/webp',created)
-                record.update(storage_path=original,processed_storage_path=processed,preview_path=preview,processing_status='ready',
+                upload(video_bucket,full(processed,video_bucket),directory/'stream.mp4','video/mp4',created)
+                upload(image_bucket,full(preview,image_bucket),preview_source,'image/webp',created)
+                record.update(storage_path=processed,processed_storage_path=processed,mime_type='video/mp4',preview_path=preview,processing_status='ready',
                     container_format=metadata['format'],video_codec=metadata['video_codec'],video_bitrate=round(metadata['video_bitrate']) if metadata['video_bitrate'] is not None else None,
                     frame_rate=metadata['frame_rate'],source_metadata=metadata['source_metadata'],
                     processing_action=metadata['processing_action'],audio_codec=metadata['audio_codec'],audio_bitrate=metadata['audio_bitrate'],
                     processed_file_size=(directory/'stream.mp4').stat().st_size,
                     resolution_width=metadata['width'],resolution_height=metadata['height'],duration_seconds=metadata['duration_seconds'])
+                if layout==2: record.update(storage_bucket='users',preview_bucket='users')
                 result={'id':jid}
             check()
             publication_attempted=True
-            api('POST','/rest/v1/rpc/publish_media_upload',json={'p_id':jid,'p_claim':claim,
+            publication=api('POST','/rest/v1/rpc/publish_media_upload',json={'p_id':jid,'p_claim':claim,
                 'p_record':result if kind=='preview' else record})
+            if not isinstance(publication,dict) or any(publication.get(key)!=value for key,value in result.items()) or check()!='complete':
+                raise ValueError('The upload status could not be confirmed. Check your gallery before retrying.')
             published=True  # A preview now has a validated result usable by its owner.
             LOG.info(json.dumps({'operation':'media_validation','id':jid,'result':'complete','kind':kind}))
     except Exception as cause:
@@ -251,9 +304,9 @@ def process(job):
         except Exception: LOG.error(json.dumps({'operation':'media_job_status','id':jid,'result':'error'}))
     finally:
         # Retain a failed video's original in private staging for recovery.
-        # Successful videos also retain their original in final video storage.
-        if not lease_lost and (kind != 'video' or published or cancelled):
-            try: remove('media-staging',[prefix+'/source',prefix+'/preview'])
+        # A successful publication references the verified final MP4 only.
+        if prefix and source_bucket and not lease_lost and (kind != 'video' or published or cancelled):
+            try: remove(source_bucket,[prefix+'/source',prefix+'/preview'])
             except Exception: LOG.error(json.dumps({'operation':'staging_cleanup','id':jid,'result':'error'}))
         # All local processing/files are stopped now. The deletion endpoint owns
         # final storage cleanup (including ambiguous upload responses).
@@ -282,11 +335,19 @@ def main():
         while True:
             active={future for future in active if not future.done()}
             try:
-                if len(active)<2:
+                control=api('POST','/rest/v1/rpc/library_worker_control',json={})
+                if not isinstance(control,dict): raise ValueError('Worker control is unavailable')
+                draining=control['pause_media_claims'] or control['pause_library_writes']
+                if len(active)<2 and not draining:
                     jobs=api('POST','/rest/v1/rpc/claim_media_uploads',json={'p_limit':2-len(active)})
                     for job in jobs or []: active.add(pool.submit(process,job))
-                if time.monotonic()-last_cleanup>30:
-                    cleanup_failed_uploads(); last_cleanup=time.monotonic()
+                if not draining and time.monotonic()-last_cleanup>30:
+                    cleanup_failed_uploads(); cleanup_finalized_video_sources(); last_cleanup=time.monotonic()
+                state=Path('/tmp/media-worker-state.json')
+                pending=state.with_suffix('.tmp')
+                pending.write_text(json.dumps({'draining':bool(draining),'active_jobs':sum(not future.done() for future in active),
+                    'observed_at':time.time()}))
+                pending.replace(state)
                 Path('/tmp/media-heartbeat').touch()
             except Exception as cause: LOG.error(json.dumps({'operation':'media_worker_poll','type':type(cause).__name__}))
             time.sleep(2)

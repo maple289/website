@@ -10,7 +10,7 @@ import { AuthContext } from '@/context/AuthContext';
 function VideoPoster({ video }: { video: Video }) {
   const user = useContext(AuthContext)?.user;
   const placeholder = <div className="mg-placeholder"><Film size={32} /></div>;
-  return <StorageImage storagePath={video.preview_path} legacyUrl={video.visibility === 'public' || user?.id === video.owner_id ? video.preview_url : null} publicAccess={video.visibility === 'public'} alt={video.file_name}
+  return <StorageImage storageBucket={video.preview_bucket} storagePath={video.preview_path} legacyUrl={video.visibility === 'public' || user?.id === video.owner_id ? video.preview_url : null} publicAccess={video.visibility === 'public'} alt={video.file_name}
     loading="lazy" className="mg-image" fallback={placeholder} />;
 }
 

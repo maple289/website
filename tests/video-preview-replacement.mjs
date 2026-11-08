@@ -35,6 +35,10 @@ async function fixture(width = 1440) {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' } });
     if (path.endsWith('/rpc/get_storage_base_path')) return route.fulfill({ json: 'configured-images' });
+    if (path.endsWith('/rpc/reserve_media_upload')) return route.fulfill({ json: { bucket: 'media-staging', prefix: owner+'/'+request.postDataJSON().p_id } });
+    if (path.endsWith('/functions/v1/serve-shared-image')) return url.searchParams.has('access')
+      ? route.fulfill({ contentType: 'image/png', body: png })
+      : route.fulfill({ json: { url: url.origin+'/functions/v1/serve-shared-image?access=fixture' } });
     if (path.endsWith('/functions/v1/serve-media')) return route.fulfill({ json: { url: base + `/tests/fixtures/playback-ended.${engine === 'webkit' ? 'mp4' : 'webm'}` } });
     if (path.includes('/storage/v1/object/sign/')) {
       if (request.method() === 'POST') return route.fulfill({ json: { signedURL: '/object/sign/user-images/' + oldPath + '?token=fixture' } });

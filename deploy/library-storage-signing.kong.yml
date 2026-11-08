@@ -1,0 +1,23 @@
+# Merge this service into the verified installed Kong 3.x services list. Retain
+# every other route/plugin. Rehearse route captures before any live reload.
+- name: library-storage-signing
+  url: http://functions:9000/library-storage-sign
+  routes:
+    - name: library-storage-signing
+      strip_path: true
+      regex_priority: 100
+      paths:
+        - '~/storage/v1/(?<library_operation>object/sign|render/image/sign)/(?<library_bucket>user-videos|user-images|user-files|users)(?:/|$)'
+  plugins:
+    - name: cors
+    - name: request-transformer
+      config:
+        remove:
+          headers:
+            - X-Library-Storage-Operation
+            - X-Library-Storage-Bucket
+            - X-Library-Storage-Key
+        add:
+          headers:
+            - 'X-Library-Storage-Operation:$(uri_captures.library_operation)'
+            - 'X-Library-Storage-Bucket:$(uri_captures.library_bucket)'

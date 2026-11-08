@@ -31,7 +31,8 @@ Deno.serve(async req => {
         console.info(JSON.stringify({ operation: "delete_video", id, result: "complete" }));
         return json({ deleted: true });
       }
-      for (const bucket of ["user-videos", "user-images", "media-staging"]) {
+      if (objects.data.some((o: { bucket_id: string }) => !["user-videos", "user-images", "media-staging", "users", "staging"].includes(o.bucket_id))) throw new Error('Unexpected bucket');
+      for (const bucket of ["user-videos", "user-images", "media-staging", "users", "staging"]) {
         const paths = objects.data.filter((o: { bucket_id: string }) => o.bucket_id === bucket).map((o: { name: string }) => o.name);
         if (!paths.length) continue;
         const removed = await client.storage.from(bucket).remove(paths);

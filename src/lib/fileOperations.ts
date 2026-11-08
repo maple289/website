@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { FileEntry, FileMetadata } from './fileTree';
+import { resolveFileLocation } from './fileStorage';
 export type FileOperationPlan = { source: string; destination: string; copy: boolean; restore?: boolean; operationId?: string; preserveTrash?: FileOperationPlan; objects: string[]; metadata: FileMetadata[]; done: Set<string>; metadataDone: Set<string> };
 type ServerPlan = Omit<FileOperationPlan, 'done' | 'metadataDone' | 'preserveTrash'> & { objectsDone?: string[]; metadataDone?: string[]; preserveTrash?: ServerPlan };
 const preparePlan = (plan: ServerPlan): FileOperationPlan => ({ ...plan, done: new Set(plan.objectsDone), metadataDone: new Set(plan.metadataDone), preserveTrash: plan.preserveTrash ? preparePlan({ ...plan.preserveTrash, operationId: plan.operationId, objectsDone: plan.objectsDone, metadataDone: plan.metadataDone }) : undefined });
@@ -34,11 +35,12 @@ export async function executeFileOperation(plan: FileOperationPlan, owner: strin
   // This is preservation of an already deleted item, not a second deletion:
   // retain its bytes, identity and Trash state before freeing the old name.
   if (plan.preserveTrash) await executeFileOperation(plan.preserveTrash, owner, true);
-  const bucket = supabase.storage.from('user-files');
   for (const source of plan.objects) {
     if (await checkpoint(plan, source, false)) { plan.done.add(source); continue; }
     const destination = plan.destination + source.slice(plan.source.length);
-    const { error } = plan.copy ? await bucket.copy(source, destination) : await bucket.move(source, destination);
+    const from = await resolveFileLocation(source), to = await resolveFileLocation(destination, true);
+    const bucket = supabase.storage.from(from.bucket), options = { destinationBucket: to.bucket };
+    const { error } = plan.copy ? await bucket.copy(from.path, to.path, options) : await bucket.move(from.path, to.path, options);
     if (error) throw new Error(`${error.message}. Some contents may have completed. Retry skips completed steps; existing destinations are never overwritten.`);
     await checkpoint(plan, source, false, true);
     plan.done.add(source);

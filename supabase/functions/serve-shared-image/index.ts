@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, If-None-Match",
+  "Access-Control-Expose-Headers": "ETag", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 const hash = async (token: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))), b => b.toString(16).padStart(2, "0")).join("");
 const safePath = (path: unknown): path is string => typeof path === 'string' && path.length < 2048 && path.split('/').every(part => !!part && part !== '.' && part !== '..' && !/[\\\p{Cc}]/u.test(part));
@@ -13,16 +14,26 @@ Deno.serve(async req => {
     const base = Deno.env.get('SUPABASE_URL')!, key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, anon = Deno.env.get('SUPABASE_ANON_KEY')!;
     const admin = createClient(base, key, { auth: { persistSession: false } }), url = new URL(req.url);
     const capability = url.searchParams.get('access');
-    if (capability) {
-      if (!/^[a-f0-9]{64}$/.test(capability)) return json({ error: 'Image unavailable' }, 404);
-      const { data, error } = await admin.rpc('check_shared_image', { p_hash: await hash(capability) });
+    const publicRequest = url.searchParams.get('public') === '1';
+    if (capability || publicRequest) {
+      if (capability && !/^[a-f0-9]{64}$/.test(capability)) return json({ error: 'Image unavailable' }, 404);
+      const path = url.searchParams.get('path'), bucket = url.searchParams.get('bucket');
+      if (publicRequest && (capability || !safePath(path) || !['user-images','users'].includes(bucket || ''))) return json({ error: 'Image unavailable' }, 404);
+      const { data, error } = capability
+        ? await admin.rpc('check_shared_image', { p_hash: await hash(capability) })
+        : await admin.rpc('resolve_public_library_image', { p_path: path, p_bucket: bucket });
       if (error || !data || !safePath(data.object_path)) return json({ error: 'Image unavailable or access expired' }, 403);
-      const upstream = await fetch(`${base}/storage/v1/object/authenticated/user-images/${data.object_path.split('/').map(encodeURIComponent).join('/')}`, {
-        method: req.method, headers: { Authorization: `Bearer ${key}`, apikey: key }, redirect: 'error', signal: req.signal });
-      if (!upstream.ok) return json({ error: 'Image unavailable' }, 404);
+      if (!['user-images','users'].includes(data.bucket)) return json({ error: 'Image unavailable' }, 404);
+      const upstream = await fetch(`${base}/storage/v1/object/authenticated/${data.bucket}/${data.object_path.split('/').map(encodeURIComponent).join('/')}`, {
+        method: req.method, headers: { Authorization: `Bearer ${key}`, apikey: key,
+          ...(publicRequest && req.headers.has('If-None-Match') ? { 'If-None-Match': req.headers.get('If-None-Match')! } : {}) }, redirect: 'error', signal: req.signal });
+      if (!upstream.ok && upstream.status !== 304) return json({ error: 'Image unavailable' }, 404);
+      const cacheHeaders = publicRequest ? { 'Cache-Control': 'public, max-age=0, must-revalidate',
+        ...(upstream.headers.has('ETag') ? { ETag: upstream.headers.get('ETag')! } : {}) } : {};
+      const mime = upstream.headers.get('Content-Type')?.split(';')[0] || data.mime;
       // Never redirect to Storage: it would turn a revocable grant into a signed URL.
-      return new Response(upstream.body, { status: upstream.status, headers: { ...headers,
-        'Content-Type': /^image\/(jpeg|png|webp|gif|bmp|tiff|heic|heif|avif)$/i.test(data.mime) ? data.mime : 'application/octet-stream',
+      return new Response(upstream.status === 304 || req.method === 'HEAD' ? null : upstream.body, { status: upstream.status, headers: { ...headers, ...cacheHeaders,
+        'Content-Type': /^image\/(jpeg|png|webp|gif|bmp|tiff|heic|heif|avif)$/i.test(mime) ? mime : 'application/octet-stream',
         'Content-Security-Policy': "default-src 'none'; sandbox",
         'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(data.name).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}` } });
     }

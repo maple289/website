@@ -16,17 +16,20 @@ const queue = async (kind, group = family, extra = {}) => {
  await root(); await sql("INSERT INTO storage.objects(bucket_id,name,metadata) VALUES('media-staging',$1,'{\"size\":10}') ON CONFLICT DO NOTHING", [owner + '/' + id + '/source']);
  return handler(new Request('https://fixture.invalid/functions/v1/queue-media-upload', { method: 'POST', headers: { Authorization: 'Bearer verified-fixture' }, body: JSON.stringify({ id, kind, file_name: 'Upload ' + id, visibility: 'private', group_id: group, ...extra }) }));
 };
-const prepare = async (id, kind) => {
+const prepare = async (id, kind, singleFinal = false) => {
  await root(); const claim = randomUUID(), name = (await sql('SELECT file_name FROM media_upload_jobs WHERE id=$1', [id]))[0].file_name;
  await sql("UPDATE media_upload_jobs SET status='processing',claim_token=$2,started_at=now() WHERE id=$1", [id, claim]);
  const path = owner + '/' + (kind === 'video' ? 'videos' : 'photos') + '/' + id;
  const record = { id, owner_id: owner, file_name: name, visibility: 'private', storage_path: path + '/original.' + (kind === 'video' ? 'mp4' : 'jpg'), preview_path: kind === 'video' ? owner + '/video-previews/' + id + '/preview.webp' : path + '/preview.webp', thumbnail_path: path + '/thumbnail.webp', processed_storage_path: path + '/stream.mp4', processing_status: 'ready' };
- for (const [bucket, name] of [[kind === 'video' ? 'user-videos' : 'user-images', record.storage_path], [kind === 'video' ? 'user-videos' : 'user-images', kind === 'video' ? record.processed_storage_path : record.thumbnail_path], ['user-images', record.preview_path]]) await sql("INSERT INTO storage.objects(bucket_id,name,metadata) VALUES($1,$2,'{\"size\":10}')", [bucket, name]);
+ if(singleFinal)Object.assign(record,{storage_path:path+'/video.mp4',processed_storage_path:path+'/video.mp4',mime_type:'video/mp4',container_format:'mp4',video_codec:'h264',duration_seconds:1,processed_file_size:10});
+ for (const [bucket, name] of [[kind === 'video' ? 'user-videos' : 'user-images', record.storage_path], [kind === 'video' ? 'user-videos' : 'user-images', kind === 'video' ? record.processed_storage_path : record.thumbnail_path], ['user-images', record.preview_path]]) await sql("INSERT INTO storage.objects(bucket_id,name,metadata) VALUES($1,$2,'{\"size\":10}') ON CONFLICT DO NOTHING", [bucket, name]);
  return () => { return service().then(() => sql('SELECT publish_media_upload($1,$2,$3) value', [id, claim, record])); };
 };
 try {
  await db.exec(await readFile('tests/media-upload-setup.sql', 'utf8'));
- await db.exec(`ALTER TABLE storage.objects ADD COLUMN metadata jsonb;
+ await db.exec(`ALTER TABLE storage.objects ADD COLUMN metadata jsonb,ADD COLUMN version text DEFAULT gen_random_uuid()::text,ADD COLUMN updated_at timestamptz DEFAULT now();
+ CREATE UNIQUE INDEX fixture_object_key ON storage.objects(bucket_id,name);
+ CREATE TABLE video_deletions(id uuid PRIMARY KEY);
  CREATE TABLE storage_settings(id int PRIMARY KEY,videos_base_path text,images_base_path text); INSERT INTO storage_settings VALUES(1,'','');
  ALTER TABLE videos ADD COLUMN owner_email text, ADD COLUMN file_size bigint, ADD COLUMN mime_type text, ADD COLUMN processed_storage_path text,
  ADD COLUMN container_format text, ADD COLUMN video_codec text, ADD COLUMN video_bitrate bigint, ADD COLUMN frame_rate numeric, ADD COLUMN source_metadata jsonb,
@@ -43,6 +46,7 @@ try {
  await db.exec(sharing.split('CREATE FUNCTION public.media_access_for_user')[0] + '\nCOMMIT;');
  await migration('20261019030000_media_group_filter.sql');
  await migration('20261019040000_group_media_uploads.sql');
+ await migration('20261107010000_single_final_video_publication.sql');
  await sql("INSERT INTO messenger_conversations VALUES($1,'group','Family'),($2,'group','Work')", [family, work]);
  await sql('INSERT INTO messenger_members VALUES($1,$2),($3,$4)', [family, owner, work, other]);
  const client = { auth: { getUser: async token => ({ data: { user: token === 'verified-fixture' ? { id: owner } : null }, error: null }) }, rpc: async (name, args) => {
@@ -65,6 +69,11 @@ try {
   await root(); assert.equal((await sql(`SELECT owner_id,visibility FROM ${kind==='video'?'videos':'photos'} WHERE id=$1`,[id]))[0].owner_id,owner);
  }
  console.log('PASS actual queue handler derives owner, saves private group intent, retries idempotently; real video/photo publisher creates exactly one group grant atomically');
+ const singleResponse=await queue('video'),singleId=(await singleResponse.json()).id;
+ await (await prepare(singleId,'video',true))();
+ await root();assert.equal((await sql('SELECT count(*)::int n FROM media_shares WHERE media_id=$1',[singleId]))[0].n,1);
+ assert.equal((await sql('SELECT storage_path=processed_storage_path same FROM videos WHERE id=$1',[singleId]))[0].same,true);
+ console.log('PASS single-final video publication also commits its group grant atomically');
  for(const [group,extra] of [[work,{}],[family,{kind:'preview',target_video_id:randomUUID()}],[family,{visibility:'public'}],[randomUUID(),{}],['invalid',{}]]) assert.ok((await queue('video',group,extra)).status>=400);
  const before=calls.length; assert.equal((await handler(new Request('https://fixture.invalid',{method:'POST',headers:{Authorization:'Bearer forged'},body:'{}'}))).status,401);assert.equal(calls.length,before);
  await root();await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${owner}'`);

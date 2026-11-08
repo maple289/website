@@ -1,5 +1,9 @@
 # Automated video analysis and conversion
 
+The single-final lifecycle publishes one verified permanent MP4 plus its
+thumbnail. Legacy original/stream records remain readable during the staged
+UUID-location upgrade; publication and workers support captured layout versions.
+
 The existing media worker/queue handles every video upload. FFprobe performs server-side analysis; FFmpeg performs actual decoding, conversion and final verification. TypeScript remains responsible for upload orchestration and gallery status; browser JavaScript does not transcode media.
 
 ## Admin configuration
@@ -52,9 +56,35 @@ Performance tuning was deployed on 2026-10-04 UTC. The healthy running worker ma
 
 Migration `20260928100000_video_processing_metadata.sql` stores original probe metadata, conversion action, output audio details and processed size. Existing video codec/bitrate/resolution/frame-rate/duration fields describe the playable output. Owner, name and Public/Private selection remain unchanged.
 
-`storage_path` retains the original; `processed_storage_path` points to the verified MP4. Both use the existing Admin-configured video base path. The existing `serve-media` endpoint serves the processed MP4 and checks access as before. Ready gallery rows are created only after successful processing/publication. No unvalidated processing row is exposed in the public gallery.
+New worker publications set both `storage_path` and `processed_storage_path` to
+the single verified `video.mp4`. Original probe metadata and upload byte counts
+remain database metadata. Both paths use the existing Admin-configured video
+base until the UUID-bucket cutover. Existing legacy records may still have
+separate original/stream paths. `serve-media` continues selecting the verified
+processed MP4 and enforcing the same access rules. Ready rows appear only after
+successful final verification and atomic publication.
 
-Private owner-only job cards show Processing, Ready or Processing Failed. Closing the upload dialog after queueing, navigating away or closing the browser does not stop conversion. A processing failure cannot enable playback. Successful completion refreshes the gallery automatically. Failed source files remain in private staging for troubleshooting; successful originals are retained in video storage. This change does not introduce automatic original-file deletion or a new unconfirmed delete action.
+Private owner-only job cards show Processing, Ready or Processing Failed. Closing
+the dialog or browser does not stop processing. Failures cannot enable playback,
+and failed video inputs remain in private staging for retry. The new worker
+removes successful staging inputs only after confirmed publication. Ambiguous
+publication retains source/final objects for recovery. It never uploads a second
+permanent original, including for a compliant MP4 kept without conversion.
+
+If successful staging cleanup fails, the operator-controlled retry queue accepts
+only the new single-final contract after a 15-minute grace period. It rechecks
+Ready/job state, owner/job paths, final size, positive finite duration and the
+exact final catalog ID/version/update time captured at publication. Failed jobs,
+legacy pairs, unknown JSON/TUS files and permanent user objects are excluded.
+The private drain flag pauses claims and automatic cleanup while existing jobs
+finish; browser and service API roles cannot change that flag.
+
+The single-final lifecycle was deployed on 2026-11-08 UTC with migration
+20261107010000_single_final_video_publication.sql. Seventeen isolated worker
+regressions, publication/group-grant SQL checks, restored-live-schema rehearsal
+and selective rollback rehearsal passed. The replacement worker is healthy;
+claims resumed, existing media/shares were unchanged and no other production
+container was replaced. UUID-bucket activation remains a separate migration.
 
 ## Verification of configurable bitrate
 
