@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 const overlays = ['media-worker', 'file-preview-worker', 'analytics-collector', 'email-dispatcher', 'push-dispatcher'];
 const result = spawnSync('docker', ['compose', ...overlays.flatMap(name => ['-f', `deploy/${name}.compose.yml`]), 'config', '--format', 'json'], {
   encoding: 'utf8',
-  env: { ...process.env, STREAMLY_PROJECT_ROOT: process.cwd(), SERVICE_ROLE_KEY: 'isolated-fixture', GLOBAL_S3_BUCKET: 'fixture', STORAGE_TENANT_ID: 'fixture' },
+  env: { ...process.env, STREAMLY_PROJECT_ROOT: process.cwd(), SERVICE_ROLE_KEY: 'isolated-fixture', GLOBAL_S3_BUCKET: 'fixture', STORAGE_TENANT_ID: 'fixture', MEDIA_CONVERSION_ROOT: '' },
 });
 assert.equal(result.status, 0, result.stderr || result.error?.message);
 const config = JSON.parse(result.stdout);
@@ -21,6 +21,18 @@ assert.equal(worker.read_only, true);
 assert.equal(worker.tmpfs.length, 1, 'comma-separated mount options must remain one YAML string');
 assert.equal(worker.tmpfs[0].split(':')[0], '/tmp');
 console.log('PASS production worker overlays normalize successfully with absolute tmpfs paths');
+const staged = spawnSync('docker', ['compose', ...overlays.flatMap(name => ['-f', `deploy/${name}.compose.yml`]), 'config', '--format', 'json'], {
+  encoding: 'utf8',
+  env: { ...process.env, STREAMLY_PROJECT_ROOT: process.cwd(), SERVICE_ROLE_KEY: 'isolated-fixture', GLOBAL_S3_BUCKET: 'fixture', STORAGE_TENANT_ID: 'fixture',
+    MEDIA_CONVERSION_ROOT: '/isolated-fixture/storage/staging/conversions' },
+});
+assert.equal(staged.status, 0, staged.stderr || staged.error?.message);
+const conversionMount = JSON.parse(staged.stdout).services['media-worker'].volumes.find(mount => mount.target === '/work');
+assert.equal(conversionMount.type, 'bind');
+assert.equal(conversionMount.source, '/isolated-fixture/storage/staging/conversions');
+assert.notEqual(conversionMount.read_only, true);
+assert.equal(config.services['media-worker'].volumes.find(mount => mount.target === '/work').type, 'volume');
+console.log('PASS verified conversion staging can bind without replacing the legacy scratch-volume default');
 
 // Exercise the mount on the Docker daemon, including the worker UID and sandbox.
 // The CI frontend image already contains sh; no production volumes or network.

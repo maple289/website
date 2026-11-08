@@ -17,7 +17,9 @@ services:
       - default
     read_only: true
     volumes:
-      - media_scratch:/work
+      # Set only after a verified empty-scratch drain. The old volume remains
+      # available for rollback; the default preserves existing installations.
+      - ${MEDIA_CONVERSION_ROOT:-media_scratch}:/work
     tmpfs:
       - /tmp:size=64m,mode=1777
     # Let FFmpeg auto-thread across the VM CPUs. Relative weight keeps the

@@ -1,53 +1,35 @@
 # UUID storage cutover: implementation notes
 
-This is the pending compatibility design, not a deployed change. See
-STORAGE_REORGANIZATION_AUDIT.md for completed operations and private evidence.
+These notes describe implementation contracts and operator rollout gates.
+Current deployment state, live inventories and per-object evidence are kept in
+the private operator checkpoint; this is not a public deployment ledger.
 
-The user reconfirmed the target tree on 2026-11-07. Use immutable owner UUIDs,
+Use immutable owner UUIDs,
 video/photo UUID directories, and preserve existing file subfolders beneath
 users/<owner>/files/. Public IDs and sharing remain database data. Sharing a
 resource must never move/copy its bytes. Existing preview formats are preserved.
 
-## Current implementation stage
+## Compatibility and validation
 
-- Full backups and isolated restore checks passed. Five proven redundant video
-  originals were removed, with all other user content and permissions unchanged.
-- Thirty private copies are verified. Two initially unpublished per-file-UUID
-  copies were replaced by verified copies preserving the existing file hierarchy;
-  only those two superseded unpublished copies were removed. No live file changed.
-- Current copy manifest: verified-private-migration-manifest-v2.json in the
-  private Windows backup directory. No application reference cutover occurred.
-- The single-final worker and forward migration
-  20261107010000_single_final_video_publication.sql were deployed on November 8
-  UTC. Only the media worker was replaced; the other containers were unchanged.
-  They retain legacy publisher compatibility, publish one video.mp4/thumbnail,
-  preserve original probe metadata and retain ambiguous/failed staging inputs.
-  Source-cleanup retries compare the exact final ID/version/update time recorded
-  at Ready publication. Private drain control pauses claims/automatic cleanup.
-- Seventeen isolated worker regressions and real isolated PostgreSQL publication,
-  drain, cleanup and group-publication regressions passed. Full migration and
-  selective rollback rehearsals against the restored live schema passed. The
-  worker is healthy, claims resumed and existing content/shares were unchanged.
-- The deployed decoder/dependency files match the checkout after normalizing
-  Windows CRLF. Do not change FFmpeg policy or dependencies during worker rollout.
-- Existing media conversion scratch is empty (4,096 allocated bytes); no unknown
-  scratch content needs moving. Preserve isolation and existing cleanup locks.
-- The second forward migration, 20261108010000_storage_location_compatibility.sql,
-  and its serving/client changes are local preparation only. Isolated SQL checks
-  cover exact legacy prefixes, current-location aliases, visibility/membership/
-  session revocation, retained-object retirement, owner-scoped photo cleanup and
-  metadata-bound file preview resolution. File catalog/transfer compatibility,
-  new-layout publication, route compatibility and activation gates remain pending.
-- Additional local forward migrations adapt the current file catalog and durable
-  transfers, preserve canonical statistics while rebinding their actual Storage
-  FK, add resource-specific users-bucket RLS and a service-aware write gate, and
-  keep permanent file deletion retryable across active/retained locations.
-  Restored-production-schema rehearsals preserve existing data and analytics.
-  Rollback-only clone tests proved old-copy deletion keeps current metadata and
-  counters, while current-copy deletion retains the intended cascades. Isolated
-  catalog tests cover new uploads, favorites, moves, empty folders, permissions,
-  write pauses, Trash validation, partial retry and path reuse. These changes
-  are not deployed or activated; no new live storage references changed.
+Forward migrations preserve legacy locations until a separate reference
+transaction activates verified copies. Resource bucket columns and private
+aliases support current-location serving, saved links and authorized deletion.
+File catalogs retain virtual paths, stable public IDs, canonical statistics,
+durable transfer checks, Trash and partial-deletion retry state.
+
+Workers capture input and output layout on each job. Publication keeps one
+verified final MP4 and required images, preserves probe metadata, and retains
+failed/ambiguous inputs. Cleanup retries compare exact final identity, version,
+size and update time. Private flags pause claims/writes/cleanup; idle markers
+reflect actual worker futures rather than only database job status.
+
+Validation includes real SQL and selective reference rollback in a restored
+schema, synthetic browser fixtures, isolated Linux coordinator tests, and the
+installed Storage/PostgREST/Auth/Edge/decoder runtimes with fresh test-only JWTs.
+Old-copy deletion preserves active metadata/counters; current-copy deletion keeps
+the intended cascades. Unknown data and upload receipts stay outside automatic
+migration/cleanup. Do not change FFmpeg policy or decoder dependencies during
+the location rollout.
 
 ## Media locations
 
@@ -104,7 +86,7 @@ Keep a private, server-managed migration registry containing old/new object IDs,
 versions, bucket/keys, owner UUID, resource UUID, role and retirement state. It is
 an authorization/audit mapping, not ownership inferred from disk. Retired aliases
 must never become readable merely because their current metadata was deleted.
-Record both legacy file folder markers (without new payloads) at cutover.
+Record verified legacy folder markers (without new payloads) at cutover.
 
 Storage IDs change during API copy. Preserve analytics identity/counters, not just
 file public IDs. An internal canonical-ID projection for migrated files can keep
@@ -114,14 +96,14 @@ view/function definitions and all relevant foreign keys before choosing updates.
 
 ## Signed URL compatibility
 
-The deployed frontend still uses Storage signing for images and some file
-downloads. The local compatibility code uses revocable gateways instead.
+The compatibility frontend uses revocable gateways for images and private file
+downloads. Older clients can still request provider-shaped signing routes.
 Provider signed URLs remain valid until expiry/key revocation and do
 not by themselves enforce changing resource permissions. Do not rotate global
 Auth keys or delete old storage to hide this issue.
 
-A resource-authorized compatibility gateway for the library signing routes may
-be needed to preserve old clients while serving current public content and
+A resource-authorized compatibility gateway for the library signing routes
+preserves old clients while serving current public content and
 revocable session-bound capabilities for private content. Limit routing changes
 to library buckets; do not affect Messenger attachments or unrelated routes.
 The installed Kong is 3.9.1 with the expressions router. Its isolated test passed
@@ -137,7 +119,7 @@ Private grants expire within one hour and recheck current session and sharing on
 every GET/HEAD. Public links recheck current visibility before ETag responses.
 Previously issued provider JWTs grant no private access through the compatibility
 route; private clients must mint a fresh authorized link. No global JWT rotation
-or old-object deletion is used. The Kong fragment and handler are not deployed.
+or old-object deletion is used. Install the Kong fragment and handler together.
 Use scripts/prepare-library-storage-gateway.py to produce a candidate template
 without overwriting the original. Validate against the installed gateway, retain
 the original configuration backup, and install only during the controlled
@@ -151,8 +133,11 @@ Primary references:
 
 ## Staging, cache and workers
 
-Use staging/uploads/<owner>/<job>/ for future input objects and private worker
-staging for conversions. Capture input bucket and output layout on queued jobs;
+Use staging/uploads/<owner>/<job>/ for input objects. After an empty-scratch
+drain, set MEDIA_CONVERSION_ROOT in the Supabase runtime environment to the
+verified absolute staging/conversions directory. Preserve the media worker UID,
+GID and private directory permissions; keep the old named scratch volume for
+rollback. Leaving the variable unset preserves the legacy volume default. Capture input bucket and output layout on queued jobs;
 retry and cancellation must resolve those exact locations. A claim drain must
 finish processing work before final cutover. Legacy inputs may remain readable
 for existing jobs; new permanent outputs must use the new layout after activation.
