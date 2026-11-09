@@ -12,6 +12,7 @@ const suites = [
   'tests/storage-file-returning-policy.mjs',
   'tests/storage-preview-cache.mjs',
   'tests/library-storage-links-db.mjs',
+  'tests/retired-storage-cleanup.mjs',
   'tests/library-storage-links-http.mjs',
   'tests/media-job-storage-locations.mjs',
   'tests/media-staging-client.mjs',

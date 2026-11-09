@@ -175,3 +175,12 @@ normal media use, file moves/copies/Trash, new normalization/no-conversion uploa
 failure recovery and source cleanup. Report actual browser/device coverage.
 Keep old storage through successful observation. Final duplicate cleanup is a
 separate later DB/new/old comparison; UNKNOWN data is never automatically removed.
+
+During that later cleanup, a DB operator may prepare short-lived exact-object
+intents after rechecking both hashes, current resource bindings and backups.
+The maintenance trigger then permits only the service-role Storage DELETE of
+those retired duplicates while ordinary library writes remain frozen. Intents
+cannot be created by API/browser roles. Changed/missing replacements, expired
+proofs, unknown objects and active objects fail closed. Keep retirement aliases
+and cleanup receipts after physical removal so saved links still resolve current
+permissions and removed copies cannot revive content.
