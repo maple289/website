@@ -6,10 +6,21 @@ try{
   for(const width of [1440,768,375]){
     const page=await browser.newPage({viewport:{width,height:900},hasTouch:width<1024});
     const requests=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
+    page.on('request',request=>{
+      const url=new URL(request.url());
+      if(url.origin==='https://upload-test.supabase.co')requests.push(url);
+    });
     await page.route('https://upload-test.supabase.co/**',route=>{
-      const url=new URL(route.request().url());requests.push(url);
+      const url=new URL(route.request().url());
       return route.fulfill({json:url.pathname.endsWith('/is_admin')?false:[]});
     });
+    async function publicRequestMatches(predicate){
+      // Headings render before the effect dispatches its scoped query. Observe
+      // request events (not route callbacks) so an already-emitted event is
+      // recorded before checking, and a later event is awaited without a race.
+      if(!requests.some(predicate))await page.waitForRequest(request=>predicate(new URL(request.url())));
+      assert.ok(requests.some(predicate));
+    }
     const top=page.getByRole('navigation',{name:'Media navigation'});
     async function sidebar(label){
       if(width<1024)await page.getByRole('button',{name:'Open menu',exact:true}).click();
@@ -23,12 +34,12 @@ try{
       assert.equal(await selectedSidebar.count()?await selectedSidebar.innerText():'',target==='Files'?'':'Home');
       if(target==='Files'){
         assert.equal(new URL(page.url()).hash,'#/public-files');
-        assert.ok(requests.some(r=>r.pathname.endsWith('/list_public_user_files')));
+        await publicRequestMatches(r=>r.pathname.endsWith('/list_public_user_files'));
         assert.equal(await page.getByRole('button',{name:'New folder',exact:true}).count(),0);
       }else{
         assert.equal(new URL(page.url()).hash,target==='Videos'?'#/public-videos':'#/public-photos');
         const table=target==='Videos'?'videos':'photos';
-        assert.ok(requests.some(r=>r.pathname.endsWith('/'+table)&&r.searchParams.get('visibility')==='eq.public'));
+        await publicRequestMatches(r=>r.pathname.endsWith('/'+table)&&r.searchParams.get('visibility')==='eq.public');
       }
     }
     await page.goto(base+'/tests/public-navigation.html');
