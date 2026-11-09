@@ -22,6 +22,7 @@ try {
     await page.route('https://upload-test.supabase.co/**', async route => {
       const req = route.request(), url = new URL(req.url()), body = req.postDataJSON?.() ?? {};
       const rpc = url.pathname.split('/rpc/')[1];
+      if (rpc === 'resolve_user_file_location') return route.fulfill({ json: { bucket: 'user-files', path: body.p_path, id: null } });
       if (rpc === 'file_manager_metadata') return route.fulfill({ json: metadata().filter(row => row.object_path.split('/').slice(0, -1).join('/') === `${owner}${body.p_folder ? '/' + body.p_folder : ''}`) });
       if (rpc === 'file_manager_storage_bytes') return route.fulfill({ json: 14 });
       if (rpc === 'valid_file_clipboard') return route.fulfill({ json: true });
@@ -47,8 +48,8 @@ try {
         if (!copy) objects.delete(body.sourceKey);
         return route.fulfill({ json: { Key: body.destinationKey, message: 'Success' } });
       }
-      if (url.pathname.endsWith('/object/list/user-files')) {
-        const prefix = body.prefix + '/', names = new Map();
+      if (url.pathname.endsWith('/object/list/user-files') || rpc === 'file_manager_objects') {
+        const prefix = (body.p_folder ?? body.prefix) + '/', names = new Map();
         for (const [path, object] of objects) {
           if (!path.startsWith(prefix)) continue;
           const rest = path.slice(prefix.length), name = rest.split('/')[0];

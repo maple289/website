@@ -1,5 +1,4 @@
 import { supabase, supabaseAnonKey } from './supabase';
-import { resolveBucketPath } from './storageSettings';
 import type { Photo, Video } from './types';
 
 export async function deleteVideo(id: string) {
@@ -28,24 +27,12 @@ export async function deleteVideo(id: string) {
 export async function deleteMedia(type: 'video' | 'photo', item: Video | Photo, ownerId: string) {
   if (item.owner_id !== ownerId) throw new Error('You do not have permission to delete this item.');
   if (type === 'video') return deleteVideo(item.id);
-  let storageChanged = false;
-  try {
-    const photo = item as Photo;
-    const groups = [{ bucket: 'user-images', kind: 'images' as const, paths: [photo.storage_path, photo.preview_path, photo.thumbnail_path] }];
-    for (const group of groups) {
-      const paths = [...new Set(await Promise.all(group.paths.filter((path): path is string => !!path).map((path) => resolveBucketPath(path, group.kind))))];
-      if (!paths.length) continue;
-      const { error } = await supabase.storage.from(group.bucket).remove(paths);
-      if (error) throw error;
-      storageChanged = true;
-    }
-    const { data, error } = await supabase.from('photos').delete()
-      .eq('id', item.id).eq('owner_id', ownerId).select('id').maybeSingle();
-    if (error) throw error;
-    if (!data) throw new Error('The item no longer exists or your permission has changed.');
-  } catch {
-    throw new Error(storageChanged
-      ? 'Deletion was not completed. Some stored files may already have been removed. The media record has been kept where possible; retry to finish deleting it.'
-      : 'Unable to delete this item. Check your connection and permissions, then try again.');
-  }
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) throw new Error('Please sign in to delete a photo.');
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-photo`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', apikey: supabaseAnonKey,
+      Authorization: `Bearer ${data.session.access_token}` }, body: JSON.stringify({ id: item.id }),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.deleted) throw new Error(result.error || 'Unable to delete this photo. Retry to finish cleanup.');
 }

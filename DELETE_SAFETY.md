@@ -1,5 +1,35 @@
 # Delete-action inventory
 
+UUID location compatibility keeps every existing photo/video deletion caller in
+its current confirmation's onConfirm. The photo helper now calls delete-photo;
+that route independently verifies Auth, current owner and active account, resolves
+only the resource's active/verified retained objects, and retains its row until
+all Storage API removals succeed. Errors remain retryable. Migration aliases stay
+retired after resource deletion, so rollback bytes never revive public access.
+The privileged resolver cannot be called by browser roles. No confirmation flag
+grants backend permission, and no second unguarded delete caller was added.
+
+Permanent file/folder deletion still starts only in the existing Trash
+confirmation's onConfirm. It now calls delete-user-file, which derives the owner
+from verified Auth and rechecks the saved Trash timestamp, folder type, complete
+tree and active transfers. Private retry receipts block path replacement/restore
+during cleanup. Retained aliases are removed before current objects via Storage
+API; completed removals disappear from the retry queue. The backend finishes
+metadata cleanup only after no authorized objects remain. A lost final response
+can retry even after the file's source FK has already removed its metadata row.
+Browser roles cannot create/finish receipts or access the privileged resolver.
+The former direct metadata-delete branch and raw legacy-bucket deletion loop were
+removed from FileManager; no new confirmation or unguarded caller was added.
+
+Single-final video publication adds only internal cleanup of newly uploaded
+staging inputs after confirmed Ready publication. Failed/ambiguous inputs remain
+for retry. The retry cleaner accepts only the new canonical final contract and
+the exact final catalog identity/version captured at publication. It never
+sweeps legacy originals, unknown/TUS files or existing permanent content. Operator
+drain control pauses both claims and automatic cleanup. No UI delete helper or
+unconfirmed user deletion caller is introduced; existing confirmations and
+backend ownership/claim checks remain in force.
+
 Direct group media uploads add a destination/grant only, with no new delete caller.
 Existing rollback remains limited to newly staged, uncommitted upload paths.
 Group deletion removes completed media grants and preserves owned originals.

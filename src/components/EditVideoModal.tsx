@@ -132,14 +132,14 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
         pendingCleanup.current = { path: previewChanged && video.preview_path !== nextPreviewPath ? video.preview_path : null };
       }
       if (pendingCleanup.current.path) {
-        const { error: cleanupError } = await supabase.storage.from('user-images').remove([await resolveBucketPath(pendingCleanup.current.path, 'images')]);
+        const { error: cleanupError } = await supabase.storage.from(video.preview_bucket || 'user-images').remove([await resolveBucketPath(pendingCleanup.current.path, 'images', video.preview_bucket)]);
         if (cleanupError) throw new Error('Your changes were saved, but the old preview could not be deleted. Retry to finish cleanup.');
       }
       onSaved();
     } catch (cause) {
       if (uploadedPreviewPath && !pendingCleanup.current) {
         // Roll back only the uncommitted replacement created by this attempt.
-        await supabase.storage.from('user-images').remove([await resolveBucketPath(uploadedPreviewPath, 'images')]).catch(() => {});
+        await supabase.storage.from(video.preview_bucket || 'user-images').remove([await resolveBucketPath(uploadedPreviewPath, 'images', video.preview_bucket)]).catch(() => {});
       }
       throw cause;
     } finally { savingRef.current = false; setSaving(false); }
@@ -176,6 +176,7 @@ export function EditVideoModal({ video, onClose, onSaved }: EditVideoModalProps)
           <div className="mb-4 flex gap-3">
             <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-xl border border-[#3a3a3a] bg-[#121212]">
               <StorageImage
+                storageBucket={video.preview_bucket}
                 storagePath={previewChanged ? null : video.preview_path}
                 legacyUrl={previewUrl}
                 alt="Preview"

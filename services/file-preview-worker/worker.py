@@ -10,6 +10,7 @@ import signal
 import subprocess
 import tempfile
 import time
+from uuid import UUID
 from urllib.parse import quote
 import requests
 
@@ -32,8 +33,33 @@ def current(job):
     return bool(rows)
 
 
-def remove_cache(path):
-    api('DELETE', '/storage/v1/object/file-previews', json={'prefixes': [path]})
+def remove_cache(path, bucket='file-previews'):
+    if bucket not in ('file-previews', 'cache'):
+        raise ValueError('Invalid preview cache bucket')
+    api('DELETE', '/storage/v1/object/' + bucket, json={'prefixes': [path]})
+
+
+def cache_location(job):
+    bucket = job.get('cache_bucket', 'file-previews')
+    identity = str(UUID(job['id']))
+    if bucket == 'cache' and job.get('source_bucket') in ('user-files', 'users'):
+        expected = 'previews/' + str(UUID(job['owner_id'])) + '/' + str(UUID(job['source_id'])) + '/' + identity + '.pdf'
+    elif bucket == 'file-previews':
+        expected = identity + '.pdf'
+    else:
+        raise ValueError('Invalid preview cache location')
+    if job['preview_path'] != expected:
+        raise ValueError('Invalid preview cache location')
+    return bucket, expected
+
+
+def remove_job_cache(job):
+    # Keep the legacy helper call shape for existing jobs and their retry tests.
+    if job.get('cache_bucket', 'file-previews') == 'file-previews':
+        remove_cache(job['preview_path'])
+    else:
+        bucket, path = cache_location(job)
+        remove_cache(path, bucket)
 
 
 def source_current(job):
@@ -64,7 +90,7 @@ def recover_uploaded_preview(job):
                 rows = api('GET', '/rest/v1/file_preview_jobs?id=eq.' + job['id']) or []
                 if rows and rows[0]['status'] == 'ready' and source_current(job):
                     return True
-        remove_cache(job['preview_path'])
+        remove_job_cache(job)
     except Exception:
         LOG.error(json.dumps({'operation': 'preview_cleanup_deferred', 'id': job['id']}))
     return False
@@ -73,6 +99,7 @@ def recover_uploaded_preview(job):
 def process(job):
     uploaded = False
     try:
+        cache_bucket, cache_path = cache_location(job)
         with tempfile.TemporaryDirectory(prefix='preview-', dir='/work') as folder:
             root = Path(folder)
             root.chmod(0o755)
@@ -82,7 +109,7 @@ def process(job):
                 return
             # Streaming, bounded download. The converter has read-only source access.
             bucket = job.get('source_bucket', 'user-files')
-            if bucket not in ('user-files', 'messenger-attachments'):
+            if bucket not in ('user-files', 'users', 'messenger-attachments'):
                 raise ValueError('Preview source unavailable.')
             with requests.get(URL + '/storage/v1/object/authenticated/' + bucket + '/' + quote(job['object_path'], safe='/'),
                               headers=HEADERS, stream=True, timeout=(10, 30)) as response:
@@ -129,20 +156,20 @@ def process(job):
             if not current(job) or not source_current(job):
                 return
             pdf = output / 'source.pdf'
-            if not pdf.is_file() or pdf.stat().st_size > 50 * 1048576:
+            if not pdf.is_file() or not 0 < pdf.stat().st_size <= 50 * 1048576:
                 raise ValueError('The generated preview exceeds the preview size limit.')
             uploaded = True  # Ambiguous upload responses still require cleanup.
             with pdf.open('rb') as handle:
-                api('POST', '/storage/v1/object/file-previews/' + job['preview_path'], data=handle,
+                api('POST', '/storage/v1/object/' + cache_bucket + '/' + cache_path, data=handle,
                     headers={'Content-Type': 'application/pdf', 'x-upsert': 'false'})
             if not source_current(job):
-                remove_cache(job['preview_path']); uploaded = False
+                remove_job_cache(job); uploaded = False
                 return
             changed = api('PATCH', '/rest/v1/file_preview_jobs?id=eq.' + job['id'] + '&status=eq.generating',
                 headers={'Prefer': 'return=representation'}, json={'status': 'ready', 'error': None,
                     'finished_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
             if not changed:
-                remove_cache(job['preview_path']); uploaded = False
+                remove_job_cache(job); uploaded = False
                 return
             uploaded = False
             LOG.info(json.dumps({'operation': 'file_preview_ready', 'id': job['id'], 'bytes': pdf.stat().st_size}))
@@ -159,9 +186,9 @@ def process(job):
 
 def cleanup():
     api('POST', '/rest/v1/rpc/reconcile_file_preview_cache', json={})
-    for item in api('GET', '/rest/v1/file_preview_cleanup?order=created_at&limit=50') or []:
+    for item in api('POST', '/rest/v1/rpc/file_preview_cleanup_candidates', json={}) or []:
         try:
-            remove_cache(item['path'])
+            remove_cache(item['path'], item['cache_bucket'])
             api('DELETE', '/rest/v1/file_preview_cleanup?path=eq.' + quote(item['path'], safe=''))
         except Exception as cause:
             LOG.error(json.dumps({'operation': 'preview_cache_cleanup', 'type': type(cause).__name__}))
@@ -189,16 +216,30 @@ def main():
         if path.is_symlink(): path.unlink()
         elif path.is_dir(): shutil.rmtree(path)
     active = None
+    active_job = None
     last_cleanup = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         while True:
             try:
+                control = api('POST', '/rest/v1/rpc/library_worker_control', json={})
+                if not isinstance(control, dict) or 'pause_preview_claims' not in control:
+                    raise RuntimeError('Preview worker control unavailable')
                 if active is None or active.done():
                     if active: active.result()
-                    jobs = api('POST', '/rest/v1/rpc/claim_file_preview', json={})
+                    jobs = [] if control['pause_preview_claims'] else api('POST', '/rest/v1/rpc/claim_file_preview', json={})
+                    active_job = jobs[0] if jobs else None
                     active = pool.submit(process, jobs[0]) if jobs else None
                 if time.monotonic() - last_cleanup > 10:
                     cleanup(); last_cleanup = time.monotonic()
+                # Written after synchronous cleanup and based on the actual future,
+                # not a job status that may commit before its last Storage request.
+                busy = bool(active and not active.done())
+                state = {'active_jobs': int(busy), 'library_active': bool(busy and active_job and
+                    active_job.get('source_bucket', 'user-files') != 'messenger-attachments'),
+                    'draining': bool(control['pause_preview_claims'] or control['pause_media_claims'] or control['pause_library_writes']),
+                    'observed_at': time.time()}
+                temporary = Path('/tmp/preview-worker-state.next')
+                temporary.write_text(json.dumps(state)); temporary.replace('/tmp/preview-worker-state.json')
                 Path('/tmp/preview-heartbeat').touch()
             except Exception as cause:
                 LOG.error(json.dumps({'operation': 'preview_worker_poll', 'type': type(cause).__name__}))

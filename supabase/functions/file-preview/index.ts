@@ -47,7 +47,8 @@ Deno.serve(async (req: Request) => {
     if (!type) return json({ status: "unsupported", message: "Preview is not available for this file type. You can still download the original file." });
     const [kind, mime, maximum] = type;
     if (source.size > maximum) return json({ status: "failed", message: `This file exceeds the ${maximum / 1048576} MB preview limit. You can still download the original file.` });
-    let bucket = "user-files", objectPath = path;
+    if (!['user-files','users'].includes(source.bucket)) return unavailable();
+    let bucket = source.bucket, objectPath = source.path;
     if (kind === "office") {
       const { data: job, error } = await service.rpc("queue_file_preview", {
         p_source_id: source.id, p_version: source.version, p_extension: extension,
@@ -58,13 +59,14 @@ Deno.serve(async (req: Request) => {
       }
       if (job.status === "failed") return json({ status: "failed", message: job.error || "Preview could not be generated. You can still download the original file." });
       if (job.status !== "ready") return json({ status: "generating", message: "Generating preview…", queued: job.status === "queued" }, 202);
-      bucket = "file-previews"; objectPath = job.preview_path;
+      bucket = job.cache_bucket ?? "file-previews"; objectPath = job.preview_path;
+      if (!['file-previews', 'cache'].includes(bucket)) return unavailable();
     }
     if (params.get("content") !== "1") return json({ status: "available", kind: kind === "office" ? "pdf" : kind, mime });
     const upstream = await fetch(`${base}/storage/v1/object/authenticated/${bucket}/${objectPath.split("/").map(encodeURIComponent).join("/")}`, {
       headers: { Authorization: `Bearer ${key}`, apikey: key }, redirect: "error",
     });
-    if (!upstream.ok || Number(upstream.headers.get("content-length") || "0") > (bucket === "file-previews" ? 50 * 1048576 : maximum)) return unavailable();
+    if (!upstream.ok || Number(upstream.headers.get("content-length") || "0") > (['file-previews', 'cache'].includes(bucket) ? 50 * 1048576 : maximum)) return unavailable();
     // Opaque public IDs stay opaque. Never disclose storage headers, paths, job
     // identities or signed URLs. The frontend creates a local Blob for rendering.
     return new Response(upstream.body, { headers: { ...headers, "Content-Type": mime,

@@ -4,6 +4,7 @@ import { dataUrlToBlob } from '@/lib/imageStorage';
 import { validateMediaFile } from '@/lib/mediaValidation';
 import { uploadFailureMessage } from '@/lib/uploadErrors';
 type Options = { file: File; user: { id: string; email?: string }; fileName: string; visibility: 'private' | 'public'; groupId?: string; onProgress: (value: number) => void; previewImage?: string | null; onPhase?: (phase: 'Validating' | 'Uploading' | 'Processing') => void };
+type StagingBucket = 'media-staging' | 'staging';
 
 export async function uploadObject(bucket: string, path: string, file: Blob, mimeType: string, onProgress: (value: number) => void): Promise<{ error: { message: string } | null }> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -62,20 +63,28 @@ async function validatedUpload(options: Options, kind: 'video' | 'photo' | 'prev
   const previewBlob = options.previewImage && kind === 'video' ? await dataUrlToBlob(options.previewImage) : null;
   if (previewBlob) await validateMediaFile(new File([previewBlob], 'preview.webp', { type: previewBlob.type }), 'photo');
   const id = crypto.randomUUID();
-  const prefix = user.id + '/' + id;
+  const { data: reservation, error: reservationError } = await supabase.rpc('reserve_media_upload', {
+    p_id: id, p_kind: kind, p_video: targetVideoId ?? null,
+  });
+  if (reservationError) throw new Error(reservationError.message);
+  if (!reservation || !['media-staging','staging'].includes(reservation.bucket)
+    || reservation.prefix !== (reservation.bucket === 'staging' ? 'uploads/' : '') + user.id + '/' + id) {
+    throw new Error('Upload storage is unavailable. Refresh the page and try again.');
+  }
+  const bucket = reservation.bucket as StagingBucket, prefix = reservation.prefix as string;
   let queued = false;
   let enqueueAttempted = false;
   const paths: string[] = [];
   try {
     onPhase?.('Uploading');
-    if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, prefix + '/source', file.type, pct => onProgress(Math.round(pct*.9)));
+    if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, bucket, prefix + '/source', file.type, pct => onProgress(Math.round(pct*.9)));
     else {
-      const { error } = await uploadObject('media-staging', prefix + '/source', file, file.type, pct => onProgress(Math.round(pct*.9)));
+      const { error } = await uploadObject(bucket, prefix + '/source', file, file.type, pct => onProgress(Math.round(pct*.9)));
       if (error) throw new Error(error.message);
     }
     paths.push(prefix + '/source');
     if (previewBlob) {
-      const { error } = await uploadObject('media-staging', prefix + '/preview', previewBlob, previewBlob.type, () => {});
+      const { error } = await uploadObject(bucket, prefix + '/preview', previewBlob, previewBlob.type, () => {});
       if (error) throw new Error(error.message);
       paths.push(prefix + '/preview');
     }
@@ -106,7 +115,7 @@ async function validatedUpload(options: Options, kind: 'video' | 'photo' | 'prev
     }
     throw new Error('Processing is taking longer than expected. Check your gallery before uploading this file again.');
   } catch (error) {
-    if (!queued && !enqueueAttempted && paths.length) await supabase.storage.from('media-staging').remove(paths);
+    if (!queued && !enqueueAttempted && paths.length) await supabase.storage.from(bucket).remove(paths);
     throw error;
   }
 }
@@ -119,6 +128,7 @@ export async function uploadValidatedPreview(file: File, user: Options['user'], 
 }
 async function uploadLargeFile(
   file: File,
+  bucket: StagingBucket,
   bucketPath: string,
   mimeType: string,
   onProgress?: (pct: number) => void,
@@ -146,7 +156,7 @@ async function uploadLargeFile(
       removeFingerprintOnSuccess: true,
       chunkSize: 6 * 1024 * 1024,
       metadata: {
-        bucketName: 'media-staging',
+        bucketName: bucket,
         objectName: bucketPath,
         contentType: mimeType || 'application/octet-stream',
         cacheControl: '3600',

@@ -16,6 +16,7 @@ function createClient(base, key) {
     rpc: async (name, args) => {
       if (name === 'create_temporary_share') { created.push(args); return { data: { id: 'new-link', expires_at: link.expires_at }, error: null }; }
       if (name === 'temporary_share_children') return { data: [{ name: 'child.txt', relative: 'child.txt', isFolder: false }], error: null };
+      if (name === 'get_file_preview_source') return { data: { bucket: 'user-files', path: args.p_path }, error: null };
       throw new Error('Unexpected RPC');
     },
     from: table => {
@@ -25,8 +26,8 @@ function createClient(base, key) {
         maybeSingle: async () => {
           if (table === 'temporary_content_shares') return { data: filters.token_hash === tokenHash ? link : null, error: null };
           if (deleted) return { data: null, error: null };
-          if (table === 'photos') return { data: { owner_id: owner, storage_path: `${owner}/photo.jpg`, file_name: 'Photo.jpg', mime_type: 'image/jpeg' } };
-          if (table === 'videos') return { data: { owner_id: owner, storage_path: `${owner}/video.mp4`, processed_storage_path: `${owner}/processed.mp4`, file_name: 'Video.mp4', mime_type: 'video/mp4', processing_status: 'ready' } };
+          if (table === 'photos') return { data: { owner_id: owner, storage_bucket: 'user-images', storage_path: `${owner}/photo.jpg`, file_name: 'Photo.jpg', mime_type: 'image/jpeg' } };
+          if (table === 'videos') return { data: { owner_id: owner, storage_bucket: 'user-videos', storage_path: `${owner}/video.mp4`, processed_storage_path: `${owner}/processed.mp4`, file_name: 'Video.mp4', mime_type: 'video/mp4', processing_status: 'ready' } };
           if (table === 'storage_settings') return { data: { images_base_path: 'images', videos_base_path: 'videos' } };
           if (table === 'user_file_metadata') { const path = filters.object_path; return { data: { object_path: path, is_folder: path === `${owner}/Root`, trashed_at: null, mime_type: 'text/plain' } }; }
           throw new Error('Unexpected table');

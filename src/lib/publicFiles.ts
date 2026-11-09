@@ -1,5 +1,6 @@
 import { supabase, supabaseAnonKey } from '@/lib/supabase';
 import type { FileEntry, FilePage } from '@/lib/fileTree';
+import { resolveFileLocation } from './fileStorage';
 
 export async function loadPublicFiles(path = '', offset = 0, query = ''): Promise<FilePage> {
   const { data, error } = await supabase.rpc('list_public_user_files', {
@@ -11,18 +12,20 @@ export async function loadPublicFiles(path = '', offset = 0, query = ''): Promis
 }
 
 export async function downloadFile(entry: FileEntry, maximumBytes?: number): Promise<{ data: Blob | null; error: Error | null }> {
-  if (!entry.id && maximumBytes === undefined) return supabase.storage.from('user-files').download(entry.path);
   try {
     let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-public-file?id=${encodeURIComponent(entry.id ?? '')}`;
+    let token = supabaseAnonKey;
     if (!entry.id) {
-      const { data, error } = await supabase.storage.from('user-files').createSignedUrl(entry.path, 60);
-      if (error || !data?.signedUrl) throw new Error('This file is no longer available.');
-      url = data.signedUrl;
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error('Please sign in to download this file.');
+      const location = await resolveFileLocation(entry.path);
+      url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/authenticated/${location.bucket}/${location.path.split('/').map(encodeURIComponent).join('/')}`;
+      token = data.session.access_token;
     }
     const response = await fetch(url, {
-      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` }, cache: 'no-store',
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` }, cache: 'no-store',
     });
-    if (!response.ok) throw new Error('This public file is no longer available.');
+    if (!response.ok) throw new Error('This file is no longer available.');
     // Only allow existing safe preview types; HTML/SVG are never inline documents.
     const type = /^(image\/(png|jpeg|gif|webp|avif)|video\/[\w.+-]+|audio\/[\w.+-]+|application\/pdf|text\/plain)$/.test(entry.mimeType) ? entry.mimeType : 'application/octet-stream';
     if (maximumBytes === undefined) return { data: new Blob([await response.arrayBuffer()], { type }), error: null };

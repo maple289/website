@@ -10,9 +10,17 @@ const stream='BT /F1 20 Tf 40 150 Td (Public generated preview) Tj ET';
 const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`];
 let pdf='%PDF-1.4\n',offsets=[0];for(let i=0;i<objects.length;i++){offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`;}const xref=pdf.length;pdf+=`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
 export async function createPublicPreviewServer() {
+const failedImagePaths=new Set();
 return createServer({configFile:false,root:process.cwd(),plugins:[{name:'preview-fixtures',configureServer(s){s.middlewares.use((req,res,next)=>{
   const u=new URL(req.url,'http://127.0.0.1');
   if(u.pathname==='/functions/v1/serve-media'){res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');return res.end(JSON.stringify({url:'/tests/fixtures/playback-ended.webm'}));}
+  if(u.pathname==='/functions/v1/serve-shared-image'){
+    const imagePath=u.searchParams.get('path')||'';
+    const fail=imagePath.includes('/retry-')&&!failedImagePaths.has(imagePath);
+    if(fail)failedImagePaths.add(imagePath);
+    res.statusCode=fail?403:200;res.setHeader('Content-Type',fail?'application/json':'image/png');
+    res.setHeader('Cache-Control',fail?'no-store':'public, max-age=0, must-revalidate');return res.end(fail?'{}':png);
+  }
   if(u.pathname.startsWith('/storage/v1/object/sign/')){res.setHeader('Cache-Control',u.searchParams.has('fail')?'no-store':'public, max-age=3600');res.statusCode=u.searchParams.has('fail')?403:200;res.setHeader('Content-Type',u.searchParams.has('fail')?'application/json':'image/png');return res.end(u.searchParams.has('fail')?'{}':png);}
   if(u.pathname==='/functions/v1/serve-public-file'){res.setHeader('Content-Type','application/octet-stream');res.setHeader('Cache-Control','no-store');return res.end(png);}
   if(u.pathname==='/functions/v1/file-preview'){res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',u.searchParams.has('content')?'application/pdf':'application/json');return res.end(u.searchParams.has('content')?pdf:JSON.stringify({status:'available',kind:'pdf',mime:'application/pdf'}));}

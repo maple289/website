@@ -52,7 +52,7 @@ export function EditPhotoModal({ photo, onClose, onSaved }: { photo: Photo; onCl
         <button disabled={saving} onClick={close} aria-label="Close edit photo" className="rounded-full p-2 text-[#a7a7a7] hover:bg-[#2a2a2a] hover:text-white"><X size={18} /></button>
       </div>
       <form onSubmit={save} className="px-6 pb-7 pt-5">
-        <StorageImage storagePath={photo.preview_path ?? photo.storage_path} alt={photo.file_name} className="mb-4 h-40 w-full rounded-xl bg-[#121212] object-contain" />
+        <StorageImage storageBucket={photo.storage_bucket} storagePath={photo.preview_path ?? photo.storage_path} alt={photo.file_name} className="mb-4 h-40 w-full rounded-xl bg-[#121212] object-contain" />
         <MediaEditFields kind="Photo" name={name} onNameChange={setName} visibility={visibility} onVisibilityChange={setVisibility} extension={extension} disabled={saving} />
         {error && <div role="alert" className="mb-4 rounded-lg border border-[#ff3d46]/30 bg-[#ff3d46]/10 px-4 py-3 text-sm text-[#ff8a90]">{error}</div>}
         <div className="flex gap-3">

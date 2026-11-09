@@ -1,6 +1,6 @@
 // Local UI + real PostgreSQL planning/catalog triggers. No production connection.
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
+import { setupFileStorageFixture } from './file-storage-fixture.mjs';
 import path from 'node:path';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -22,26 +22,9 @@ try {
     const query = async (sql, values = []) => (await db.query(sql, values)).rows;
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     try {
-      await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
-        CREATE SCHEMA auth; CREATE SCHEMA storage;
-        CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
-        GRANT USAGE ON SCHEMA public,auth,storage TO authenticated,anon,service_role;
-        CREATE TABLE auth.users(id uuid PRIMARY KEY); INSERT INTO auth.users VALUES ('${owner}'),('${other}');
-        CREATE FUNCTION public.active_account(id uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT id IS NOT NULL $$;
-        CREATE TABLE public.profiles(id uuid PRIMARY KEY);
-        CREATE TABLE public.videos(id uuid PRIMARY KEY,owner_id uuid,processing_status text);
-        CREATE TABLE public.photos(id uuid PRIMARY KEY,owner_id uuid);
-        CREATE TABLE public.user_file_metadata(owner_id uuid,object_path text,is_folder boolean,trashed_at timestamptz,is_favorite boolean DEFAULT false,file_size bigint DEFAULT 7,mime_type text DEFAULT 'text/plain',created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now(),PRIMARY KEY(owner_id,object_path));
-        CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text,version text DEFAULT 'fixture-version',updated_at timestamptz DEFAULT now(),metadata jsonb DEFAULT '{"size":7,"mimetype":"text/plain"}',UNIQUE(bucket_id,name));
-        INSERT INTO public.profiles VALUES ('${owner}'),('${other}');
-        GRANT SELECT,INSERT,UPDATE,DELETE ON public.user_file_metadata,storage.objects TO authenticated;
-        ALTER TABLE public.user_file_metadata ENABLE ROW LEVEL SECURITY;
-        CREATE POLICY owner_metadata ON public.user_file_metadata TO authenticated USING(owner_id=auth.uid()) WITH CHECK(owner_id=auth.uid());
-        ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-        CREATE POLICY owner_storage ON storage.objects TO authenticated USING(starts_with(name,auth.uid()::text||'/')) WITH CHECK(starts_with(name,auth.uid()::text||'/'));`);
-      for (const migration of ['20261003130000_file_catalog_integrity.sql','20261007010000_content_context_actions.sql','20261007020000_reuse_trashed_file_names.sql','20261012040000_durable_file_transfers.sql']) {
-        await db.exec(await fs.readFile(new URL('../supabase/migrations/' + migration, import.meta.url), 'utf8'));
-      }
+      await setupFileStorageFixture(db,7);
+      await query('INSERT INTO auth.users(id) VALUES($1),($2)',[owner,other]);
+      await query("INSERT INTO profiles(id,email) VALUES($1,'owner@test.invalid'),($2,'other@test.invalid')",[owner,other]);
       await query('INSERT INTO storage.objects(bucket_id,name) SELECT $1,unnest($2::text[])', ['user-files',
         ['test/.folder','test/OEM Mode.txt','everyone/.folder','test/Tree/.folder','test/Tree/Sub/.folder','test/Tree/Sub/leaf.txt'].map(name => `${owner}/${name}`)]);
       await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${owner}';`);
@@ -95,11 +78,27 @@ try {
         const request = route.request(), url = new URL(request.url());
         const body = request.postData() ? request.postDataJSON() : {};
         try {
+          if (url.pathname.endsWith('/functions/v1/delete-user-file')) {
+            assert.equal(request.headers().authorization,'Bearer fixture');
+            const result=await db.transaction(async tx=>{
+              await tx.exec('SET LOCAL ROLE service_role');
+              const id=(await tx.query('SELECT begin_user_file_deletion($1,$2,$3,$4) id',[owner,body.path,body.trashed_at,body.is_folder])).rows[0].id;
+              if(!id)return {deleted:true};
+              const objects=(await tx.query('SELECT * FROM user_file_deletion_objects($1,$2)',[id,owner])).rows;
+              if(failRemove){failRemove=false;throw Error('Fixture permanent-delete failure');}
+              for(const object of objects)await tx.query('DELETE FROM storage.objects WHERE bucket_id=$1 AND name=$2',[object.bucket_id,object.name]);
+              await tx.query('SELECT finish_user_file_deletion($1,$2)',[id,owner]);
+              return {deleted:true};
+            });
+            return route.fulfill({json:result});
+          }
           const rpc = url.pathname.split('/rpc/')[1];
           if (rpc) {
             const args = {
               file_manager_metadata: [body.p_folder ?? '',body.p_view ?? 'files',body.p_offset ?? 0],
               file_manager_storage_bytes: [], valid_file_clipboard: [body.p_path],
+              file_manager_objects: [body.p_folder,body.p_limit,body.p_offset],
+              resolve_user_file_location: [body.p_path,body.p_write],
               plan_file_operation: [body.p_source,body.p_destination,body.p_copy],
               plan_file_restore: [body.p_source,body.p_destination],
               begin_file_operation: [body.p_id,body.p_source,body.p_destination,body.p_copy,body.p_restore],
@@ -109,7 +108,7 @@ try {
             if (!args) return route.fulfill({ json: rpc === 'get_temporary_share' ? null : [] });
             const calls = args.map((_, i) => '$' + (i + 1)).join(',');
             if (rpc === 'unfinished_file_operations') return route.fulfill({ json: (await query('SELECT public.unfinished_file_operations() result')).map(row => row.result) });
-            if (rpc === 'file_manager_metadata') return route.fulfill({ json: await query(`SELECT * FROM public.${rpc}(${calls})`, args) });
+            if (['file_manager_metadata','file_manager_objects'].includes(rpc)) return route.fulfill({ json: await query(`SELECT * FROM public.${rpc}(${calls})`, args) });
             return route.fulfill({ json: (await query(`SELECT public.${rpc}(${calls}) AS result`, args))[0].result });
           }
           if (url.pathname.endsWith('/object/list/user-files')) {

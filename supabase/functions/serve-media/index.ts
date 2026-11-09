@@ -16,7 +16,7 @@ Deno.serve(async req => {
     if (!uuid(id)) return json({ error: "Video id required" }, 400);
     const base = Deno.env.get("SUPABASE_URL")!, key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, anon = Deno.env.get("SUPABASE_ANON_KEY")!;
     const admin = createClient(base, key, { auth: { persistSession: false } });
-    const { data: video, error } = await admin.from("videos").select("id,owner_id,storage_path,processed_storage_path,visibility,mime_type,file_name,processing_status").eq("id", id).maybeSingle();
+    const { data: video, error } = await admin.from("videos").select("id,owner_id,storage_path,processed_storage_path,storage_bucket,visibility,mime_type,file_name,processing_status").eq("id", id).maybeSingle();
     if (error || !video) return json({ error: "Video unavailable" }, 404);
     if (capability) {
       if (!/^[a-f0-9]{64}$/.test(capability)) return json({ error: "Video unavailable" }, 404);
@@ -26,9 +26,10 @@ Deno.serve(async req => {
       if (typeof path !== "string" || !path.startsWith(`${video.owner_id}/`) || path.split("/").some(part => !part || part === "." || part === ".." || part.includes("\\"))) return json({ error: "Video unavailable" }, 404);
       const { data: settings, error: settingsError } = await admin.from("storage_settings").select("videos_base_path").eq("id", 1).maybeSingle();
       if (settingsError) return json({ error: "Video unavailable" }, 503);
-      const prefix = (settings?.videos_base_path || '').replace(/^\/+|\/+$/g, '');
+      if (!['user-videos','users'].includes(video.storage_bucket)) return json({ error: "Video unavailable" }, 404);
+      const prefix = video.storage_bucket === 'users' ? '' : (settings?.videos_base_path || '').replace(/^\/+|\/+$/g, '');
       const fullPath = prefix ? `${prefix}/${path}` : path;
-      const upstream = await fetch(`${base}/storage/v1/object/authenticated/user-videos/${fullPath.split("/").map(encodeURIComponent).join("/")}`, {
+      const upstream = await fetch(`${base}/storage/v1/object/authenticated/${video.storage_bucket}/${fullPath.split("/").map(encodeURIComponent).join("/")}`, {
         method: req.method, headers: { Authorization: `Bearer ${key}`, apikey: key, ...(req.headers.has("Range") ? { Range: req.headers.get("Range")! } : {}) }, redirect: "error", signal: req.signal });
       if (!upstream.ok && upstream.status !== 416) return json({ error: "Video unavailable" }, 404);
       const output: Record<string, string> = { ...headers, "Content-Type": video.processed_storage_path ? "video/mp4" : video.mime_type || "application/octet-stream",

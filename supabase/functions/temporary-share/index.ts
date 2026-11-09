@@ -45,10 +45,11 @@ Deno.serve(async (req: Request) => {
       if (!item || (video && item.processing_status !== 'ready') || !safePath(video ? item.processed_storage_path || item.storage_path : item.storage_path, link.owner_id)) return unavailable();
       name = item.file_name;
       mime = video && item.processed_storage_path ? 'video/mp4' : item.mime_type;
-      bucket = video ? 'user-videos' : 'user-images';
+      bucket = item.storage_bucket;
+      if (!(video ? ['user-videos','users'] : ['user-images','users']).includes(bucket)) return unavailable();
       path = video ? item.processed_storage_path || item.storage_path : item.storage_path;
       const { data: settings } = await admin.from('storage_settings').select('videos_base_path,images_base_path').eq('id', 1).maybeSingle();
-      const prefix = video ? settings?.videos_base_path : settings?.images_base_path;
+      const prefix = bucket === 'users' ? '' : video ? settings?.videos_base_path : settings?.images_base_path;
       if (prefix) path = `${prefix}/${path}`;
     } else {
       const { data: root } = await admin.from('user_file_metadata').select('object_path,is_folder,trashed_at').eq('owner_id', link.owner_id).eq('object_path', link.file_path).maybeSingle();
@@ -70,7 +71,10 @@ Deno.serve(async (req: Request) => {
         if (childrenError || !children) return unavailable();
         return json({ type: 'folder', name: path.split('/').pop(), entries: children.slice(0, 100), hasMore: children.length > 100 });
       }
-      bucket = 'user-files'; name = path.split('/').pop()!; mime = item.mime_type;
+      name = path.split('/').pop()!; mime = item.mime_type;
+      const { data: source, error: sourceError } = await admin.rpc('get_file_preview_source', { p_path: path });
+      if (sourceError || !source || !['user-files','users'].includes(source.bucket)) return unavailable();
+      bucket = source.bucket; path = source.path;
     }
     if (path.split('/').some(part => !part || part === '.' || part === '..' || part.includes('\\'))) return unavailable();
     const streamUrl = `${base}/storage/v1/object/authenticated/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}`;

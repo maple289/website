@@ -12,6 +12,7 @@ async function setup(kind,mobile=false){
  const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1280,height:900},hasTouch:mobile});const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));const uploads=[],jobs=[];let tusOffset=0;
  await page.route(/^https:\/\/upload-test(?:\.storage)?\.supabase\.co\//,route=>{
   const req=route.request(),url=new URL(req.url());
+  if(url.pathname.endsWith('/rpc/reserve_media_upload'))return route.fulfill({json:{bucket:'media-staging',prefix:'11111111-1111-4111-8111-111111111111/'+req.postDataJSON().p_id}});
   if(url.pathname.includes('/storage/v1/upload/resumable')){
    tusOffset+=req.postDataBuffer()?.length || 0;
    if(req.method()==='POST'){

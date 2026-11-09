@@ -29,6 +29,7 @@ import { downloadFile, loadPublicFiles } from '@/lib/publicFiles';
 import { FileTree } from '@/components/FileTree';
 import { FileVideoThumbnail } from '@/components/FileVideoThumbnail';
 import { ancestorPaths, metadataColumns, getFileMetadataTree, loadFileChildren, fromMetadata, type FileEntry, type FileMetadata } from '@/lib/fileTree';
+import { listFileObjects, resolveFileLocation } from '@/lib/fileStorage';
 
 import { useFileNavigation } from '@/hooks/useFileNavigation';
 type Entry = FileEntry;
@@ -36,7 +37,6 @@ type Metadata = FileMetadata;
 type UploadItem = { file: File; state: 'waiting' | 'uploading' | 'done' | 'error'; message?: string; progress?: number };
 type SearchRow = { object_path: string; name: string; location: string; is_folder: boolean; file_size: number; mime_type: string; updated_at: string; is_favorite: boolean };
 
-const BUCKET = 'user-files';
 const SEARCH_PAGE_SIZE = 50;
 const formatSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : bytes < 1073741824 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1073741824).toFixed(2)} GB`;
 const dateLabel = (value: string) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -199,7 +199,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         return;
       }
       const prefix = folder ? `${user.id}/${folder}` : user.id;
-      const { data: objects, error: listError } = await supabase.storage.from(BUCKET).list(prefix, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+      const { data: objects, error: listError } = await listFileObjects(prefix, 1000);
       if (version !== listingState.current.version) return;
       if (listError) throw listError;
       const base = `${prefix}/`;
@@ -389,11 +389,15 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     if (!name || name.includes('/') || name === '.' || name === '..') { setError('Choose a folder name without slashes.'); return; }
     const path = `${user.id}/${folder ? `${folder}/` : ''}${name}`;
     setBusy(true);
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(`${path}/.folder`, new Blob([]), { contentType: 'application/x-directory', upsert: false });
-    if (uploadError) { setError(uploadError.message); setBusy(false); return; }
-    // Storage's catalog trigger creates metadata in the same transaction.
-    setDialog(null); await load();
-    setBusy(false);
+    try {
+      const location = await resolveFileLocation(path, true);
+      const { error: createError } = location.bucket === 'users'
+        ? await supabase.rpc('create_user_file_folder', { p_path: path })
+        : await supabase.storage.from(location.bucket).upload(`${location.path}/.folder`, new Blob([]), { contentType: 'application/x-directory', upsert: false });
+      if (createError) throw createError;
+      setDialog(null); await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create this folder.'); }
+    finally { setBusy(false); }
   };
   const latestLoad = useRef(load); latestLoad.current = load;
   const uploadFiles = async (files: FileList | File[]) => {
@@ -415,9 +419,10 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
         try {
           if (!file.name || /[\\/]/.test(file.name) || ['.', '..', '.folder', '.keep'].includes(file.name)) throw new Error('Choose a valid file name.');
           if (file.size > 10 * 1024 * 1024 * 1024) throw new Error('Files must be 10 GB or smaller.');
-          if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, path, (progress) => update({ progress: Math.min(progress, 99) }));
+          const location = await resolveFileLocation(path, true);
+          if (file.size > 6 * 1024 * 1024) await uploadLargeFile(file, location.bucket, location.path, (progress) => update({ progress: Math.min(progress, 99) }));
           else {
-            const { error: uploadError } = await uploadObject(BUCKET, path, file, file.type || 'application/octet-stream', (progress) => update({ progress: Math.min(progress, 99) }));
+            const { error: uploadError } = await uploadObject(location.bucket, location.path, file, file.type || 'application/octet-stream', (progress) => update({ progress: Math.min(progress, 99) }));
             if (uploadError) throw new Error(uploadError.message);
           }
           // The server commits metadata with the Storage object. A lost browser
@@ -433,25 +438,9 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     } finally { uploadingBatch.current = false; }
   };
 
-  const listTree = async (path: string): Promise<string[]> => {
-    const result: string[] = [];
-    for (let offset = 0; ; offset += 1000) {
-      const { data, error: listError } = await supabase.storage.from(BUCKET).list(path, { limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } });
-      if (listError) throw listError;
-      for (const object of data ?? []) {
-        const child = `${path}/${object.name}`;
-        if (object.name === '.folder' || object.name === '.keep' || object.id) result.push(child);
-        else result.push(...await listTree(child));
-      }
-      if ((data?.length ?? 0) < 1000) break;
-    }
-    return result;
-  };
-  const changeMetadata = async (paths: string[], trashedAt?: string | null) => {
+  const changeMetadata = async (paths: string[], trashedAt: string | null) => {
     for (let offset = 0; offset < paths.length; offset += 100) {
-      const query = trashedAt === undefined
-        ? supabase.from('user_file_metadata').delete()
-        : supabase.from('user_file_metadata').update({ trashed_at: trashedAt, updated_at: new Date().toISOString() });
+      const query = supabase.from('user_file_metadata').update({ trashed_at: trashedAt, updated_at: new Date().toISOString() });
       const { error: changeError } = await query.eq('owner_id', user!.id).in('object_path', paths.slice(offset, offset + 100));
       if (changeError) throw changeError;
     }
@@ -472,26 +461,21 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   };
   const permanentDelete = async (entry: Entry) => {
     if (!user || !owns(entry)) throw new Error('You do not have permission to delete this item.');
-    const rows = await getFileMetadataTree(entry, user.id);
-    const current = rows.find((row) => row.object_path === entry.path);
-    // Recheck saved Trash state after confirmation, including on a partial retry.
-    // A restored/replaced item at the same path must never be deleted as Trash.
-    if (!current) {
-      if (rows.length) throw new Error('The folder has changed. Refresh Trash before deleting it.');
-      return;
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) throw new Error('Please sign in to permanently delete files.');
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user-file`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: supabaseAnonKey,
+          Authorization: `Bearer ${data.session.access_token}` },
+        body: JSON.stringify({ path: entry.path, is_folder: entry.isFolder, trashed_at: entry.trashedAt }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Permanent deletion is incomplete. Retry to finish cleanup.');
+      if (result.deleted) return;
+      if (!result.pending) throw new Error('Deletion could not be confirmed. Please retry.');
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    if (!current.trashed_at || current.trashed_at !== entry.trashedAt || current.is_folder !== entry.isFolder || rows.some((row) => !row.trashed_at)) {
-      throw new Error('This item or part of its contents is no longer in Trash. Refresh Trash before deleting it.');
-    }
-    const paths = entry.isFolder ? await listTree(entry.path) : [entry.path];
-    for (let offset = 0; offset < paths.length; offset += 1000) {
-      const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths.slice(offset, offset + 1000));
-      if (removeError) throw removeError;
-    }
-    // Keep the folder's row until descendant cleanup succeeds, so a retry can
-    // still validate and finish the remaining tree after a metadata failure.
-    const affectedPaths = rows.map((row) => row.object_path).sort((a, b) => b.length - a.length);
-    await changeMetadata(affectedPaths);
+    throw new Error('Cleanup is still pending. Retry the saved deletion to finish.');
   };
   const confirmDeleteEntries = (selectedItems: Entry[], emptyTrash = false) => {
     if (!user || busy || !selectedItems.length) return;
@@ -832,7 +816,7 @@ function AuthenticatedThumbnail({ entry }: { entry: Entry }) {
   }} /> : <FileTypeIcon entry={entry} size={38} />;
 }
 
-async function uploadLargeFile(file: File, path: string, onProgress: (percent: number) => void): Promise<void> {
+async function uploadLargeFile(file: File, bucket: 'user-files' | 'users', path: string, onProgress: (percent: number) => void): Promise<void> {
   const baseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Your sign-in expired. Please sign in again.');
@@ -848,7 +832,7 @@ async function uploadLargeFile(file: File, path: string, onProgress: (percent: n
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
       chunkSize: 6 * 1024 * 1024,
-      metadata: { bucketName: BUCKET, objectName: path, contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
+      metadata: { bucketName: bucket, objectName: path, contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
       onError: reject,
       onProgress: (uploaded, total) => onProgress(Math.round(uploaded / total * 100)),
       onSuccess: () => resolve(),

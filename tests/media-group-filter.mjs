@@ -28,6 +28,7 @@ try {
    if (route.request().method() === 'OPTIONS') return respond({ status: 204, body: '' });
    if (rpc === 'is_admin') return respond({ json: false });
    if (rpc === 'media_filter_groups') return respond({ json: groups });
+   if (rpc === 'reserve_media_upload') return respond({ json: { bucket: 'media-staging', prefix: '11111111-1111-4111-8111-111111111111/'+body.p_id } });
    if (rpc === 'queue-media-upload') {
     if (body.group_id && !groups.some(g => g.id === body.group_id)) return respond({ status: 409, json: { error: 'Group unavailable. You must be a current member to upload.' } });
     uploads.push({ ...body, status: body.kind === 'video' ? 'queued' : 'complete' });

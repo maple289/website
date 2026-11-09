@@ -23,7 +23,8 @@ try {
     if(path.endsWith('fail.txt')) return route.fulfill({status:500,json:{message:'Fixture write failed'}});
     objects.set(path,true);return route.fulfill({json:{Key:path}});
    }
-   if(url.pathname.endsWith('/storage/v1/object/list/user-files')) return route.fulfill({json:[...objects.keys()].map((path,index)=>({id:String(index+1),name:path.split('/').at(-1),updated_at:now,created_at:now,metadata:{size:7,mimetype:'text/plain'}}))});
+   if(url.pathname.endsWith('/storage/v1/object/list/user-files')||url.pathname.endsWith('/rpc/file_manager_objects')) return route.fulfill({json:[...objects.keys()].map((path,index)=>({id:String(index+1),name:path.split('/').at(-1),updated_at:now,created_at:now,metadata:{size:7,mimetype:'text/plain'}}))});
+   if(url.pathname.endsWith('/rpc/resolve_user_file_location'))return route.fulfill({json:{bucket:'user-files',path:request.postDataJSON().p_path,id:null}});
    if(url.pathname.endsWith('/rpc/file_manager_metadata')) {
     if(failMetadata){failMetadata=false;return route.fulfill({status:503,json:{message:'Fixture metadata response lost'}})}
     return route.fulfill({json:metadata()});

@@ -1,0 +1,24 @@
+{
+  "source_revision": "22bf19726365d1b183a7df8f34b2f5e7b87e9840",
+  "captured_at_utc": "2026-11-07T13:28:47.621508+00:00",
+  "scope": "all tracked UTF-8 text files, including historical SQL/tests/audits; ignored credentials, generated assets and vendored dependencies excluded",
+  "matching_files": 84,
+  "line_name_references": 337,
+  "files_by_category": {
+    "documentation/other": 1,
+    "historical audit": 4,
+    "operations/audit": 3,
+    "worker": 8,
+    "frontend": 10,
+    "endpoint": 6,
+    "database migration history": 29,
+    "test": 23
+  },
+  "references_by_storage_name": {
+    "user-images": 86,
+    "user-videos": 78,
+    "media-staging": 47,
+    "user-files": 105,
+    "video-previews": 21
+  }
+}

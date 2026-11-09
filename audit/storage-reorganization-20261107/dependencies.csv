@@ -1,0 +1,338 @@
+file,line,storage_name,category
+MEDIA_UPLOAD_VALIDATION.md,5,user-images,documentation/other
+MEDIA_UPLOAD_VALIDATION.md,5,user-videos,documentation/other
+MEDIA_UPLOAD_VALIDATION.md,9,media-staging,documentation/other
+audit/20261011/before-tailwind-upgrade.patch,514,user-files,historical audit
+audit/20261011/before-tailwind-upgrade.patch,583,user-files,historical audit
+audit/20261011/before-tailwind-upgrade.patch,585,user-files,historical audit
+audit/20261011/before-tailwind-upgrade.patch,590,user-files,historical audit
+audit/20261011/content-context-db-diagnostic.mjs,28,user-files,historical audit
+audit/20261011/content-context-db-diagnostic.mjs,79,user-files,historical audit
+audit/20261011/content-context-diagnostic.mjs,45,user-files,historical audit
+audit/20261011/file-previews-diagnostic.mjs,29,user-files,historical audit
+scripts/check-database-integrity.py,45,user-videos,operations/audit
+scripts/check-database-integrity.py,54,user-videos,operations/audit
+scripts/check-database-integrity.py,60,user-videos,operations/audit
+scripts/check-database-integrity.py,61,user-images,operations/audit
+scripts/check-database-integrity.py,64,user-images,operations/audit
+scripts/check-database-integrity.py,68,user-files,operations/audit
+scripts/check-database-integrity.py,73,user-files,operations/audit
+scripts/check-database-integrity.py,74,user-files,operations/audit
+scripts/check-database-integrity.py,77,media-staging,operations/audit
+scripts/check-database-integrity.py,117,media-staging,operations/audit
+scripts/check-database-integrity.py,117,user-files,operations/audit
+scripts/check-database-integrity.py,117,user-images,operations/audit
+scripts/check-database-integrity.py,117,user-videos,operations/audit
+scripts/database-audit-inventory.sql,62,media-staging,operations/audit
+scripts/database-audit-inventory.sql,62,user-files,operations/audit
+scripts/database-audit-inventory.sql,62,user-images,operations/audit
+scripts/database-audit-inventory.sql,62,user-videos,operations/audit
+scripts/test-file-sharing.mjs,52,user-files,operations/audit
+scripts/test-file-sharing.mjs,71,user-files,operations/audit
+scripts/test-file-sharing.mjs,80,user-files,operations/audit
+services/analytics-collector/collector.py,84,user-files,worker
+services/analytics-collector/collector.py,84,user-images,worker
+services/analytics-collector/collector.py,84,user-videos,worker
+services/analytics-collector/collector.py,85,media-staging,worker
+services/analytics-collector/test_collector.py,11,user-files,worker
+services/analytics-collector/test_collector.py,11,user-videos,worker
+services/analytics-collector/test_collector.py,59,user-files,worker
+services/file-preview-worker/worker.py,42,user-files,worker
+services/file-preview-worker/worker.py,84,user-files,worker
+services/file-preview-worker/worker.py,85,user-files,worker
+services/media-worker/cleanup_receipts.py,22,media-staging,worker
+services/media-worker/legacy-video-parser.txt,79,user-videos,worker
+services/media-worker/legacy-video-parser.txt,150,user-videos,worker
+services/media-worker/test_cleanup_receipts.py,15,media-staging,worker
+services/media-worker/test_worker.py,51,media-staging,worker
+services/media-worker/test_worker.py,56,media-staging,worker
+services/media-worker/test_worker.py,62,media-staging,worker
+services/media-worker/test_worker.py,76,media-staging,worker
+services/media-worker/test_worker.py,80,user-images,worker
+services/media-worker/test_worker.py,93,media-staging,worker
+services/media-worker/worker.py,91,media-staging,worker
+services/media-worker/worker.py,177,user-videos,worker
+services/media-worker/worker.py,184,video-previews,worker
+services/media-worker/worker.py,185,user-images,worker
+services/media-worker/worker.py,191,user-images,worker
+services/media-worker/worker.py,198,video-previews,worker
+services/media-worker/worker.py,206,user-videos,worker
+services/media-worker/worker.py,207,user-videos,worker
+services/media-worker/worker.py,208,user-images,worker
+services/media-worker/worker.py,256,media-staging,worker
+src/components/AdminPage.tsx,787,user-videos,frontend
+src/components/AdminPage.tsx,799,user-images,frontend
+src/components/AdminPage.tsx,813,user-videos,frontend
+src/components/AdminPage.tsx,815,user-images,frontend
+src/components/AdminPage.tsx,820,video-previews,frontend
+src/components/EditVideoModal.tsx,135,user-images,frontend
+src/components/EditVideoModal.tsx,142,user-images,frontend
+src/components/FileManager.tsx,39,user-files,frontend
+src/components/MediaContentMenu.tsx,46,user-images,frontend
+src/components/StorageImage.tsx,39,user-images,frontend
+src/lib/deleteMedia.ts,34,user-images,frontend
+src/lib/fileOperations.ts,37,user-files,frontend
+src/lib/fileTree.ts,30,user-files,frontend
+src/lib/mediaUploads.ts,73,media-staging,frontend
+src/lib/mediaUploads.ts,78,media-staging,frontend
+src/lib/mediaUploads.ts,109,media-staging,frontend
+src/lib/mediaUploads.ts,149,media-staging,frontend
+src/lib/publicFiles.ts,14,user-files,frontend
+src/lib/publicFiles.ts,18,user-files,frontend
+supabase/functions/delete-video/index.ts,34,media-staging,endpoint
+supabase/functions/delete-video/index.ts,34,user-images,endpoint
+supabase/functions/delete-video/index.ts,34,user-videos,endpoint
+supabase/functions/file-preview/index.ts,50,user-files,endpoint
+supabase/functions/serve-media/index.ts,31,user-videos,endpoint
+supabase/functions/serve-public-file/index.ts,33,user-files,endpoint
+supabase/functions/serve-shared-image/index.ts,20,user-images,endpoint
+supabase/functions/temporary-share/index.ts,48,user-images,endpoint
+supabase/functions/temporary-share/index.ts,48,user-videos,endpoint
+supabase/functions/temporary-share/index.ts,73,user-files,endpoint
+supabase/migrations/20260825193539_add_videos_and_config.sql,8,user-videos,database migration history
+supabase/migrations/20260825193539_add_videos_and_config.sql,32,user-videos,database migration history
+supabase/migrations/20260825193539_add_videos_and_config.sql,50,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,2,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,5,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,27,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,36,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,47,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,53,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,54,user-videos,database migration history
+supabase/migrations/20260825193559_add_storage_policies.sql,60,user-videos,database migration history
+supabase/migrations/20260901204509_configure_video_storage.sql,16,user-videos,database migration history
+supabase/migrations/20260901204509_configure_video_storage.sql,17,user-videos,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,16,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,17,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,45,video-previews,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,58,video-previews,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,133,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,141,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,166,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,174,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,178,user-images,database migration history
+supabase/migrations/20260901210225_configure_image_storage.sql,186,user-images,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,2,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,5,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,15,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,17,user-images,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,19,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,35,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,40,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,45,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,46,user-videos,database migration history
+supabase/migrations/20260907163612_fix_video_storage_policies_uuid_prefix.sql,51,user-videos,database migration history
+supabase/migrations/20260907164809_bind_video_storage_path_to_owner.sql,8,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,6,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,6,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,12,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,15,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,16,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,19,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,28,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,38,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,48,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,55,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,65,user-videos,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,72,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,81,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,91,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,101,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,108,user-images,database migration history
+supabase/migrations/20260907171053_update_storage_policies_for_base_path.sql,118,user-images,database migration history
+supabase/migrations/20260907175742_create_user_images_bucket.sql,2,user-images,database migration history
+supabase/migrations/20260907175742_create_user_images_bucket.sql,5,user-images,database migration history
+supabase/migrations/20260907175742_create_user_images_bucket.sql,10,user-images,database migration history
+supabase/migrations/20260907175742_create_user_images_bucket.sql,14,user-images,database migration history
+supabase/migrations/20260907182855_increase_video_bucket_size_limit.sql,3,user-videos,database migration history
+supabase/migrations/20260907184704_increase_video_bucket_size_limit_to_10gb.sql,3,user-videos,database migration history
+supabase/migrations/20260908001917_create_photos_table.sql,10,user-images,database migration history
+supabase/migrations/20260923000000_create_user_file_manager.sql,3,user-files,database migration history
+supabase/migrations/20260923000000_create_user_file_manager.sql,9,user-files,database migration history
+supabase/migrations/20260923000000_create_user_file_manager.sql,13,user-files,database migration history
+supabase/migrations/20260923000000_create_user_file_manager.sql,17,user-files,database migration history
+supabase/migrations/20260923000000_create_user_file_manager.sql,18,user-files,database migration history
+supabase/migrations/20260923000000_create_user_file_manager.sql,22,user-files,database migration history
+supabase/migrations/20260923010000_correct_user_file_manager_metadata.sql,5,user-files,database migration history
+supabase/migrations/20260924000000_add_file_sharing.sql,43,user-files,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,2,user-images,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,3,user-videos,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,5,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,44,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,55,user-files,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,57,user-images,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,57,user-videos,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,58,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,60,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,60,user-images,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,60,user-videos,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,61,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,61,user-images,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,61,user-videos,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,63,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,65,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,67,media-staging,database migration history
+supabase/migrations/20260928090000_validated_media_uploads.sql,69,media-staging,database migration history
+supabase/migrations/20260929010000_video_deletion.sql,62,user-videos,database migration history
+supabase/migrations/20260929010000_video_deletion.sql,63,user-images,database migration history
+supabase/migrations/20260929010000_video_deletion.sql,63,video-previews,database migration history
+supabase/migrations/20260929010000_video_deletion.sql,64,media-staging,database migration history
+supabase/migrations/20260929010000_video_deletion.sql,68,user-images,database migration history
+supabase/migrations/20260929010000_video_deletion.sql,68,user-videos,database migration history
+supabase/migrations/20260930010000_retry_video_processing.sql,16,media-staging,database migration history
+supabase/migrations/20260930010000_retry_video_processing.sql,17,media-staging,database migration history
+supabase/migrations/20260930010000_retry_video_processing.sql,20,user-videos,database migration history
+supabase/migrations/20260930010000_retry_video_processing.sql,21,user-images,database migration history
+supabase/migrations/20260930010000_retry_video_processing.sql,21,video-previews,database migration history
+supabase/migrations/20261001000000_add_file_previews.sql,40,user-files,database migration history
+supabase/migrations/20261001000000_add_file_previews.sql,49,user-files,database migration history
+supabase/migrations/20261001000000_add_file_previews.sql,101,user-files,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,113,user-files,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,170,user-files,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,174,user-files,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,275,user-files,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,281,user-videos,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,283,user-images,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,283,user-videos,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,285,user-images,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,290,user-videos,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,291,user-images,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,291,video-previews,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,292,user-files,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,292,user-images,database migration history
+supabase/migrations/20261002000000_admin_analytics.sql,293,media-staging,database migration history
+supabase/migrations/20261002000000_preserve_excel_preview_layout.sql,12,user-files,database migration history
+supabase/migrations/20261003000000_user_analytics.sql,36,user-files,database migration history
+supabase/migrations/20261003000000_user_analytics.sql,40,user-videos,database migration history
+supabase/migrations/20261003000000_user_analytics.sql,46,user-images,database migration history
+supabase/migrations/20261003130000_file_catalog_integrity.sql,13,user-files,database migration history
+supabase/migrations/20261003130000_file_catalog_integrity.sql,24,user-files,database migration history
+supabase/migrations/20261003130000_file_catalog_integrity.sql,64,user-files,database migration history
+supabase/migrations/20261003130000_file_catalog_integrity.sql,70,user-files,database migration history
+supabase/migrations/20261003130000_file_catalog_integrity.sql,85,user-files,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,50,video-previews,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,51,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,61,video-previews,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,69,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,69,user-videos,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,70,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,70,user-videos,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,72,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,74,user-videos,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,111,user-videos,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,112,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,113,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,113,video-previews,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,114,user-images,database migration history
+supabase/migrations/20261003140000_media_job_integrity.sql,114,video-previews,database migration history
+supabase/migrations/20261007010000_content_context_actions.sql,117,user-files,database migration history
+supabase/migrations/20261007010000_content_context_actions.sql,121,user-files,database migration history
+supabase/migrations/20261007020000_reuse_trashed_file_names.sql,41,user-files,database migration history
+supabase/migrations/20261007020000_reuse_trashed_file_names.sql,49,user-files,database migration history
+supabase/migrations/20261007020000_reuse_trashed_file_names.sql,57,user-files,database migration history
+supabase/migrations/20261007020000_reuse_trashed_file_names.sql,60,user-files,database migration history
+supabase/migrations/20261007020000_reuse_trashed_file_names.sql,69,user-files,database migration history
+supabase/migrations/20261008020000_messenger_previews.sql,2,user-files,database migration history
+supabase/migrations/20261008020000_messenger_previews.sql,3,user-files,database migration history
+supabase/migrations/20261008020000_messenger_previews.sql,7,user-files,database migration history
+supabase/migrations/20261008020000_messenger_previews.sql,17,user-files,database migration history
+supabase/migrations/20261008020000_messenger_previews.sql,39,user-files,database migration history
+supabase/migrations/20261008020000_messenger_previews.sql,47,user-files,database migration history
+supabase/migrations/20261012020000_guard_storage_prefix_changes.sql,10,user-images,database migration history
+supabase/migrations/20261012020000_guard_storage_prefix_changes.sql,10,user-videos,database migration history
+supabase/migrations/20261012040000_durable_file_transfers.sql,44,user-files,database migration history
+supabase/migrations/20261012040000_durable_file_transfers.sql,82,user-files,database migration history
+supabase/migrations/20261012040000_durable_file_transfers.sql,85,user-files,database migration history
+supabase/migrations/20261012040000_durable_file_transfers.sql,95,user-files,database migration history
+supabase/migrations/20261012040000_durable_file_transfers.sql,120,user-files,database migration history
+supabase/migrations/20261013010000_public_media_preview_access.sql,25,user-images,database migration history
+tests/admin-statistics-reset-db.mjs,50,user-files,test
+tests/audit-media-security.mjs,68,user-videos,test
+tests/content-context-db.mjs,28,user-files,test
+tests/content-context-db.mjs,79,user-files,test
+tests/content-context.mjs,50,user-files,test
+tests/database-integrity.py,38,user-files,test
+tests/database-integrity.py,45,user-files,test
+tests/database-integrity.py,55,user-files,test
+tests/database-integrity.py,55,user-videos,test
+tests/database-integrity.py,56,media-staging,test
+tests/database-integrity.py,56,user-images,test
+tests/database-integrity.py,65,user-videos,test
+tests/database-integrity.py,66,user-videos,test
+tests/database-integrity.py,71,user-images,test
+tests/database-integrity.py,163,user-files,test
+tests/database-integrity.py,165,user-files,test
+tests/database-integrity.py,219,media-staging,test
+tests/database-integrity.py,227,media-staging,test
+tests/database-integrity.py,249,user-files,test
+tests/database-integrity.py,253,user-files,test
+tests/database-integrity.py,261,media-staging,test
+tests/database-integrity.py,268,video-previews,test
+tests/database-integrity.py,282,user-videos,test
+tests/database-integrity.py,283,user-images,test
+tests/database-integrity.py,293,media-staging,test
+tests/database-integrity.py,299,user-images,test
+tests/database-integrity.py,304,video-previews,test
+tests/database-integrity.py,305,user-images,test
+tests/database-integrity.py,313,media-staging,test
+tests/database-integrity.py,316,user-videos,test
+tests/file-integrity.mjs,20,user-files,test
+tests/file-integrity.mjs,21,user-files,test
+tests/file-integrity.mjs,26,user-files,test
+tests/file-preview-backend.py,50,user-files,test
+tests/file-preview-backend.py,118,user-files,test
+tests/file-preview-backend.py,159,user-files,test
+tests/file-preview-backend.py,168,user-files,test
+tests/file-preview-backend.py,204,user-files,test
+tests/file-previews.mjs,29,user-files,test
+tests/file-trash.mjs,45,user-files,test
+tests/file-trash.mjs,54,user-files,test
+tests/file-trash.mjs,72,user-files,test
+tests/file-trash.mjs,115,user-files,test
+tests/file-trash.mjs,116,user-files,test
+tests/file-trash.mjs,128,user-files,test
+tests/file-trash.mjs,129,user-files,test
+tests/file-trash.mjs,134,user-files,test
+tests/file-trash.mjs,136,user-files,test
+tests/group-media-upload-db.mjs,16,media-staging,test
+tests/group-media-upload-db.mjs,23,video-previews,test
+tests/group-media-upload-db.mjs,24,user-images,test
+tests/group-media-upload-db.mjs,24,user-videos,test
+tests/media-reactions.mjs,67,user-images,test
+tests/media-upload-checks.sql,4,user-videos,test
+tests/media-upload-checks.sql,5,user-images,test
+tests/media-upload-checks.sql,6,media-staging,test
+tests/media-upload-checks.sql,7,media-staging,test
+tests/media-upload-checks.sql,8,user-files,test
+tests/media-upload-checks.sql,26,media-staging,test
+tests/media-uploads.mjs,18,media-staging,test
+tests/media-uploads.mjs,24,media-staging,test
+tests/messenger-group-sharing-db.mjs,65,user-images,test
+tests/messenger-group-sharing-db.mjs,87,user-images,test
+tests/public-preview-access.mjs,20,user-images,test
+tests/public-preview-access.mjs,21,user-images,test
+tests/public-preview-access.mjs,25,video-previews,test
+tests/public-preview-access.mjs,34,user-images,test
+tests/public-preview-access.mjs,36,user-images,test
+tests/public-preview-access.mjs,42,user-images,test
+tests/public-preview-caching.mjs,21,user-images,test
+tests/public-preview-caching.mjs,25,user-images,test
+tests/public-previews-harness.tsx,22,video-previews,test
+tests/public-previews-harness.tsx,42,user-images,test
+tests/public-previews-harness.tsx,54,video-previews,test
+tests/shared-image-gateway.mjs,31,user-images,test
+tests/storage-integrity.py,28,user-files,test
+tests/storage-integrity.py,32,user-files,test
+tests/storage-integrity.py,40,user-files,test
+tests/video-deletion.mjs,12,user-videos,test
+tests/video-deletion.mjs,13,user-images,test
+tests/video-deletion.mjs,13,video-previews,test
+tests/video-deletion.mjs,41,user-videos,test
+tests/video-deletion.mjs,42,user-images,test
+tests/video-preview-replacement-harness.tsx,18,video-previews,test
+tests/video-preview-replacement.mjs,10,video-previews,test
+tests/video-preview-replacement.mjs,40,user-images,test
+tests/video-preview-replacement.mjs,43,media-staging,test
+tests/video-preview-replacement.mjs,55,media-staging,test
+tests/video-preview-replacement.mjs,70,user-images,test
+tests/video-retry.sql,23,media-staging,test

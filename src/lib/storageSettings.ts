@@ -93,7 +93,8 @@ export async function fetchStorageBasePath(kind: 'videos' | 'images'): Promise<s
   return cache(kind, typeof data === 'string' ? data.replace(/^\/+|\/+$/g, '') : '');
 }
 
-export async function resolveBucketPath(dbPath: string, kind: 'videos' | 'images'): Promise<string> {
+export async function resolveBucketPath(dbPath: string, kind: 'videos' | 'images', bucket?: string): Promise<string> {
+  if (bucket === 'users') return dbPath;
   const base = await fetchStorageBasePath(kind);
   return base ? `${base}/${dbPath}` : dbPath;
 }
