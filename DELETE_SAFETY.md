@@ -1,5 +1,16 @@
 # Delete-action inventory
 
+Retired migration duplicates have a separate operator-only cleanup gate. A DB
+operator verifies the manifest, backups, current resource binding and both
+copies before creating exact-identity intents that expire within 15 minutes.
+While claims and library writes are paused, only service-role Storage DELETE
+requests matching a still-retired alias and its unchanged active replacement may
+pass. Empty legacy folder markers require the migrated metadata folder. Current
+objects, unknowns, uploads, expired intents and browser roles stay blocked. The
+operator removes bytes through Storage API and verifies the result; aliases and
+receipts remain. No frontend action, public cleanup RPC, confirmation bypass or
+second caller of an application delete helper is introduced.
+
 UUID location compatibility keeps every existing photo/video deletion caller in
 its current confirmation's onConfirm. The photo helper now calls delete-photo;
 that route independently verifies Auth, current owner and active account, resolves
