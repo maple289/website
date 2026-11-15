@@ -11,6 +11,8 @@ import { useVideoVolume } from '@/hooks/useVideoVolume';
 import { useVideoCompletion } from '@/hooks/useVideoCompletion';
 import { analyticsRequestId, recordMediaView } from '@/lib/analytics';
 import { VideoPresentationControls } from './VideoPresentationControls';
+import { useIPhoneVideoViewport } from '@/hooks/useIPhoneVideoViewport';
+import './VideoPlayer.css';
 
 type VideoPlayerProps = {
   video: Video;
@@ -29,6 +31,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const viewEvent = useRef({ id: video.id, requestId: analyticsRequestId(), sent: false });
 
   useVideoVolume(videoRef, url);
+  useIPhoneVideoViewport(playerRef);
   const completion = useVideoCompletion(videoRef, playerRef, url, onClose);
 
   useEffect(() => {
