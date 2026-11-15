@@ -9,7 +9,8 @@ MediaRecorder (`video/mp4;codecs=avc1.42001e`, 1 Mbps).
 `tests/iphone-video-layout.mjs` pauses this same source and compares the rendered
 playback area with a canvas rendering of the decoded frame at uniform contain
 scale. It checks portrait, short landscape, browser-bar-sized viewport changes
-and rotation back to portrait in Chromium and WebKit. Only the native playback
-controls are hidden during pixel capture, and they are restored immediately
-afterward. Presentation and interaction regressions run separately with controls
-enabled.
+and rotation back to portrait in Chromium and WebKit. Native controls and application
+overlays are hidden during pixel comparison. Card captures restore the application
+overlays; interaction checks restore all controls. The tests also verify landscape
+growth, unchanged portrait geometry, upward reaction picking, fullscreen/PiP return,
+seeking, double tap, manual Close and natural-end auto-close.

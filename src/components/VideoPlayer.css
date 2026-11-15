@@ -50,3 +50,35 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+
+@media (orientation: landscape) and (pointer: coarse) {
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) {
+    --iphone-video-reaction-row: 48px;
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-player-header {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 3;
+    padding: 0 8px;
+    background: linear-gradient(#000b, transparent);
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls {
+    position: absolute;
+    right: 8px;
+    /* Keep the browser-owned timeline/seek controls unobstructed. */
+    bottom: calc(var(--iphone-video-reaction-row) + 64px);
+    z-index: 3;
+    max-width: calc(100% - 16px);
+    padding: 0;
+    border-radius: 8px;
+    background: #0009;
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-reactions {
+    height: var(--iphone-video-reaction-row);
+    max-height: var(--iphone-video-reaction-row);
+    padding: 2px 8px;
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .media-reactions {
+    margin-top: 0;
+  }
+}

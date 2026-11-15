@@ -59,8 +59,13 @@ is positioned within that area's final flex size with explicit 100% width/height
 maximum dimensions, and centered contain fitting. This avoids WebKit retaining
 the intrinsic height of an in-flow percentage-height video and clipping it. Only
 the lower reaction area scrolls when necessary. Android/desktop sizing and all
-fullscreen/PiP behavior retain their existing implementation. The isolated
-`tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
+fullscreen/PiP behavior retain their existing implementation. The
+normal iPhone landscape layout overlays the compact title/Close and mode controls
+over the media instead of reserving their rows. Mode controls leave the native
+64px seek strip free; reactions occupy a 48px row below the video, with their
+existing upward, portaled picker. All landscape rules exclude page and browser
+fullscreen; portrait, viewport measurement and player handlers are unchanged.
+The isolated `tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
 viewport changes, all four source-frame edges and proportions, reaction scrolling,
 explicit Close and non-iPhone exclusion in Chromium and WebKit emulation. CI runs
 both engines. The previous CSS fails the short landscape video-bounds check in
