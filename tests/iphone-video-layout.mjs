@@ -20,14 +20,22 @@ async function completeFrame(page, label) {
   // Compare the rendered playback area against the SAME decoded video frame,
   // drawn uncropped with uniform scaling. Hide controls/overlays for pixel
   // comparison, then restore them for UI captures and interaction checks.
+  const captureStyle = await page.addStyleTag({ content: '.managed-video[data-layout-frame-capture]::-webkit-media-controls { display: none !important; }' });
   const overlays = await page.locator('.video-player-header, .video-presentation-controls').evaluateAll(elements => elements.map(el => {
     const previous = el.style.visibility; el.style.visibility = 'hidden'; return previous;
   }));
   const restoreOverlays = () => page.locator('.video-player-header, .video-presentation-controls').evaluateAll((elements, values) => {
     elements.forEach((el, i) => { el.style.visibility = values[i]; });
   }, overlays);
-  const source = await page.locator('video').evaluate(v => {
+  const source = await page.locator('video').evaluate(async v => {
+    // WebKit's media-controls compositor can outlive the controls attribute
+    // change, especially immediately after fullscreen/PiP and rotation. Hide
+    // the native chrome explicitly for this frame-only comparison and wait for
+    // the new geometry to paint. Restore everything before interaction checks.
+    v.pause();
     v.controls = false;
+    v.setAttribute('data-layout-frame-capture', '');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const area = v.parentElement.getBoundingClientRect();
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(area.width); canvas.height = Math.round(area.height);
@@ -55,6 +63,16 @@ async function completeFrame(page, label) {
       for (const key of keys) { regions[key][0] += delta > 35 ? 1 : 0; regions[key][1]++; }
     }
     for (const [edge, [different, total]] of Object.entries(regions)) {
+      if (different / total >= .12) {
+        const folder = '.runtime/iphone-video-layout';
+        await fs.mkdir(folder, { recursive: true });
+        await fs.writeFile(`${folder}/${engine}-${label}-failed-actual.png`, actualBuffer);
+        await fs.writeFile(`${folder}/${engine}-${label}-failed-source.png`, Buffer.from(source, 'base64'));
+        await fs.writeFile(`${folder}/${engine}-${label}-failed.json`, JSON.stringify({ regions, video: await page.locator('video').evaluate(v => ({
+          width: v.videoWidth, height: v.videoHeight, rect: v.getBoundingClientRect().toJSON(), controls: v.controls,
+          time: v.currentTime, paused: v.paused, ready: v.readyState, fit: getComputedStyle(v).objectFit,
+        })) }, null, 2));
+      }
       assert.ok(different / total < .12, `${label}: ${edge} frame differs from uncropped source (${different}/${total})`);
     }
     if (process.env.CAPTURE_IPHONE_LAYOUT) {
@@ -64,7 +82,11 @@ async function completeFrame(page, label) {
       await restoreOverlays();
       await page.screenshot({ path: `.runtime/iphone-video-layout/${engine}-${label}-card.png` });
     }
-  } finally { await restoreOverlays(); await page.locator('video').evaluate(v => { v.controls = true; }); }
+  } finally {
+    await restoreOverlays();
+    await page.locator('video').evaluate(v => { v.removeAttribute('data-layout-frame-capture'); v.controls = true; });
+    await captureStyle.evaluate(el => el.remove());
+  }
 }
 try {
   for (const suffix of ['', ' FxiOS/132.0', ' CriOS/132.0']) {

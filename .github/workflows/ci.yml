@@ -62,6 +62,15 @@ jobs:
           BROWSER_CHANNEL=chromium node tests/iphone-video-layout.mjs
           BROWSER_ENGINE=webkit node tests/iphone-video-layout.mjs
 
+      - name: Preserve iPhone frame comparison failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-video-frame-failure
+          path: .runtime/iphone-video-layout/*failed*
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Messenger notification browser compatibility
         run: |
           BROWSER_ENGINE=firefox node tests/messenger-notifications-ui.mjs
