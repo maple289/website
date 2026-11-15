@@ -51,7 +51,16 @@ Standard PiP return preserves playing/paused state during the fullscreen handoff
 its leave event does not run fullscreen-exit cleanup. Recovery is limited to the
 same connected source, excludes native dismissal/background playback and respects
 subsequent manual Pause. Close remains unconditional and cancels recovery listeners.
-The normal gallery player retains its previous sizing. On coarse pointers,
+The normal iPhone gallery player fits the visible viewport with safe-area padding
+and top alignment. A scoped, animation-frame-coalesced VisualViewport listener
+updates CSS geometry without React renders; resizing and orientation changes shrink
+the contain-fit video while retaining the header and presentation controls. Only
+the lower reaction area scrolls when necessary. Android/desktop sizing and all
+fullscreen/PiP behavior retain their existing implementation. The isolated
+`tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
+viewport changes, reaction scrolling, explicit Close and non-iPhone exclusion in
+desktop browser emulation; physical iPhone Safari/Firefox/Chrome validation remains
+necessary. On coarse pointers,
 fullscreen gives the video the entire viewport; the header and application mode
 controls overlay it, leaving the bottom native playback-control strip available.
 Mobile gallery fullscreen fills the viewport and centers the complete video with

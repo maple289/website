@@ -1,0 +1,35 @@
+/* Opted in only on iPhone/iPod. Exclude both page and browser fullscreen so
+   their existing geometry and control overlays remain authoritative. */
+.iphone-video-viewport:not(.video-page-fullscreen-layer) {
+  inset: auto;
+  top: var(--iphone-video-top, 0px);
+  left: var(--iphone-video-left, 0px);
+  width: var(--iphone-video-width, 100%);
+  height: var(--iphone-video-height, 100dvh);
+  max-height: var(--iphone-video-height, 100dvh);
+  align-items: flex-start;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+.iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  overflow: hidden;
+}
+.iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-player-header {
+  padding: 4px 12px;
+  gap: 8px;
+}
+.iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-playback-area {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-reactions {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 25%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
