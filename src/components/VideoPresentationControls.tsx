@@ -9,7 +9,7 @@ export function VideoPresentationControls({ videoRef, surfaceRef, source }: {
 }) {
   const mode = useVideoPresentation(videoRef, surfaceRef, source);
   const controlsRef = useRef<HTMLDivElement>(null);
-  useVideoControlsAutoHide(videoRef, surfaceRef, controlsRef, source, mode.fullscreen, mode.error);
+  useVideoControlsAutoHide(videoRef, surfaceRef, controlsRef, source, mode.fullscreen, mode.error, mode.pip);
   const style = 'flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-white/15 disabled:opacity-50';
   return <div ref={controlsRef} className="video-presentation-controls shrink-0 bg-black px-2 py-1 text-white">
     <div className="flex flex-wrap items-center justify-end gap-1">

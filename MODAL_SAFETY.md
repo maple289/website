@@ -65,6 +65,15 @@ over the media instead of reserving their rows. Mode controls leave the native
 64px seek strip free; reactions occupy a 48px row below the video, with their
 existing upward, portaled picker. All landscape rules exclude page and browser
 fullscreen; portrait, viewport measurement and player handlers are unchanged.
+In normal iPhone landscape, the compact translucent mode bar uses the lower-right
+safe inset above the native seek strip. The existing idle hook owns its single
+2.5-second timer: playing hides it, video touch reveals it, and pause, buffering,
+keyboard focus and an active control press retain it. Native controls remain
+browser-owned in normal view. Advancing timeupdate events recover normal idle
+after WebKit waiting/current-data state without a polling timer. Portrait rotation,
+presentation changes, Close and
+unmount clear normal hidden state and pending timers. Fullscreen retains its
+existing two-second deadline, progress probe and native-control policy.
 The isolated `tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
 viewport changes, all four source-frame edges and proportions, reaction scrolling,
 explicit Close and non-iPhone exclusion in Chromium and WebKit emulation. CI runs

@@ -16,6 +16,102 @@ await server.listen();
 const browser = await engines[engine].launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
 const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
 
+async function landscapeIdle(page) {
+  const hidden = () => page.locator('.video-presentation-controls').evaluate(el => el.classList.contains('video-controls-hidden'));
+  const waitHidden = value => page.waitForFunction(value => {
+    const controls = document.querySelector('.video-presentation-controls');
+    return controls?.classList.contains('video-controls-hidden') === value && (!value || getComputedStyle(controls).opacity === '0');
+  }, value, { timeout: 4500 }).catch(async error => {
+    throw new Error(error.message + ' ' + JSON.stringify(await page.locator('video').evaluate(v => ({
+      paused: v.paused, seeking: v.seeking, ended: v.ended, ready: v.readyState, time: v.currentTime, loop: v.loop, playError: window.idlePlayError,
+      liveTimers: window.normalIdleTimers.live.size, fullscreen: !!document.fullscreenElement, pip: !!document.pictureInPictureElement,
+      surface: v.closest('.video-player-surface').className, landscape: matchMedia('(orientation: landscape)').matches,
+    }))));
+  });
+  const play = async () => {
+    await page.locator('video').evaluate(v => {
+      window.idlePlayError = null;
+      void v.play().catch(error => { window.idlePlayError = error.message; });
+    });
+    await page.waitForFunction(() => window.idlePlayError || !document.querySelector('video').paused);
+    assert.equal(await page.evaluate(() => window.idlePlayError), null);
+  };
+  const tapVideo = () => page.locator('video').evaluate(v => {
+    const b = v.getBoundingClientRect();
+    const touch = { identifier: 1, target: v, clientX: b.left + b.width * .25, clientY: b.top + b.height * .4 };
+    for (const type of ['touchstart', 'touchend']) {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(e, { touches: { value: type === 'touchstart' ? [touch] : [] }, changedTouches: { value: [touch] } });
+      v.dispatchEvent(e);
+    }
+    return v.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+  });
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.evaluate(() => window.setVisibleViewport({ width: 844, height: 260, offsetTop: 10 }));
+  // The three-second fixture must not wrap while testing a 2.5-second idle
+  // deadline repeatedly. Keep real playback but slow the static test clip.
+  await page.locator('video').evaluate(v => { v.pause(); v.playbackRate = .0625; v.currentTime = 0; });
+  await page.waitForFunction(() => !document.querySelector('video').seeking);
+  await waitHidden(false);
+  const areaHeight = await page.locator('.video-playback-area').evaluate(el => el.getBoundingClientRect().height);
+  await play();
+  await page.waitForFunction(() => !document.querySelector('video').paused);
+  await page.waitForTimeout(1500);
+  assert.equal(await hidden(), false, 'initial playback keeps controls visible briefly');
+  await waitHidden(true);
+  assert.equal(await page.locator('.video-presentation-controls').getAttribute('aria-hidden'), 'true');
+  assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.hasAttribute('inert')), true);
+  assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'normal idle never hides native controls');
+  await page.screenshot({ path: `.runtime/iphone-idle-${engine}-hidden.png` });
+  assert.equal(await page.locator('.video-playback-area').evaluate(el => el.getBoundingClientRect().height), areaHeight, 'idle does not change video sizing');
+  await page.locator('video').evaluate(v => {
+    Object.defineProperty(v, 'readyState', { configurable: true, get: () => 2 });
+    v.dispatchEvent(new Event('waiting'));
+  });
+  await waitHidden(false);
+  await waitHidden(true);
+  await page.locator('video').evaluate(v => { delete v.readyState; });
+  assert.equal(await tapVideo(), true, 'revealing normal video click retains native playback/seek defaults');
+  await waitHidden(false);
+  assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.hasAttribute('inert')), false);
+  // A pointer-only press must hold the bar visible, including outside release.
+  await page.locator('[data-video-fullscreen-toggle]').dispatchEvent('pointerdown', { pointerId: 91, pointerType: 'touch', bubbles: true });
+  await page.waitForTimeout(2800);
+  assert.equal(await hidden(), false, 'an active control press cannot time out');
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 91, pointerType: 'touch' })));
+  await page.locator('video').evaluate(v => { v.pause(); });
+  await waitHidden(false);
+  await page.waitForTimeout(2800);
+  assert.equal(await hidden(), false, 'paused controls stay visible');
+  await page.screenshot({ path: `.runtime/iphone-idle-${engine}-paused.png` });
+  await play();
+  await waitHidden(true);
+  await tapVideo();
+  await waitHidden(false);
+  await waitHidden(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.setVisibleViewport({ width: 390, height: 600, offsetTop: 12 }));
+  await waitHidden(false);
+  await page.waitForTimeout(2800);
+  assert.equal(await hidden(), false, 'rotation into portrait clears hidden state and idle timer');
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.evaluate(() => window.setVisibleViewport({ width: 844, height: 260, offsetTop: 10 }));
+  await waitHidden(true);
+  await page.locator('video').evaluate(v => { v.pause(); });
+  await waitHidden(false);
+  assert.ok(await page.evaluate(() => window.normalIdleTimers.maximum <= 1), 'only one normal-view idle timer exists');
+  await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).tap();
+  await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).tap();
+  await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Enter picture-in-picture', exact: true }).tap();
+  await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).tap();
+  await page.getByRole('button', { name: 'Enter picture-in-picture', exact: true }).waitFor();
+  assert.equal(await hidden(), false, 'paused return from presentation modes stays visible');
+  console.log(`PASS ${engine} normal landscape idle: current-data progress, reveal, pause/resume, held control, rotation, fullscreen/PiP and native seek controls`);
+}
+
 async function completeFrame(page, label) {
   // Compare the rendered playback area against the SAME decoded video frame,
   // drawn uncropped with uniform scaling. Hide controls/overlays for pixel
@@ -93,6 +189,16 @@ try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, userAgent: iphone + suffix });
     await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: '/tests/fixtures/video-frame-edges.mp4' } }));
     await page.addInitScript(() => {
+      const nativeSet = window.setTimeout.bind(window), nativeClear = window.clearTimeout.bind(window);
+      const live = new Set();
+      window.normalIdleTimers = { maximum: 0, live };
+      window.setTimeout = (fn, delay, ...args) => {
+        if (delay !== 2500) return nativeSet(fn, delay, ...args);
+        const id = nativeSet(() => { live.delete(id); fn.apply(window, args); }, delay);
+        live.add(id); window.normalIdleTimers.maximum = Math.max(window.normalIdleTimers.maximum, live.size);
+        return id;
+      };
+      window.clearTimeout = id => { live.delete(id); nativeClear(id); };
       Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
       const viewport = new EventTarget();
       Object.assign(viewport, { width: 390, height: 600, offsetTop: 12, offsetLeft: 0, scale: 1 });
@@ -241,6 +347,7 @@ try {
       assert.ok(await page.locator('.video-reactions').evaluate(el => el.scrollTop > 0));
       await page.locator('[data-layout-extra]').evaluate(el => el.remove());
     }
+    if (!suffix.includes('CriOS')) await landscapeIdle(page);
     await page.locator('video').evaluate(v => { v.currentTime = .5; });
     await page.waitForFunction(() => { const v = document.querySelector('video'); return v && !v.seeking && Math.abs(v.currentTime - .5) < .1; });
     await page.locator('video').evaluate(v => { void v.play(); });
@@ -256,21 +363,27 @@ try {
     await page.getByRole('button', { name: 'Close video player', exact: true }).click();
     assert.equal(await page.locator('.iphone-video-viewport').count(), 0);
     assert.equal(await page.evaluate(() => document.body.style.overflow), '');
+    assert.equal(await page.evaluate(() => window.normalIdleTimers.live.size), 0, 'Close removes the normal-view timer');
     // Fresh playback keeps natural-end behavior separate from our looped layout
     // fixture and from seeking. Close must still happen on the real ended event.
     await page.getByRole('button', { name: 'Play Public video', exact: true }).click();
     await page.locator('.video-player-surface').waitFor();
+    assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.classList.contains('video-controls-hidden')), false, 'reopening resets visibility');
     await page.locator('.video-player-surface').waitFor({ state: 'hidden', timeout: 8000 });
     assert.equal(await page.evaluate(() => document.body.style.overflow), '');
     await page.close();
     console.log(`PASS ${engine} complete frame/source comparison, rotations, lower scrolling and modal safety: ` + (suffix || 'Safari'));
   }
   for (const userAgent of ['Mozilla/5.0 (Linux; Android 14) Chrome/132.0 Mobile Safari/537.36', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/132.0']) {
-    const page = await browser.newPage({ userAgent });
+    const page = await browser.newPage({ userAgent, hasTouch: userAgent.includes('Android'), viewport: { width: 844, height: 390 } });
+    await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: '/tests/fixtures/video-frame-edges.mp4' } }));
     await page.goto('http://127.0.0.1:5217/tests/public-previews.html');
     await page.getByRole('button', { name: 'Play Public video', exact: true }).click();
     await page.locator('.video-player-surface').waitFor();
     assert.equal(await page.locator('.iphone-video-viewport').count(), 0);
+    await page.waitForFunction(() => { const v = document.querySelector('video'); if (!v || v.readyState < 2) return false; v.loop = true; v.playbackRate = .25; return true; });
+    await page.waitForTimeout(2800);
+    assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.classList.contains('video-controls-hidden')), false, 'non-iPhone normal controls remain visible');
     await page.close();
   }
   console.log('PASS Android and desktop excluded');
