@@ -10,7 +10,9 @@ MediaRecorder (`video/mp4;codecs=avc1.42001e`, 1 Mbps).
 playback area with a canvas rendering of the decoded frame at uniform contain
 scale. It checks portrait, short landscape, browser-bar-sized viewport changes
 and rotation back to portrait in Chromium and WebKit. Native controls and application
-overlays are hidden during pixel comparison. Card captures restore the application
+overlays, including portaled reaction menus/details and their transitions, are
+hidden by screenshot-scoped CSS during pixel comparison. A deliberately open
+reaction-details popover verifies capture isolation and restoration. Card captures retain the application
 overlays; interaction checks restore all controls. The tests also verify landscape
 growth, unchanged portrait geometry, upward reaction picking, fullscreen/PiP return,
 seeking, double tap, manual Close and natural-end auto-close.

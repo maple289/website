@@ -15,6 +15,12 @@ const server = await createPublicPreviewServer();
 await server.listen();
 const browser = await engines[engine].launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
 const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
+const frameComparisonStyle = `
+  .video-player-header, .video-presentation-controls, .reaction-bar, .reaction-details {
+    opacity: 0 !important;
+    transition: none !important;
+  }
+`;
 
 async function landscapeIdle(page) {
   const hidden = () => page.locator('.video-presentation-controls').evaluate(el => el.classList.contains('video-controls-hidden'));
@@ -117,12 +123,6 @@ async function completeFrame(page, label) {
   // drawn uncropped with uniform scaling. Hide controls/overlays for pixel
   // comparison, then restore them for UI captures and interaction checks.
   const captureStyle = await page.addStyleTag({ content: '.managed-video[data-layout-frame-capture]::-webkit-media-controls { display: none !important; }' });
-  const overlays = await page.locator('.video-player-header, .video-presentation-controls').evaluateAll(elements => elements.map(el => {
-    const previous = el.style.visibility; el.style.visibility = 'hidden'; return previous;
-  }));
-  const restoreOverlays = () => page.locator('.video-player-header, .video-presentation-controls').evaluateAll((elements, values) => {
-    elements.forEach((el, i) => { el.style.visibility = values[i]; });
-  }, overlays);
   const source = await page.locator('video').evaluate(async v => {
     // WebKit's media-controls compositor can outlive the controls attribute
     // change, especially immediately after fullscreen/PiP and rotation. Hide
@@ -143,7 +143,12 @@ async function completeFrame(page, label) {
     return canvas.toDataURL('image/png').split(',')[1];
   });
   try {
-    const actualBuffer = await page.locator('.video-playback-area').screenshot();
+    // A portal popover can remain over the media after a previous reaction tap
+    // or hover. Visibility transitions can also keep a bar painted after its
+    // inline visibility changes. Isolate ALL application overlays for this
+    // screenshot only; opacity preserves popup focus/hover state, and Playwright
+    // restores the stylesheet immediately after.
+    const actualBuffer = await page.locator('.video-playback-area').screenshot({ style: frameComparisonStyle });
     const expected = PNG.sync.read(Buffer.from(source, 'base64'));
     const actual = PNG.sync.read(actualBuffer);
     assert.ok(Math.abs(actual.width - expected.width) <= 1 && Math.abs(actual.height - expected.height) <= 1, 'capture rounding is at most one pixel');
@@ -175,11 +180,9 @@ async function completeFrame(page, label) {
       await fs.mkdir('.runtime/iphone-video-layout', { recursive: true });
       await fs.writeFile(`.runtime/iphone-video-layout/${engine}-${label}-actual.png`, actualBuffer);
       await fs.writeFile(`.runtime/iphone-video-layout/${engine}-${label}-source.png`, Buffer.from(source, 'base64'));
-      await restoreOverlays();
       await page.screenshot({ path: `.runtime/iphone-video-layout/${engine}-${label}-card.png` });
     }
   } finally {
-    await restoreOverlays();
     await page.locator('video').evaluate(v => { v.removeAttribute('data-layout-frame-capture'); v.controls = true; });
     await captureStyle.evaluate(el => el.remove());
   }
@@ -296,7 +299,18 @@ try {
         assert.ok(Math.abs(boxes.video[edge] - boxes.area[edge]) < 1, `video must fit final playback area: ${edge} ${JSON.stringify(boxes)}`);
       }
       assert.deepEqual(await page.locator('video').evaluate(v => [getComputedStyle(v).objectFit, getComputedStyle(v).objectPosition]), ['contain', '50% 50%']);
+      if (size.width > 500 && size.height === 220) {
+        // Reproduce the Linux failure deliberately, instead of depending on
+        // incidental pointer hover. Frame pixels must ignore this open portal.
+        await page.locator('.video-reactions .reaction-count').first().tap();
+        await page.locator('.reaction-details').waitFor();
+      }
       await completeFrame(page, `${suffix ? suffix.trim().split('/')[0] : 'Safari'}-${size.width}x${size.height}`);
+      if (size.width > 500 && size.height === 220) {
+        assert.equal(await page.locator('.reaction-details').isVisible(), true, 'frame-only screenshot restores the open reaction popover');
+        await page.getByRole('button', { name: 'Close video player', exact: true }).focus();
+        await page.locator('.reaction-details').waitFor({ state: 'hidden' });
+      }
       assert.ok(boxes.card.scroll <= boxes.card.client + 1, 'card must not scroll title/video away');
       if (size.width > 500) {
         const cardHeight = await page.locator('.video-player-surface').evaluate(el => el.getBoundingClientRect().height);
