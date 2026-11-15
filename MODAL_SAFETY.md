@@ -74,6 +74,11 @@ after WebKit waiting/current-data state without a polling timer. Portrait rotati
 presentation changes, Close and
 unmount clear normal hidden state and pending timers. Fullscreen retains its
 existing two-second deadline, progress probe and native-control policy.
+Normal iPhone landscape header decoration and presentation-bar wrappers pass
+pointer input through to the video. Only Close and visible application mode
+buttons opt back into pointer input; hidden/fading mode buttons inherit no pointer
+input. This keeps the native top-left iOS controls reachable under the header,
+without changing portrait/fullscreen hit testing, geometry or gesture handlers.
 The isolated `tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
 viewport changes, all four source-frame edges and proportions, reaction scrolling,
 explicit Close and non-iPhone exclusion in Chromium and WebKit emulation. CI runs

@@ -61,6 +61,8 @@ jobs:
         run: |
           BROWSER_CHANNEL=chromium node tests/iphone-video-layout.mjs
           BROWSER_ENGINE=webkit node tests/iphone-video-layout.mjs
+          BROWSER_CHANNEL=chromium node tests/iphone-video-hit-testing.mjs
+          BROWSER_ENGINE=webkit node tests/iphone-video-hit-testing.mjs
 
       - name: Preserve iPhone frame comparison failures
         if: failure()

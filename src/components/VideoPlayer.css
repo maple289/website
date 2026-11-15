@@ -61,6 +61,11 @@
     z-index: 3;
     padding: 0 8px;
     background: linear-gradient(#000b, transparent);
+    /* Decoration must not cover iOS's native top-left mode controls. */
+    pointer-events: none;
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-player-header button {
+    pointer-events: auto;
   }
   .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls {
     position: absolute;
@@ -75,6 +80,10 @@
     border-radius: 12px;
     background: rgb(0 0 0 / .55);
     transition: opacity 180ms ease, visibility 180ms;
+    pointer-events: none;
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls:not(.video-controls-hidden) button {
+    pointer-events: auto;
   }
   .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls button {
     gap: 4px;
