@@ -21,14 +21,31 @@
   gap: 8px;
 }
 .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-playback-area {
-  flex: 0 1 auto;
+  position: relative;
+  flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
+  background: black;
+}
+.iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-playback-area video {
+  /* A positioned child resolves against the final, flex-shrunken area on iOS.
+     A percentage-height in-flow video can retain its intrinsic height instead. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-reactions {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  max-height: 25%;
+  max-height: calc(var(--iphone-video-height, 100dvh) * .25);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;

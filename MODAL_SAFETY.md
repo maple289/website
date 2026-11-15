@@ -54,12 +54,17 @@ subsequent manual Pause. Close remains unconditional and cancels recovery listen
 The normal iPhone gallery player fits the visible viewport with safe-area padding
 and top alignment. A scoped, animation-frame-coalesced VisualViewport listener
 updates CSS geometry without React renders; resizing and orientation changes shrink
-the contain-fit video while retaining the header and presentation controls. Only
+the playback area while retaining the header and presentation controls. Its video
+is positioned within that area's final flex size with explicit 100% width/height,
+maximum dimensions, and centered contain fitting. This avoids WebKit retaining
+the intrinsic height of an in-flow percentage-height video and clipping it. Only
 the lower reaction area scrolls when necessary. Android/desktop sizing and all
 fullscreen/PiP behavior retain their existing implementation. The isolated
 `tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
-viewport changes, reaction scrolling, explicit Close and non-iPhone exclusion in
-desktop browser emulation; physical iPhone Safari/Firefox/Chrome validation remains
+viewport changes, all four source-frame edges and proportions, reaction scrolling,
+explicit Close and non-iPhone exclusion in Chromium and WebKit emulation. CI runs
+both engines. The previous CSS fails the short landscape video-bounds check in
+WebKit; physical iPhone Safari/Firefox/Chrome validation remains
 necessary. On coarse pointers,
 fullscreen gives the video the entire viewport; the header and application mode
 controls overlay it, leaving the bottom native playback-control strip available.
