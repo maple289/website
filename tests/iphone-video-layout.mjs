@@ -64,6 +64,13 @@ async function landscapeIdle(page) {
   assert.equal(await page.locator('video').evaluate(v => v.controls), true, 'normal idle never hides native controls');
   await page.screenshot({ path: `.runtime/iphone-idle-${engine}-hidden.png` });
   assert.equal(await page.locator('.video-playback-area').evaluate(el => el.getBoundingClientRect().height), areaHeight, 'idle does not change video sizing');
+  await page.locator('video').evaluate(v => {
+    Object.defineProperty(v, 'readyState', { configurable: true, get: () => 2 });
+    v.dispatchEvent(new Event('waiting'));
+  });
+  await waitHidden(false);
+  await waitHidden(true);
+  await page.locator('video').evaluate(v => { delete v.readyState; });
   assert.equal(await tapVideo(), true, 'revealing normal video click retains native playback/seek defaults');
   await waitHidden(false);
   assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.hasAttribute('inert')), false);
@@ -102,7 +109,7 @@ async function landscapeIdle(page) {
   await page.getByRole('button', { name: 'Exit picture-in-picture', exact: true }).tap();
   await page.getByRole('button', { name: 'Enter picture-in-picture', exact: true }).waitFor();
   assert.equal(await hidden(), false, 'paused return from presentation modes stays visible');
-  console.log(`PASS ${engine} normal landscape idle: reveal, pause/resume, held control, rotation, fullscreen/PiP and native seek controls`);
+  console.log(`PASS ${engine} normal landscape idle: current-data progress, reveal, pause/resume, held control, rotation, fullscreen/PiP and native seek controls`);
 }
 
 async function completeFrame(page, label) {

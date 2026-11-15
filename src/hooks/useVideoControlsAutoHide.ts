@@ -11,7 +11,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     const coarse = view.matchMedia('(pointer: coarse)');
     const landscape = view.matchMedia('(orientation: landscape)');
     const iphone = /iPhone|iPod/i.test(view.navigator.userAgent);
-    let normalWaiting = false;
+    let normalWaiting = false, normalLastTime = video.currentTime;
     let timer: number | undefined, held = false, keyboard = false, revealTouch = false, nativeControlsHidden = false;
     let progressTimer: number | undefined, lastTime = video.currentTime, progressedAt = -Infinity;
     const clear = () => { view.clearTimeout(timer); timer = undefined; };
@@ -127,6 +127,10 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     const mediaChanged = (event: Event) => {
       if (normalLandscape()) {
         if (iosSeek.enabled && event.type === 'seeking') revealTouch = false;
+        // WebKit may keep HAVE_CURRENT_DATA and omit a new playing/canplay
+        // event after waiting, even while the playback clock advances.
+        if (event.type === 'timeupdate' && running() && Math.abs(video.currentTime - normalLastTime) > .001) normalWaiting = false;
+        normalLastTime = video.currentTime;
         if (event.type === 'waiting') normalWaiting = true;
         else if (['playing', 'play', 'canplay', 'pause', 'ended', 'emptied'].includes(event.type)) normalWaiting = false;
         if (['playing', 'play', 'pause', 'ended', 'seeking', 'seeked', 'waiting', 'error', 'emptied'].includes(event.type)) {

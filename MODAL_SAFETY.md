@@ -69,7 +69,9 @@ In normal iPhone landscape, the compact translucent mode bar uses the lower-righ
 safe inset above the native seek strip. The existing idle hook owns its single
 2.5-second timer: playing hides it, video touch reveals it, and pause, buffering,
 keyboard focus and an active control press retain it. Native controls remain
-browser-owned in normal view. Portrait rotation, presentation changes, Close and
+browser-owned in normal view. Advancing timeupdate events recover normal idle
+after WebKit waiting/current-data state without a polling timer. Portrait rotation,
+presentation changes, Close and
 unmount clear normal hidden state and pending timers. Fullscreen retains its
 existing two-second deadline, progress probe and native-control policy.
 The isolated `tests/iphone-video-layout.mjs` regression checks portrait/landscape, toolbar-sized
