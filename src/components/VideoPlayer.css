@@ -64,14 +64,22 @@
   }
   .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls {
     position: absolute;
-    right: 8px;
+    right: max(12px, env(safe-area-inset-right));
+    left: auto;
+    transform: none;
     /* Keep the browser-owned timeline/seek controls unobstructed. */
-    bottom: calc(var(--iphone-video-reaction-row) + 64px);
+    bottom: calc(var(--iphone-video-reaction-row) + max(64px, env(safe-area-inset-bottom)));
     z-index: 3;
     max-width: calc(100% - 16px);
     padding: 0;
-    border-radius: 8px;
-    background: #0009;
+    border-radius: 12px;
+    background: rgb(0 0 0 / .55);
+    transition: opacity 180ms ease, visibility 180ms;
+  }
+  .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls button {
+    gap: 4px;
+    padding-inline: 8px;
+    font-size: 12px;
   }
   .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-reactions {
     height: var(--iphone-video-reaction-row);
@@ -81,4 +89,7 @@
   .iphone-video-viewport .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .media-reactions {
     margin-top: 0;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .iphone-video-viewport .video-presentation-controls { transition: none; }
 }

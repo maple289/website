@@ -2,13 +2,16 @@ import { useEffect, type RefObject } from 'react';
 import type { FullscreenDocument } from '@/lib/videoFullscreen';
 import { protectIOSVideoSeek } from '@/lib/iosVideoSeek';
 
-export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, surfaceRef: RefObject<HTMLElement>, controlsRef: RefObject<HTMLDivElement>, source: string | null | undefined, fullscreen: boolean, error: string) {
+export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, surfaceRef: RefObject<HTMLElement>, controlsRef: RefObject<HTMLDivElement>, source: string | null | undefined, fullscreen: boolean, error: string, pip = false) {
   useEffect(() => {
     const video = videoRef.current, surface = surfaceRef.current, controls = controlsRef.current;
     if (!video || !surface || !controls) return;
     const doc = video.ownerDocument as FullscreenDocument, view = doc.defaultView;
     if (!view) return;
     const coarse = view.matchMedia('(pointer: coarse)');
+    const landscape = view.matchMedia('(orientation: landscape)');
+    const iphone = /iPhone|iPod/i.test(view.navigator.userAgent);
+    let normalWaiting = false;
     let timer: number | undefined, held = false, keyboard = false, revealTouch = false, nativeControlsHidden = false;
     let progressTimer: number | undefined, lastTime = video.currentTime, progressedAt = -Infinity;
     const clear = () => { view.clearTimeout(timer); timer = undefined; };
@@ -27,10 +30,13 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       controls.removeAttribute('aria-hidden');
     };
     const mobileFullscreen = () => fullscreen && !error && coarse.matches && surface.classList.contains('video-player-surface');
+    const normalLandscape = () => iphone && !fullscreen && !pip && !error && coarse.matches && landscape.matches &&
+      !!surface.closest('.iphone-video-viewport') && !surface.classList.contains('video-page-fullscreen') &&
+      !doc.fullscreenElement && !doc.webkitFullscreenElement;
     const running = () => !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= video.HAVE_CURRENT_DATA;
     const needsProgress = () => mobileFullscreen() && running() && video.readyState < video.HAVE_FUTURE_DATA;
-    const canHide = () => mobileFullscreen() && running() &&
-      (video.readyState >= video.HAVE_FUTURE_DATA || view.performance.now() - progressedAt < 1000) && !held && !iosSeek.held &&
+    const canHide = () => running() && (normalLandscape() ? !normalWaiting : mobileFullscreen() &&
+      (video.readyState >= video.HAVE_FUTURE_DATA || view.performance.now() - progressedAt < 1000)) && !held && !iosSeek.held &&
       !(keyboard && (controls.contains(doc.activeElement) || doc.activeElement === video));
     const sampleProgress = () => {
       progressTimer = undefined;
@@ -71,19 +77,31 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
         controls.classList.add('video-controls-hidden');
         controls.setAttribute('inert', '');
         controls.setAttribute('aria-hidden', 'true');
-      }, 2000);
+      }, normalLandscape() ? 2500 : 2000);
     };
     const schedule = () => { show(); reconcile(); };
     const touchStart = (event: TouchEvent) => {
-      revealTouch = controls.classList.contains('video-controls-hidden') && event.target instanceof Node && !controls.contains(event.target);
+      const revealing = controls.classList.contains('video-controls-hidden') && event.target instanceof Node && !controls.contains(event.target);
+      revealTouch = normalLandscape() ? revealTouch || revealing : revealing;
       keyboard = false; held = true; show();
     };
     const touchEnd = (event: TouchEvent) => { held = event.touches.length > 0; schedule(); };
     const touchCancel = () => { revealTouch = false; held = false; schedule(); };
     const pointerDown = (event: PointerEvent) => {
-      if (event.pointerType !== 'touch') { revealTouch = false; keyboard = false; held = true; show(); }
+      if (event.pointerType !== 'touch' || normalLandscape()) {
+        revealTouch = normalLandscape() && controls.classList.contains('video-controls-hidden') && event.target instanceof Node && !controls.contains(event.target);
+        keyboard = false; held = true; show();
+      }
     };
-    const pointerUp = (event: PointerEvent) => { if (event.pointerType !== 'touch') touchCancel(); };
+    const pointerUp = (event: PointerEvent) => {
+      if (normalLandscape()) { held = false; schedule(); }
+      else if (event.pointerType !== 'touch') touchCancel();
+    };
+    const releasedOutside = () => { if (normalLandscape()) { held = false; schedule(); } };
+    const orientationChanged = () => {
+      if (fullscreen || surface.classList.contains('video-page-fullscreen') || doc.fullscreenElement || doc.webkitFullscreenElement) return;
+      held = false; revealTouch = false; normalWaiting = false; schedule();
+    };
     const keyDown = (event: KeyboardEvent) => {
       const modal = surface.closest('[data-task-modal]');
       if (!(event.target instanceof Node) || !modal?.contains(event.target)) return;
@@ -95,6 +113,9 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       // That touch only reveals controls; the always-visible Close stays usable.
       if (!revealTouch || event.detail === 0 || !(event.target instanceof Node) ||
         (event.target !== video && !controls.contains(event.target))) return;
+      // Normal-view taps keep their native playback/seek behavior. Only guard
+      // a newly exposed application button under the revealing finger.
+      if (normalLandscape() && event.target === video) { revealTouch = false; return; }
       revealTouch = false; event.preventDefault(); event.stopImmediatePropagation();
     };
     const focused = () => { if (keyboard) schedule(); };
@@ -104,6 +125,17 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       if (doc.fullscreenElement || doc.webkitFullscreenElement) restoreNativeControls();
     };
     const mediaChanged = (event: Event) => {
+      if (normalLandscape()) {
+        if (iosSeek.enabled && event.type === 'seeking') revealTouch = false;
+        if (event.type === 'waiting') normalWaiting = true;
+        else if (['playing', 'play', 'canplay', 'pause', 'ended', 'emptied'].includes(event.type)) normalWaiting = false;
+        if (['playing', 'play', 'pause', 'ended', 'seeking', 'seeked', 'waiting', 'error', 'emptied'].includes(event.type)) {
+          if (['pause', 'ended', 'seeking', 'waiting', 'error', 'emptied'].includes(event.type)) resetProgress();
+          // Resume starts a fresh visible interval, rather than retaining an
+          // old hidden state or a deadline from before a pause/seek.
+          show(); reconcile(); return;
+        }
+      }
       // A seek jump is not sustained playback. Genuine waiting/pause also
       // invalidates earlier progress immediately; subsequent motion can recover.
       if (['seeking', 'seeked', 'waiting', 'pause', 'ended', 'emptied', 'error'].includes(event.type)) resetProgress();
@@ -131,6 +163,14 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     doc.addEventListener('webkitfullscreenchange', browserFullscreenChanged);
     view.addEventListener('keydown', keyDown, true);
     coarse.addEventListener('change', schedule);
+    if (iphone) {
+      landscape.addEventListener('change', orientationChanged);
+      view.addEventListener('pointerup', releasedOutside, true);
+      view.addEventListener('pointercancel', releasedOutside, true);
+      view.addEventListener('touchend', releasedOutside, true);
+      view.addEventListener('touchcancel', releasedOutside, true);
+      view.addEventListener('blur', releasedOutside);
+    }
     schedule();
     return () => {
       iosSeek.dispose();
@@ -149,6 +189,14 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       doc.removeEventListener('webkitfullscreenchange', browserFullscreenChanged);
       view.removeEventListener('keydown', keyDown, true);
       coarse.removeEventListener('change', schedule);
+      if (iphone) {
+        landscape.removeEventListener('change', orientationChanged);
+        view.removeEventListener('pointerup', releasedOutside, true);
+        view.removeEventListener('pointercancel', releasedOutside, true);
+        view.removeEventListener('touchend', releasedOutside, true);
+        view.removeEventListener('touchcancel', releasedOutside, true);
+        view.removeEventListener('blur', releasedOutside);
+      }
     };
-  }, [videoRef, surfaceRef, controlsRef, source, fullscreen, error]);
+  }, [videoRef, surfaceRef, controlsRef, source, fullscreen, error, pip]);
 }
