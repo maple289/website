@@ -1,5 +1,14 @@
 # Delete-action inventory
 
+Unicode File Storage names keep the existing virtual paths, public IDs, ownership,
+Trash state and transfer receipts. The server resolves unsupported object-API
+characters through the private `users/<owner>/files-utf8/` namespace. Permanent
+deletion resolves actual objects by catalog identity; its pending-storage guard
+decodes both file namespaces before checking the saved folder tree. Preview
+invalidation uses the virtual path for encoded keys. No deletion caller, automatic
+tracking cancellation or confirmation bypass is added. Saved transfers still
+resume only in the existing confirmation's `onConfirm`.
+
 Retired migration duplicates have a separate operator-only cleanup gate. A DB
 operator verifies the manifest, backups, current resource binding and both
 copies before creating exact-identity intents that expire within 15 minutes.

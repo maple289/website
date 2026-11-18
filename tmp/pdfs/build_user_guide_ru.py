@@ -29,7 +29,8 @@ pdfmetrics.registerFontFamily('Guide',normal='Guide',bold='GuideBold',italic='Gu
 W,H = A4
 M = 40
 CW = W-2*M
-TOTAL_PAGES = 14
+TOTAL_PAGES = 18
+GUIDE_DATE = '17.11.2026'
 INK = HexColor('#182b47')
 BLUE = HexColor('#2563eb')
 MUTED = HexColor('#52657d')
@@ -75,19 +76,22 @@ def visual(number):
     pictures=[]
     text=''
     if number==1:
-        pictures=[screenshot(SHOTS/'16-current-home.png',crop=(0,70,751,570))]
+        pictures=[screenshot(SHOTS/'26-live-home.jpg',crop=(0,70,1210,730))]
         text='Публичная галерея. Личные разделы открываются через меню после входа.'
-    elif number==2:
-        pictures=[screenshot(SHOTS/'03-registration.jpg',crop=(50,82,504,677)),screenshot(SHOTS/'02-sign-in.jpg',crop=(50,112,504,647))]
-        text='Слева: Request account. Справа: Sign in. Пустые формы из предыдущей редакции; порядок входа проверен по текущему интерфейсу.'
+    elif number==3:
+        pictures=[screenshot(SHOTS/'29-live-group-upload.jpg')]
+        text='Загрузка в выбранную группу: проверьте Upload to group. Материал остается приватным; владелец не меняется.'
     elif number==4:
-        pictures=[screenshot(SHOTS/'18-current-file-menu.png',crop=(415,15,680,464))]
-        text='Меню собственной папки: Move, Copy, Paste here и Move to Trash. Paste here неактивна до Copy.'
+        pictures=[screenshot(SHOTS/'32-live-folder-menu.jpg')]
+        text='Текущее меню собственной папки: Share, временная ссылка, Move, Copy и Move to Trash.'
     elif number==5:
-        pictures=[screenshot(SHOTS/'17-current-files.png',crop=(492,140,1220,358))]
+        pictures=[screenshot(SHOTS/'31-live-files.jpg',crop=(490,145,1172,372))]
         text='Панель File Storage: Paste, New folder, Upload, поиск и переключатели вида.'
+    elif number==18:
+        pictures=[screenshot(SHOTS/'30-live-sharing.jpg')]
+        text='Share video: Visibility, People и Groups. Личные данные скрыты. Снятие сохраненного доступа требует подтверждения.'
     elif number==7:
-        pictures=[screenshot(SHOTS/'19-current-temporary-link.png',crop=(390,325,890,575))]
+        pictures=[screenshot(SHOTS/'33-live-temporary-link.jpg')]
         text='Начальное окно Temporary Share Link. Copy Link и Valid until появятся после создания.'
     elif number==8:
         desktop=screenshot(SHOTS/'20-people-desktop-redacted.png')
@@ -103,9 +107,18 @@ def visual(number):
     elif number==12:
         pictures=[screenshot(SHOTS/'25-demo-mobile-landscape.png')]
         text='Горизонтальный экран телефона: компактные кнопки и свой просмотр. Демонстрационные данные; набор звуковых кнопок зависит от устройства.'
+    elif number==15:
+        pictures=[screenshot(SHOTS/'28-live-group-filter.jpg',crop=(0,70,1210,610))]
+        text='Messenger group: выбрана группа my. Пустая галерея означает, что ей пока не назначены видео.'
+    elif number==16:
+        pictures=[screenshot(SHOTS/'27-live-notifications.jpg')]
+        text='Settings → Notifications. Enable Notifications включает доставку на этом устройстве; разрешение еще не запрошено.'
+    elif number==17:
+        pictures=[screenshot(SHOTS/'34-demo-iphone-landscape.png')]
+        text='Демонстрационный кадр из проверки WebKit, 15.11.2026. Горизонтальный просмотр на паузе с Fullscreen/Picture-in-picture; это не снимок физического iPhone.'
     if not pictures:
         return []
-    height={1:130,2:235,4:240,5:150,7:150,8:220,10:195,11:220,12:145}.get(number,150)
+    height={1:190,3:195,4:210,5:150,7:150,8:220,10:195,11:220,12:145,15:155,16:155,17:145,18:440}.get(number,150)
     if len(pictures)==1:
         flow=shot_flow(pictures[0],CW,height)
     else:
@@ -121,7 +134,7 @@ class GuideCanvas(Canvas):
         self.setFont('Guide',8);self.setFillColor(MUTED)
         self.drawRightString(W-M,H-34,'РУКОВОДСТВО ПОЛЬЗОВАТЕЛЯ')
         self.setStrokeColor(HexColor('#dbe4f0'));self.setLineWidth(.6);self.line(M,35,W-M,35)
-        self.drawString(M,22,'myhostage.ca/video/  |  Русская версия  |  11.10.2026')
+        self.drawString(M,22,f'myhostage.ca/video/  |  Русская версия  |  {GUIDE_DATE}')
         self.linkURL('https://myhostage.ca/video/',(M,16,M+115,31),relative=0)
         self.drawRightString(W-M,22,f'{self._pageNumber} / {TOTAL_PAGES}')
         super().showPage()
@@ -139,8 +152,8 @@ for index in range(1,len(parts),2):
     title,section=parts[index:index+2];number=int(title.split('.')[0])
     if number>1:story.append(PageBreak())
     else:
-        story.append(Paragraph('Обновлено 11 октября 2026 года. Видео, фото, файлы, Messages и звонки.',intro))
-        story.append(Paragraph('Кнопки указаны как на сайте. Возможности зависят от прав и браузера.',intro))
+        story.append(Paragraph('Обновлено 17 ноября 2026 года. Видео, фото, файлы, Messages и звонки.',intro))
+        story.append(Paragraph('Кнопки указаны как на сайте. Новые снимки действующего интерфейса; личные данные скрыты. Демонстрационные иллюстрации подписаны.',intro))
     story.append(Paragraph(inline(title),heading));story.extend(visual(number))
     lines=section.strip().splitlines();i=0
     while i<len(lines):
@@ -150,10 +163,13 @@ for index in range(1,len(parts),2):
             rows=[]
             while i<len(lines) and lines[i].strip().startswith('|'):
                 cells=[c.strip() for c in lines[i].strip().strip('|').split('|')]
-                if not all(re.fullmatch(r'[-:]+',c) for c in cells):rows.append([Paragraph(inline(c),cell) for c in cells])
+                table_cell = ParagraphStyle('TroubleshootingCell', parent=cell, fontSize=9, leading=12) if number==14 else cell
+                if not all(re.fullmatch(r'[-:]+',c) for c in cells):rows.append([Paragraph(inline(c),table_cell) for c in cells])
                 i+=1
             table=Table(rows,colWidths=[CW*.32,CW*.68],repeatRows=1,hAlign='LEFT')
             table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,0),HexColor('#eaf1fb')),('ROWBACKGROUNDS',(0,1),(-1,-1),[white,HexColor('#f7f9fc')]),('LINEBELOW',(0,0),(-1,0),.6,HexColor('#cbd8eb')),('LEFTPADDING',(0,0),(-1,-1),10),('RIGHTPADDING',(0,0),(-1,-1),10),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
+            if number==14:
+                table.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
             story.extend([table,Spacer(1,12)]);continue
         if re.match(r'^\d+\. ',line):
             story.append(Paragraph(inline(line),body));i+=1;continue
@@ -162,7 +178,7 @@ for index in range(1,len(parts),2):
             block.append(lines[i].strip());i+=1
         story.append(Paragraph(inline(' '.join(block)),body))
 
-doc=GuideDoc(str(PDF),pagesize=A4,leftMargin=M,rightMargin=M,topMargin=60,bottomMargin=48,title='MyHostage - руководство пользователя (11.10.2026)',author='MyHostage',subject='Контент, доступ, файлы, Messenger и звонки')
+doc=GuideDoc(str(PDF),pagesize=A4,leftMargin=M,rightMargin=M,topMargin=60,bottomMargin=48,title=f'MyHostage - руководство пользователя ({GUIDE_DATE})',author='MyHostage',subject='Контент, группы, уведомления, доступ, файлы, Messenger и звонки')
 doc.build(list(story),canvasmaker=GuideCanvas)
 from pypdf import PdfReader
 pages=len(PdfReader(PDF).pages)

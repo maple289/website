@@ -52,10 +52,11 @@ try {
  await sql('INSERT INTO user_file_shares VALUES($1,$2,$3)',[owner,meta.object_path,viewer]);assert.ok(await resolve('users',physical,viewer,otherSid));
  const fileHash='b'.repeat(64);
  await sql("INSERT INTO library_storage_link_grants(token_hash,resource_type,resource_id,media_role,user_id,session_id,expires_at) VALUES($1,'file',$2,'file',$3,$4,now()+interval '10 minutes')",[fileHash,meta.public_id,viewer,otherSid]);
- const moved=owner+'/files/Folder/Renamed.docx';await sql('UPDATE storage.objects SET name=$2 WHERE id=$1',[source.id,moved]);
+ const renamed=owner+'/Folder/Руководство пользователя.docx';
+ const moved=(await sql('SELECT streamly_internal.file_storage_key($1) value',[renamed]))[0].value;await sql('UPDATE storage.objects SET name=$2 WHERE id=$1',[source.id,moved]);
  assert.equal((await check(fileHash)).object_path,moved,'Saved file capabilities follow stable public identity after an authorized move');
  await sql('DELETE FROM user_file_shares WHERE owner_id=$1',[owner]);assert.equal(await check(fileHash),null);
- await sql('INSERT INTO user_file_shares VALUES($1,$2,NULL)',[owner,owner+'/Folder/Renamed.docx']);
+ await sql('INSERT INTO user_file_shares VALUES($1,$2,NULL)',[owner,renamed]);
  assert.ok((await resolve('users',moved)).public);
  await sql('UPDATE user_file_metadata SET trashed_at=now() WHERE source_id=$1',[source.id]);assert.equal(await resolve('users',moved),null);
  await sql('DELETE FROM photos WHERE id=$1',[photo]);assert.equal(await resolve('user-images',oldPath,owner,sid),null,'Retained bytes cannot revive a deleted resource');

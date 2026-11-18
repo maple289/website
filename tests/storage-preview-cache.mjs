@@ -31,6 +31,7 @@ try {
  for(const name of ['get_file_preview_source','get_preview_source_by_id'])
    await db.exec(locations.match(new RegExp('CREATE OR REPLACE FUNCTION public\\.'+name+'[\\s\\S]*?\\$\\$;'))[0]);
  await apply('20261108080000_library_preview_cache_locations.sql');
+ await apply('20261118010000_unicode_file_names.sql');
  const old=await object('user-files',owner+'/ready.docx');await service();let job=await queue(old);
  assert.equal(job.cache_bucket,'file-previews');assert.equal(job.preview_path,job.id+'.pdf');
  await sql("UPDATE file_preview_jobs SET status='ready' WHERE id=$1",[job.id]);
@@ -84,5 +85,14 @@ try {
  await sql('UPDATE storage.objects SET version=$2 WHERE id=$1',[newSource.id,randomUUID()]);
  assert.equal((await sql('SELECT id FROM file_preview_jobs WHERE id=$1',[job.id])).length,0);
  await root();await db.exec('SET ROLE authenticated');await assert.rejects(sql('SELECT * FROM file_preview_cleanup_candidates()'),/permission denied/);
- console.log('PASS preview cache layout, ready reuse, library drain, Messenger independence, scoped cleanup, late-upload rejection, prepared copy and source invalidation');
+ await root();
+ const unicodePath=owner+'/Русская папка/Отчёт.docx';
+ const unicodeKey=(await sql('SELECT streamly_internal.file_storage_key($1) value',[unicodePath]))[0].value;
+ const unicodeSource=await object('users',unicodeKey);
+ await service();const unicodeJob=await queue(unicodeSource);
+ assert.equal(unicodeJob.object_path,unicodeKey);assert.equal(unicodeJob.cache_bucket,'cache');
+ await root();await sql('UPDATE user_file_metadata SET trashed_at=now() WHERE source_id=$1',[unicodeSource.id]);
+ assert.equal((await sql('SELECT id FROM file_preview_jobs WHERE id=$1',[unicodeJob.id])).length,0);
+ assert.ok((await sql('SELECT * FROM file_preview_cleanup')).some(row=>row.path===unicodeJob.preview_path));
+ console.log('PASS preview cache layout, ready reuse, library drain, Messenger independence, scoped cleanup, late-upload rejection, prepared copy, source invalidation and Russian filename preview/Trash invalidation');
 } catch(error) {console.error(error.message,error.where,error.query,error.params);process.exitCode=1;} finally {await db.close();}

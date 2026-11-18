@@ -9,6 +9,7 @@ const suites = [
   'tests/single-final-video-publication.mjs',
   'tests/storage-location-compatibility.mjs',
   'tests/storage-file-catalog.mjs',
+  'tests/unicode-file-names.mjs',
   'tests/storage-file-returning-policy.mjs',
   'tests/storage-preview-cache.mjs',
   'tests/library-storage-links-db.mjs',

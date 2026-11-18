@@ -46,6 +46,7 @@ export async function setupFileStorageFixture(db, size=12) {
  await apply('20261108020000_user_file_catalog_compatibility.sql');
  await apply('20261108040000_user_storage_authorization.sql');
  await apply('20261108050000_file_deletion_locations.sql');
+ await apply('20261118010000_unicode_file_names.sql');
  await db.exec(`GRANT SELECT,INSERT,UPDATE,DELETE ON storage.objects TO anon,authenticated,service_role;
    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
    CREATE POLICY fixture_legacy_owner ON storage.objects FOR ALL TO authenticated

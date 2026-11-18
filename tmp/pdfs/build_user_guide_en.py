@@ -1,0 +1,189 @@
+"""Rebuild the illustrated guide from USER_GUIDE_EN.md (single text source)."""
+from pathlib import Path
+from html import escape
+from io import BytesIO
+import json
+import re
+
+from PIL import Image, ImageDraw
+from reportlab.pdfbase import pdfmetrics
+from reportlab import rl_config
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.colors import HexColor, white
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, Image as PDFImage, KeepTogether
+
+ROOT = Path(__file__).resolve().parents[2]
+rl_config.useA85 = 0
+OUT = ROOT / 'output/pdf'
+SHOTS = OUT / 'screenshots'
+TMP = ROOT / 'tmp/pdfs'
+PDF = OUT / 'MyHostage_User_Guide_EN.pdf'
+OUT.mkdir(parents=True, exist_ok=True)
+SHOTS.mkdir(parents=True, exist_ok=True)
+for name, file in [('Guide','arial.ttf'),('GuideBold','arialbd.ttf'),('GuideItalic','ariali.ttf'),('GuideSymbol','seguisym.ttf')]:
+    pdfmetrics.registerFont(TTFont(name,str(Path('C:/Windows/Fonts') / file)))
+pdfmetrics.registerFontFamily('Guide',normal='Guide',bold='GuideBold',italic='GuideItalic',boldItalic='GuideBold')
+W,H = A4
+M = 40
+CW = W-2*M
+TOTAL_PAGES = 18
+GUIDE_DATE = '2026-11-17'
+INK = HexColor('#182b47')
+BLUE = HexColor('#2563eb')
+MUTED = HexColor('#52657d')
+body = ParagraphStyle('Body',fontName='Guide',fontSize=10.2,leading=14.5,textColor=INK,spaceAfter=9)
+heading = ParagraphStyle('Heading',parent=body,fontName='GuideBold',fontSize=20,leading=25,spaceAfter=14,keepWithNext=True)
+cell = ParagraphStyle('Cell',parent=body,fontSize=9.5,leading=13,spaceAfter=0)
+caption = ParagraphStyle('Caption',parent=body,fontSize=8,leading=10.5,textColor=MUTED,spaceAfter=10)
+intro = ParagraphStyle('Intro',parent=body,fontSize=9,leading=12,textColor=MUTED)
+glyphs = pdfmetrics.getFont('Guide').face.charToGlyph
+symbols = pdfmetrics.getFont('GuideSymbol').face.charToGlyph
+
+def inline(text):
+    fragments = []
+    for char in text:
+        if ord(char) not in glyphs and not char.isspace():
+            if ord(char) not in symbols:
+                raise ValueError(f'Unsupported character: {char!r}')
+            fragments.append(f'<font name="GuideSymbol">{escape(char)}</font>')
+        else:
+            fragments.append(escape(char))
+    value = ''.join(fragments)
+    value = re.sub(r'`([^`]+)`', r'\1', value)
+    value = re.sub(r'\[([^\]]+)\]\((https://[^)]+)\)',r'<link href="\2" color="#2563eb">\1</link>',value)
+    value = re.sub(r'\*\*([^*]+)\*\*',r'<b>\1</b>',value)
+    return value
+
+def screenshot(path,crop=None,redactions=(),saved=None):
+    image=Image.open(path).convert('RGB')
+    draw=ImageDraw.Draw(image)
+    for rect in redactions:
+        draw.rounded_rectangle(rect,radius=4,fill='#dce5ef')
+    if crop:
+        image=image.crop(crop)
+    if saved:
+        image.save(SHOTS/saved)
+    return image
+
+def shot_flow(image,max_width,max_height):
+    scale=min(max_width/image.width,max_height/image.height)
+    stream=BytesIO();image.save(stream,format='PNG');stream.seek(0)
+    return PDFImage(stream,width=image.width*scale,height=image.height*scale,hAlign='CENTER')
+
+def visual(number):
+    pictures=[]
+    text=''
+    if number==1:
+        pictures=[screenshot(SHOTS/'26-live-home.jpg',crop=(0,70,1210,730))]
+        text='Public gallery. After signing in, open personal sections through the sidebar menu.'
+    elif number==3:
+        pictures=[screenshot(SHOTS/'29-live-group-upload.jpg')]
+        text='Uploading to the selected group: check Upload to group. Content stays private and ownership stays with you.'
+    elif number==4:
+        pictures=[screenshot(SHOTS/'32-live-folder-menu.jpg')]
+        text='Current menu for your own folder: Share, temporary link, Move, Copy, and Move to Trash.'
+    elif number==5:
+        pictures=[screenshot(SHOTS/'31-live-files.jpg',crop=(490,145,1172,372))]
+        text='File Storage toolbar: Paste, New folder, Upload, search, and view controls.'
+    elif number==18:
+        pictures=[screenshot(SHOTS/'30-live-sharing.jpg')]
+        text='Share video: Visibility, People, and Groups. Personal information is hidden. Removing saved access requires confirmation.'
+    elif number==7:
+        pictures=[screenshot(SHOTS/'33-live-temporary-link.jpg')]
+        text='Initial Temporary Share Link dialog. Copy Link and Valid until appear after a link is created.'
+    elif number==8:
+        desktop=screenshot(SHOTS/'20-people-desktop-redacted.png')
+        mobile=screenshot(SHOTS/'21-people-mobile-redacted.png')
+        pictures=[desktop,mobile]
+        text='Left: People on a computer. Right: upper part of New conversation on a phone; Cancel is below. Names/emails are hidden.'
+    elif number==10:
+        pictures=[screenshot(SHOTS/'22-demo-voice-call.png'),screenshot(SHOTS/'23-demo-video-call.png')]
+        text='Demonstration data. Left: Voice call without video. Right: Video call with a small self-view.'
+    elif number==11:
+        pictures=[screenshot(SHOTS/'24-demo-video-fullscreen.png')]
+        text='Fullscreen video call: remote participant, self-view, and bottom controls. Demonstration data.'
+    elif number==12:
+        pictures=[screenshot(SHOTS/'25-demo-mobile-landscape.png')]
+        text='Phone in landscape: compact controls and self-view. Demonstration data; audio controls depend on the device.'
+    elif number==15:
+        pictures=[screenshot(SHOTS/'28-live-group-filter.jpg',crop=(0,70,1210,610))]
+        text='Messenger group: the group my is selected. The empty gallery means no videos have been assigned to it yet.'
+    elif number==16:
+        pictures=[screenshot(SHOTS/'27-live-notifications.jpg')]
+        text='Settings → Notifications. Enable Notifications enables delivery on this device; permission has not been requested yet.'
+    elif number==17:
+        pictures=[screenshot(SHOTS/'34-demo-iphone-landscape.png')]
+        text='WebKit test illustration, November 15, 2026. Paused landscape video with Fullscreen/Picture-in-picture; not a physical iPhone screenshot.'
+    if not pictures:
+        return []
+    height={1:190,3:195,4:210,5:150,7:150,8:220,10:195,11:220,12:145,15:155,16:155,17:145,18:440}.get(number,150)
+    if len(pictures)==1:
+        flow=shot_flow(pictures[0],CW,height)
+    else:
+        col=(CW-16)/2
+        flow=Table([[shot_flow(pictures[0],col,height),shot_flow(pictures[1],col,height)]],colWidths=[col+8,col+8])
+        flow.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),8),('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    return [KeepTogether([flow,Spacer(1,6),Paragraph(inline(text),caption)])]
+
+class GuideCanvas(Canvas):
+    def showPage(self):
+        self.setFillColor(INK);self.rect(0,H-7,W,7,fill=1,stroke=0)
+        self.setFont('GuideBold',13);self.drawString(M,H-35,'MyHostage')
+        self.setFont('Guide',8);self.setFillColor(MUTED)
+        self.drawRightString(W-M,H-34,'USER GUIDE')
+        self.setStrokeColor(HexColor('#dbe4f0'));self.setLineWidth(.6);self.line(M,35,W-M,35)
+        self.drawString(M,22,f'myhostage.ca/video/  |  English edition  |  {GUIDE_DATE}')
+        self.linkURL('https://myhostage.ca/video/',(M,16,M+115,31),relative=0)
+        self.drawRightString(W-M,22,f'{self._pageNumber} / {TOTAL_PAGES}')
+        super().showPage()
+
+class GuideDoc(SimpleDocTemplate):
+    def afterFlowable(self,flowable):
+        if isinstance(flowable,Paragraph) and flowable.style.name=='Heading':
+            title=flowable.getPlainText();key='section-'+title.split('.')[0]
+            self.canv.bookmarkPage(key);self.canv.addOutlineEntry(title,key,level=0,closed=False)
+
+source=(ROOT/'USER_GUIDE_EN.md').read_text(encoding='utf-8')
+parts=re.split(r'^## (.+)$',source,flags=re.M)
+story=[]
+for index in range(1,len(parts),2):
+    title,section=parts[index:index+2];number=int(title.split('.')[0])
+    if number>1:story.append(PageBreak())
+    else:
+        story.append(Paragraph('Updated November 17, 2026. Videos, photos, files, Messages, and calls.',intro))
+        story.append(Paragraph('Button names match the site. Updated live-interface screenshots hide personal details. Demonstration illustrations are labelled.',intro))
+    story.append(Paragraph(inline(title),heading));story.extend(visual(number))
+    lines=section.strip().splitlines();i=0
+    while i<len(lines):
+        line=lines[i].strip()
+        if not line:i+=1;continue
+        if line.startswith('|'):
+            rows=[]
+            while i<len(lines) and lines[i].strip().startswith('|'):
+                cells=[c.strip() for c in lines[i].strip().strip('|').split('|')]
+                table_cell = ParagraphStyle('TroubleshootingCell', parent=cell, fontSize=9, leading=12) if number==14 else cell
+                if not all(re.fullmatch(r'[-:]+',c) for c in cells):rows.append([Paragraph(inline(c),table_cell) for c in cells])
+                i+=1
+            table=Table(rows,colWidths=[CW*.32,CW*.68],repeatRows=1,hAlign='LEFT')
+            table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,0),HexColor('#eaf1fb')),('ROWBACKGROUNDS',(0,1),(-1,-1),[white,HexColor('#f7f9fc')]),('LINEBELOW',(0,0),(-1,0),.6,HexColor('#cbd8eb')),('LEFTPADDING',(0,0),(-1,-1),10),('RIGHTPADDING',(0,0),(-1,-1),10),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
+            if number==14:
+                table.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
+            story.extend([table,Spacer(1,12)]);continue
+        if re.match(r'^\d+\. ',line):
+            story.append(Paragraph(inline(line),body));i+=1;continue
+        block=[line];i+=1
+        while i<len(lines) and lines[i].strip() and not lines[i].strip().startswith('|') and not re.match(r'^\d+\. ',lines[i].strip()):
+            block.append(lines[i].strip());i+=1
+        story.append(Paragraph(inline(' '.join(block)),body))
+
+doc=GuideDoc(str(PDF),pagesize=A4,leftMargin=M,rightMargin=M,topMargin=60,bottomMargin=48,title=f'MyHostage - User Guide ({GUIDE_DATE})',author='MyHostage',subject='Content, groups, notifications, sharing, files, Messenger, and calls')
+doc.build(list(story),canvasmaker=GuideCanvas)
+from pypdf import PdfReader
+pages=len(PdfReader(PDF).pages)
+if pages != TOTAL_PAGES:
+    TOTAL_PAGES=pages
+    doc.build(list(story),canvasmaker=GuideCanvas)
+print(json.dumps({'pdf':str(PDF),'bytes':PDF.stat().st_size,'sections':(len(parts)-1)//2,'pages':pages},ensure_ascii=False))
