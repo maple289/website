@@ -47,7 +47,7 @@ console.log('PASS normal build/lint globs, Windows paths, Unicode names, finite 
 const child = spawnSync(process.execPath, ['-e', `
   const assert = require('node:assert/strict');
   const pm = require(process.argv[1]);
-  for (const pattern of ['+(*)', '*(*)', '+(*a)', '*(*a)', '+(*a|b)', '+(@(*a))', '+(+(a))', '+(*(ab))']) {
+  for (const pattern of ['+(*)', '*(*)', '+(*a)', '*(*a)', '+(*a|b)', '+(@(*a))', '+(+(a))', '+(*(ab))', '+(@(a|aa))', '+((a|aa))', '+((a)+)', '+({a,aa})', '+(ab|abab)', '+([ab]|a)', '+(a?|a)']) {
     const input = (pattern.includes('ab') ? 'ab' : 'a').repeat(128);
     assert.equal(pm.isMatch(input + '/', pattern), false, pattern);
     if (!['+(*)', '*(*)'].includes(pattern)) assert.equal(pm.isMatch(input + '!', pattern), false, pattern);

@@ -13,8 +13,8 @@ The upstream repeated-extglob analyzer skips single-branch bodies such as `*a`.
 Repeating their generated wildcard regex can cause exponential backtracking.
 
 Only `lib/parse.js` differs from the upstream executable code. Its existing
-repeated-extglob safety analysis now also rejects unbounded wildcards or nested
-repetitions in a single branch. It ignores escaped/quoted literals and character
+repeated-extglob safety analysis now also rejects unbounded wildcards, compound
+nested bodies, and prefix-overlapping literal alternatives. It ignores escaped/quoted literals and single-branch character
 classes and retains upstream's safe character-sequence folding. Rejected patterns
 use upstream's existing literal fallback. Normal globs and finite alternatives
 retain their behavior. As upstream documents, deliberately setting

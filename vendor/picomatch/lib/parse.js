@@ -288,7 +288,7 @@ const repeatedExtglobRecursion = pattern => {
 // generate nested quantifiers even when there is only ONE alternative. Preserve
 // escaped/quoted literals and character classes. The existing safe character
 // sequence folding below still takes precedence over this conservative guard.
-const hasUnboundedRepeat = branch => {
+const hasUnboundedRepeat = (branch, multipleBranches) => {
   let escaped = false;
   let quoted = false;
   let bracket = 0;
@@ -309,6 +309,7 @@ const hasUnboundedRepeat = branch => {
     }
     if (quoted) continue;
     if (ch === '[') {
+      if (multipleBranches) return true;
       bracket++;
       continue;
     }
@@ -316,7 +317,7 @@ const hasUnboundedRepeat = branch => {
       bracket--;
       continue;
     }
-    if (bracket === 0 && (ch === '*' || (ch === '+' && branch[index + 1] === '('))) {
+    if (bracket === 0 && ('*+(){}'.includes(ch) || (multipleBranches && ch === '?'))) {
       return true;
     }
   }
@@ -384,8 +385,16 @@ const analyzeRepeatedExtglob = (body, options) => {
 
   // CVE-2026-112366: do not restrict this check to branches.length > 1.
   // Reuse upstream's literal fallback instead of emitting a backtracking regex.
-  if (branches.some(hasUnboundedRepeat)) {
+  if (branches.some(branch => hasUnboundedRepeat(branch, branches.length > 1))) {
     return { risky: true };
+  }
+  // Repeating prefix-overlapping literal alternatives is ambiguous too, even
+  // when neither alternative consists of repetitions of one character.
+  const literals = branches.map(normalizeSimpleBranch).filter(Boolean).map(branch => branch.replace(/\\(.)/g, '$1'));
+  for (let i = 0; i < literals.length; i++) {
+    for (let j = i + 1; j < literals.length; j++) {
+      if (literals[i].startsWith(literals[j]) || literals[j].startsWith(literals[i])) return { risky: true };
+    }
   }
 
   return { risky: false };
