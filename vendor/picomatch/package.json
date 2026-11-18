@@ -1,0 +1,11 @@
+{
+  "name": "@myhostage/picomatch",
+  "version": "4.0.7",
+  "private": true,
+  "description": "Locally patched picomatch 4.0.7 for CVE-2026-112366",
+  "license": "MIT",
+  "main": "index.js",
+  "sideEffects": false,
+  "files": ["index.js", "posix.js", "lib", "LICENSE", "README.md"],
+  "engines": { "node": ">=12" }
+}
