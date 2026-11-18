@@ -9,7 +9,7 @@ const formats: Record<string, PreviewKind> = {
 export function filePreviewKind(entry: FileEntry): PreviewKind | undefined {
   if (entry.isFolder) return undefined;
   return (entry.name.includes('.') ? formats[entry.name.split('.').pop()?.toLowerCase() ?? ''] : undefined) ??
-    (entry.mimeType.startsWith('video/') ? 'video' : undefined);
+    (entry.mimeType.split(';')[0].trim().toLowerCase() === 'application/pdf' ? 'pdf' : entry.mimeType.startsWith('video/') ? 'video' : undefined);
 }
 
 export type PreviewStatus = { status: 'available' | 'generating' | 'failed' | 'unsupported'; kind?: PreviewKind; mime?: string; message?: string; queued?: boolean };

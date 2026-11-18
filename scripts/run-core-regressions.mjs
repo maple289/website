@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 const suites = [
   'tests/picomatch-security.mjs',
+  'tests/pdf-preview-access.mjs',
   'tests/audit-account-security.mjs', 'tests/audit-media-security.mjs', 'tests/audit-client-resilience.mjs',
   'tests/public-preview-access.mjs', 'tests/image-data-url.mjs',
   'scripts/test-registration-email.mjs', 'tests/video-bitrate-settings.mjs', 'tests/admin-statistics-reset-db.mjs',

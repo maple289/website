@@ -59,7 +59,8 @@ Deno.serve(async (req: Request) => {
     const { data: source, error } = await client.rpc("messenger_attachment", { p_id: id });
     if (error || !source) return unavailable();
     const download = params.get("download") === "1", video = params.get("video") === "1";
-    const extension = source.name.split('.').pop()?.toLowerCase() ?? '', type = previewFormats[extension];
+    const extension = source.name.split('.').pop()?.toLowerCase() ?? '';
+    const type = previewFormats[extension] ?? (source.mime?.split(';')[0].trim().toLowerCase() === 'application/pdf' ? previewFormats.pdf : undefined);
     let bucket = "messenger-attachments", path = source.path, mime = "application/octet-stream", maximum = 100 * 1048576;
     if (!download && !video) {
       if (!type) return json({ status: "unsupported", message: "Preview is not available. You can download the original file." });

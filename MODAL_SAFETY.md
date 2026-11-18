@@ -230,3 +230,11 @@ Password; Return to sign in protects both draft fields and Keep Editing retains
 them. A synchronous guard prevents duplicate saves. Browser fixtures cover
 desktop, tablet, portrait and landscape, draft preservation, expiration errors,
 resend and completion; no live applicant emails are sent by tests.
+
+PDF files retain TaskModal focus/inertness/scroll locking and never close on an
+outside click or Escape. Explicit Close works during fetch, module load, rendering,
+errors and fullscreen, cancels work, revokes the local Blob, and releases owned
+fullscreen. PDF-only VisualViewport measurement and safe-area padding retain Close
+and controls during toolbar changes/rotation. Unsupported element fullscreen uses
+a CSS viewport fallback. The read-only viewer has no draft or destructive actions.
+Temporary-share PDFs use the same modal and their existing scoped endpoint.

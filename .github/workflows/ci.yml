@@ -83,6 +83,11 @@ jobs:
           BROWSER_ENGINE=firefox node scripts/run-ui-regressions.mjs messenger-group-sharing-ui media-group-filter
           BROWSER_ENGINE=webkit node scripts/run-ui-regressions.mjs messenger-group-sharing-ui media-group-filter
 
+      - name: PDF viewer Firefox and iPhone WebKit compatibility
+        run: |
+          BROWSER_ENGINE=firefox node scripts/run-ui-regressions.mjs pdf-preview
+          BROWSER_ENGINE=webkit node scripts/run-ui-regressions.mjs pdf-preview
+
       - name: Browser and transfer regressions
         env:
           BROWSER_CHANNEL: chromium

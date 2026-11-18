@@ -12,7 +12,7 @@ const suites = {
   'messenger-call-layout': 'call-ui-test', 'messenger-call-audio-ui': 'call-ui-test',
   'messenger-people-ui': 'upload-test', 'messenger-deletion-ui': 'upload-test',
   'content-context': 'upload-test', 'public-navigation': 'upload-test',
-  'settings-navigation': 'settings-test', 'file-previews': 'preview-test',
+  'settings-navigation': 'settings-test', 'file-previews': 'preview-test', 'pdf-preview': 'preview-test',
   'file-integrity': 'upload-test', 'video-bitrate-settings-browser': 'upload-test',
   'audit-chunk-recovery': 'upload-test',
   'initial-password-ui': 'upload-test',
@@ -28,6 +28,7 @@ for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object
   const localApiPort = name === 'messenger-group-sharing-ui' ? 5229 : name === 'media-group-filter' ? 5230 : null;
   const server = name === 'messenger-notifications-ui' ? null : ['public-previews', 'public-consumption', 'video-player-recovery', 'media-double-tap'].includes(name) ? await createPublicPreviewServer() : await createServer({ configFile: false, root: process.cwd(), plugins: [react()], envPrefix: [],
     resolve: { alias: { '@': path.resolve('src') } },
+    ...(name === 'pdf-preview' || name === 'file-previews' ? { optimizeDeps: { include: ['pdfjs-dist/legacy/build/pdf.mjs', 'pdfjs-dist/legacy/web/pdf_viewer.mjs'] } } : {}),
     // Match production's same-origin proxy for the group lifecycle fixture.
     // WebKit otherwise reports navigation-aborted mocked CORS RPCs as page errors.
     define: { 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(localApiPort ? `http://127.0.0.1:${localApiPort}` : `https://${suites[name]}.supabase.co`), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('isolated-fixture') },

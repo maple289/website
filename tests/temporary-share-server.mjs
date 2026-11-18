@@ -8,7 +8,7 @@ const javascript = ts.transpileModule(source, { compilerOptions: { target: ts.Sc
 const owner = '11111111-1111-4111-8111-111111111111';
 const hash = async token => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))).toString('hex');
 const token = 'a'.repeat(64), tokenHash = await hash(token);
-let handler, stored = [], denied = false, deleted = false, trashed = false, storageCalls = [], created = [], tableReads = [];
+let handler, stored = [], denied = false, deleted = false, trashed = false, storageCalls = [], created = [], tableReads = [], fileMime = 'text/plain';
 let link = { id: 'fixture', owner_id: owner, content_type: 'photo', content_id: 'photo-id', photo_id: 'photo-id', token_hash: tokenHash, revoked_at: null, expires_at: new Date(Date.now()+86400000).toISOString() };
 function createClient(base, key) {
   return {
@@ -29,7 +29,7 @@ function createClient(base, key) {
           if (table === 'photos') return { data: { owner_id: owner, storage_bucket: 'user-images', storage_path: `${owner}/photo.jpg`, file_name: 'Photo.jpg', mime_type: 'image/jpeg' } };
           if (table === 'videos') return { data: { owner_id: owner, storage_bucket: 'user-videos', storage_path: `${owner}/video.mp4`, processed_storage_path: `${owner}/processed.mp4`, file_name: 'Video.mp4', mime_type: 'video/mp4', processing_status: 'ready' } };
           if (table === 'storage_settings') return { data: { images_base_path: 'images', videos_base_path: 'videos' } };
-          if (table === 'user_file_metadata') { const path = filters.object_path; return { data: { object_path: path, is_folder: path === `${owner}/Root`, trashed_at: null, mime_type: 'text/plain' } }; }
+          if (table === 'user_file_metadata') { const path = filters.object_path; return { data: { object_path: path, is_folder: path === `${owner}/Root`, trashed_at: null, mime_type: fileMime } }; }
           throw new Error('Unexpected table');
         } };
       return query;
@@ -69,6 +69,21 @@ response = await get('&metadata=1'); const folder = await response.json(); asser
 response = await get('&child=child.txt&metadata=1'); assert.equal((await response.json()).name, 'child.txt');
 trashed = true; assert.equal((await get('&child=child.txt')).status, 404); trashed = false;
 pass('folder scope permits its children only; traversal and trashed ancestors denied');
+fileMime = 'application/pdf';
+response = await get('&child=Manual.pdf&metadata=1');
+assert.equal((await response.json()).mime, 'application/pdf');
+response = await get('&child=Manual.pdf');
+assert.equal(response.status, 200); assert.equal(response.headers.get('Content-Type'), 'application/pdf');
+assert.equal(response.headers.get('Cache-Control'), 'no-store, max-age=0');
+const pdfCalls = storageCalls.length;
+link.revoked_at = new Date().toISOString();
+assert.equal((await get('&child=Manual.pdf')).status, 404);
+link.revoked_at = null; link.expires_at = new Date(Date.now() - 1).toISOString();
+assert.equal((await get('&child=Manual.pdf&metadata=1')).status, 410);
+assert.equal((await get('&child=Manual.pdf')).status, 410);
+assert.equal(storageCalls.length, pdfCalls);
+link.expires_at = new Date(Date.now()+86400000).toISOString();
+pass('temporary PDF metadata and bytes remain scoped; saved URLs fail after revocation or expiry');
 denied = true;
 assert.equal((await handler(new Request('https://site.test/temporary-share', { method: 'POST', body: JSON.stringify({ type: 'photo', id: 'photo-id' }) }))).status, 401);
 denied = false;

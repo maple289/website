@@ -43,7 +43,8 @@ Deno.serve(async (req: Request) => {
     if (segments.some((part) => !part || part === "." || part === ".." || part.includes("\\"))) return unavailable();
     const { data: source, error: sourceError } = await service.rpc("get_file_preview_source", { p_path: path });
     if (sourceError || !source) return unavailable();
-    const extension = path.split(".").pop()!.toLowerCase(), type = types[extension];
+    const extension = path.split(".").pop()!.toLowerCase();
+    const type = types[extension] ?? (source.mime?.split(';')[0].trim().toLowerCase() === 'application/pdf' ? types.pdf : undefined);
     if (!type) return json({ status: "unsupported", message: "Preview is not available for this file type. You can still download the original file." });
     const [kind, mime, maximum] = type;
     if (source.size > maximum) return json({ status: "failed", message: `This file exceeds the ${maximum / 1048576} MB preview limit. You can still download the original file.` });
