@@ -1,5 +1,12 @@
 # Modal safety inventory
 
+File Manager Shift+Delete and Shift-modified Delete controls use the existing
+DeleteConfirmationProvider, including explicit Cancel, no outside/Escape dismissal,
+synchronous duplicate-request guard, disabled pending actions and retained errors.
+No draft/task dialog or second deletion modal is added. Shortcuts are ignored in
+editable fields, open menus and existing modal layers. Permanent preparation and
+cleanup occur only in onConfirm; retries preserve the prepared Trash identity.
+
 Video/photo upload dialogs capture the selected discovery group and account at
 open, display the destination, and preserve TaskModal/useGuardedClose behavior.
 Group uploads are private; a membership refresh cannot silently redirect them.

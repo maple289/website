@@ -3,19 +3,29 @@ import { createPortal } from 'react-dom';
 import { MoreVertical } from 'lucide-react';
 import './ContentContextMenu.css';
 
-export type ContentAction = { id: string; label: string; icon?: ReactNode; disabled?: boolean; danger?: boolean; run: () => void };
-export type MenuAnchor = { x: number; y: number };
+export type ContentAction = { id: string; label: string; shiftLabel?: string; icon?: ReactNode; disabled?: boolean; danger?: boolean; run: (modifiers?: { shiftKey: boolean }) => void };
+export type MenuAnchor = { x: number; y: number; shiftKey?: boolean };
 
 export function ContentContextMenu({ name, actions, className = '', anchor, onClose }: {
   name: string; actions: ContentAction[]; className?: string; anchor?: MenuAnchor; onClose?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [shiftHeld, setShiftHeld] = useState(false);
   const [position, setPosition] = useState({ left: 0, top: 0 });
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
   const visible = actions.length > 0 && (open || !!anchor);
+  const hasShiftAction = actions.some(action => action.shiftLabel);
   const close = () => { setOpen(false); onClose?.(); };
+  useEffect(() => {
+    if (!visible || !hasShiftAction) return;
+    if (anchor) setShiftHeld(!!anchor.shiftKey);
+    const changed = (event: KeyboardEvent) => { if (event.key === 'Shift') setShiftHeld(event.type === 'keydown'); };
+    const reset = () => setShiftHeld(false);
+    window.addEventListener('keydown', changed); window.addEventListener('keyup', changed); window.addEventListener('blur', reset);
+    return () => { window.removeEventListener('keydown', changed); window.removeEventListener('keyup', changed); window.removeEventListener('blur', reset); };
+  }, [visible, hasShiftAction, anchor]);
   useEffect(() => { if (!actions.length) setOpen(false); }, [actions.length]);
   useLayoutEffect(() => {
     if (!visible || !panel.current) return;
@@ -53,7 +63,7 @@ export function ContentContextMenu({ name, actions, className = '', anchor, onCl
   if (!actions.length) return null;
   return <>
     {!anchor && <button ref={trigger} type="button" className={`content-menu-trigger ${className}`} aria-label={`Actions for ${name}`} aria-haspopup="menu" aria-expanded={visible} aria-controls={visible ? id : undefined}
-      onClick={event => { event.stopPropagation(); setOpen(value => !value); }} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); } }}><MoreVertical size={18} /></button>}
+      onClick={event => { event.stopPropagation(); setShiftHeld(event.shiftKey); setOpen(value => !value); }} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); setShiftHeld(event.shiftKey); setOpen(true); } }}><MoreVertical size={18} /></button>}
     {visible && createPortal(<div id={id} ref={panel} role="menu" tabIndex={-1} aria-label={`Actions for ${name}`} className="content-menu" style={position}
       onClick={event => event.stopPropagation()} onContextMenu={event => event.preventDefault()} onKeyDown={event => {
         const buttons = Array.from(panel.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
@@ -65,7 +75,7 @@ export function ContentContextMenu({ name, actions, className = '', anchor, onCl
         }
       }}>
       {actions.map((action, index) => <div key={action.id}>{action.danger && !actions[index - 1]?.danger && index > 0 && <div role="separator" className="content-menu-divider" />}
-        <button type="button" role="menuitem" disabled={action.disabled} data-danger={action.danger} onClick={() => { close(); trigger.current?.focus(); action.run(); }}>{action.icon}<span>{action.label}</span></button>
+        <button type="button" role="menuitem" disabled={action.disabled} data-danger={action.danger} onClick={event => { close(); trigger.current?.focus(); action.run({ shiftKey: event.shiftKey || shiftHeld }); }}>{action.icon}<span>{shiftHeld && action.shiftLabel ? action.shiftLabel : action.label}</span></button>
       </div>)}
     </div>, document.body)}
   </>;

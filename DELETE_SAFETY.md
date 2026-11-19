@@ -1,5 +1,20 @@
 # Delete-action inventory
 
+File Manager Delete moves the selection to Trash; Shift+Delete, Shift-click on
+the bulk Delete button, and holding Shift when choosing the menu's Delete action
+request permanent deletion through the same shared confirmation. The menu label
+changes to Delete forever while Shift is held. Keyboard handling ignores editable
+fields, repeat/composition events, other modifiers, open menus and modal layers.
+Only owned selections are eligible. Targets/counts and recursive folder contents
+are captured before confirmation; Cancel performs no mutation.
+
+For a confirmed permanent deletion of a live item, the existing Trash preparation
+runs first inside onConfirm, then the existing delete-user-file helper rechecks
+that exact saved Trash identity. No server permission or confirmation bypass was
+added. Failed cleanup leaves the prepared item in Trash and retains its timestamp
+for retries; completed targets are skipped. All mutation callers remain inside
+the existing guarded callback. No production records are changed by browser tests.
+
 Unicode File Storage names keep the existing virtual paths, public IDs, ownership,
 Trash state and transfer receipts. The server resolves unsupported object-API
 characters through the private `users/<owner>/files-utf8/` namespace. Permanent
@@ -29,8 +44,8 @@ retired after resource deletion, so rollback bytes never revive public access.
 The privileged resolver cannot be called by browser roles. No confirmation flag
 grants backend permission, and no second unguarded delete caller was added.
 
-Permanent file/folder deletion still starts only in the existing Trash
-confirmation's onConfirm. It now calls delete-user-file, which derives the owner
+Permanent file/folder deletion starts only in the shared confirmation's onConfirm.
+It calls delete-user-file, which derives the owner
 from verified Auth and rechecks the saved Trash timestamp, folder type, complete
 tree and active transfers. Private retry receipts block path replacement/restore
 during cleanup. Retained aliases are removed before current objects via Storage
@@ -39,7 +54,7 @@ metadata cleanup only after no authorized objects remain. A lost final response
 can retry even after the file's source FK has already removed its metadata row.
 Browser roles cannot create/finish receipts or access the privileged resolver.
 The former direct metadata-delete branch and raw legacy-bucket deletion loop were
-removed from FileManager; no new confirmation or unguarded caller was added.
+removed from FileManager; no unguarded caller was added.
 
 Single-final video publication adds only internal cleanup of newly uploaded
 staging inputs after confirmed Ready publication. Failed/ambiguous inputs remain
@@ -101,8 +116,8 @@ When Paste/Move/Rename needs that deleted name, its server plan first preserves
 the fully trashed payload under a unique path; it never removes bytes or clears
 Trash flags. Original names/locations remain available for Restore. Restore uses
 the same conflict choices as transfers; replacing a live destination remains
-inside the existing deletion confirmation. Permanent deletion still runs only
-from Trash's confirmed helper, including the complete archived folder tree.
+inside the existing deletion confirmation. Permanent deletion uses the same
+confirmed helper and saved Trash identity, including the complete archived folder tree.
 The archive plan retains completed steps for retries after partial failure.
 
 Content cards now share `ContentContextMenu`; their Delete actions still enter
@@ -123,7 +138,8 @@ requests; errors leave the dialog open for Cancel or retry.
 | Video gallery cards | Permanent video, stored versions and preview deletion | `delete-video` validates session; owner-bound RPCs, worker cancellation and storage cleanup precede record deletion |
 | Video processing cards | Cancel/delete queued, running or failed uploads | Same confirmed `delete-video` operation; waits for worker acknowledgement before cleanup |
 | Photo gallery cards | Permanent photo, preview and thumbnail deletion | Media/storage ownership policies |
-| File Manager menus and right-click menus | Move files/folders to Trash | Owner-only metadata policy |
+| File Manager menus and right-click menus | Move files/folders to Trash; Shift requests confirmed permanent deletion | Owner-only metadata policy and delete-user-file authorization |
+| File Manager Delete / Shift+Delete keyboard and Shift-click bulk Delete | Counted owned selection; Shift requests permanent deletion with recursive-folder warning | Same owner checks, Trash preparation and authorized cleanup |
 | Trash rows, menus and Delete All | Permanently delete files/folders and contents; Delete All captures every owned Trash metadata page, including unexpanded descendants | Owner-only storage and metadata policies; saved Trash state is rechecked before each target |
 | File Manager bulk actions, including Tree View selections | Counted selection with recursive-folder warning | Same ownership policies for each target |
 | Shared-content listings | Owner actions use the same guards; recipients remain read-only | Sharing grants allow reads, not deletes |

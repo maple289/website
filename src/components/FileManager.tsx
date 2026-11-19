@@ -95,7 +95,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   const [rootPaging, setRootPaging] = useState(false);
   const rootSharedOffset = useRef(50);
   const [selected, setSelected] = useState<string[]>([]);
-  const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; shiftKey?: boolean; entry: Entry } | null>(null);
   const [details, setDetails] = useState<Entry | null>(null);
   const [preview, setPreview] = useState<Entry | null>(null);
   useEffect(() => { setMenu(null); setDetails(null); setSelected([]); }, [authenticatedUser?.id]);
@@ -449,7 +449,9 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     if (!user || !owns(item)) throw new Error('You do not have permission to delete this item.');
     const affectedPaths = (await getFileMetadataTree(item, user.id)).map((row) => row.object_path);
     if (!affectedPaths.includes(item.path)) { await register(item.path, item.isFolder, item.favorite, item.size, item.mimeType); affectedPaths.push(item.path); }
-    await changeMetadata(affectedPaths, new Date().toISOString());
+    const trashedAt = new Date().toISOString();
+    await changeMetadata(affectedPaths, trashedAt);
+    return { ...item, trashedAt };
   };
   const restoreEntry = (entry: Entry) => {
     if (!user || busy || !owns(entry)) return;
@@ -477,29 +479,33 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     }
     throw new Error('Cleanup is still pending. Retry the saved deletion to finish.');
   };
-  const confirmDeleteEntries = (selectedItems: Entry[], emptyTrash = false) => {
+  const confirmDeleteEntries = (selectedItems: Entry[], emptyTrash = false, forcePermanent = false) => {
     if (!user || busy || !selectedItems.length) return;
     if (selectedItems.some((entry) => !owns(entry))) { setError('You do not have permission to delete these items.'); return; }
     if (emptyTrash && (view !== 'trash' || loading || selectedItems.some((entry) => !entry.trashedAt))) return;
     const unique = [...new Map(selectedItems.map((entry) => [entry.path, entry])).values()];
     const folderPaths = new Set(unique.filter((entry) => entry.isFolder).map((entry) => entry.path));
     const items = unique.filter((entry) => !ancestorPaths(entry.path).some((path) => folderPaths.has(path)));
-    const permanent = items.some((entry) => !!entry.trashedAt);
+    const permanent = forcePermanent || items.some((entry) => !!entry.trashedAt);
     const folders = items.some((entry) => entry.isFolder);
     const completed = new Set<string>();
+    // Keep the exact Trash identity across a failed permanent cleanup/retry.
+    // Preparation and cleanup both run only after the explicit confirmation.
+    const prepared = new Map<string, Entry>();
     setMenu(null);
     void requestDelete({
       title: emptyTrash ? 'Delete all Trash contents' : permanent ? 'Permanently delete items' : 'Move to Trash',
       message: emptyTrash
         ? `Are you sure you want to permanently delete all ${unique.length} ${unique.length === 1 ? 'file or folder' : 'files and folders'} in your Trash?`
         : selectedItems.length === 1
-        ? `Are you sure you want to delete ${items[0].isFolder ? 'the folder ' : ''}"${items[0].name}"?`
-        : `Are you sure you want to delete these ${selectedItems.length} selected items?`,
+        ? `Are you sure you want to ${forcePermanent ? 'permanently delete' : 'delete'} ${items[0].isFolder ? 'the folder ' : ''}"${items[0].name}"?`
+        : `Are you sure you want to ${forcePermanent ? 'permanently delete' : 'delete'} these ${selectedItems.length} selected items?`,
       details: [folders ? 'Folders may contain files and subfolders. All of their contents are included in this action.' : '',
         emptyTrash ? 'All listed Trash items and their folder contents will be permanently deleted, including their sharing records and temporary share links. This cannot be undone. The count includes nested files and folders.'
+          : forcePermanent ? 'These items and their sharing records and temporary share links will be permanently deleted. They cannot be restored from Trash. This cannot be undone.'
           : permanent ? 'Items already in Trash will be permanently deleted, including their sharing records. This cannot be undone. Any other selected items will be moved to Trash.'
           : 'These items will be moved to Trash and will no longer be available to shared users. You can restore them from Trash.'].filter(Boolean).join(' '),
-      confirmLabel: emptyTrash ? 'Delete All Forever' : permanent ? folders && selectedItems.length === 1 ? 'Delete Folder' : 'Delete forever' : 'Move to Trash',
+      confirmLabel: emptyTrash ? 'Delete All Forever' : forcePermanent ? 'Delete forever' : permanent ? folders && selectedItems.length === 1 ? 'Delete Folder' : 'Delete forever' : 'Move to Trash',
       processingLabel: permanent ? 'Deleting…' : 'Moving to Trash…',
       onConfirm: async () => {
         setBusy(true);
@@ -508,7 +514,11 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
           for (const item of items) {
             if (completed.has(item.path)) continue;
             current = item;
-            if (item.trashedAt) await permanentDelete(item); else await trashEntry(item);
+            if (forcePermanent || item.trashedAt) {
+              let target = prepared.get(item.path) ?? item;
+              if (!target.trashedAt) { target = await trashEntry(item); prepared.set(item.path, target); }
+              await permanentDelete(target);
+            } else await trashEntry(item);
             completed.add(item.path);
           }
           setSelected([]); setDetails(null); await load();
@@ -517,11 +527,31 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
           await load();
           setSelected(items.filter((item) => !completed.has(item.path)).map((item) => item.path));
           const reason = cause && typeof cause === 'object' && 'message' in cause ? String(cause.message) : 'Please try again.';
-          throw new Error(`Unable to finish deleting "${current?.name ?? 'this item'}". ${completed.size ? `${completed.size} selected item(s) completed. ` : ''}${folders ? 'Some folder contents may already have changed. ' : ''}${reason} Retry to finish the remaining items.`);
+          throw new Error(`Unable to finish deleting "${current?.name ?? 'this item'}". ${completed.size ? `${completed.size} selected item(s) completed. ` : ''}${folders ? 'Some folder contents may already have changed. ' : ''}${forcePermanent ? 'Items prepared for permanent deletion remain in Trash until cleanup completes. ' : ''}${reason} Retry to finish the remaining items.`);
         } finally { setBusy(false); }
       },
     });
   };
+  const deleteShortcut = useRef<(permanent: boolean) => boolean>(() => false);
+  deleteShortcut.current = permanent => {
+    if (!user || busy || loading || !selected.length) return false;
+    const targets = actionEntries.filter(entry => selected.includes(entry.path));
+    if (!targets.length || targets.some(entry => !owns(entry))) return false;
+    confirmDeleteEntries(targets, false, permanent);
+    return true;
+  };
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' || event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (document.querySelector('[aria-modal="true"], [role="menu"]')) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+      if (target && target !== document.body && target !== document.documentElement && !target.closest('.file-manager')) return;
+      if (deleteShortcut.current(event.shiftKey)) event.preventDefault();
+    };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  }, []);
   const performPathAction = async (operation = dialog) => {
     if (!operation?.entry || !user || operationLock.current) return;
     const targets = operation.entries?.length ? operation.entries : [operation.entry];
@@ -608,8 +638,8 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
   };
 
   const bulkDownload = async () => { for (const path of selected) { const item = actionEntries.find((entry) => entry.path === path); if (item) await download(item); } };
-  const bulkDelete = () => confirmDeleteEntries(actionEntries.filter((entry) => selected.includes(entry.path)));
-  const contextAction = (action: string, entry: Entry) => {
+  const bulkDelete = (permanent = false) => confirmDeleteEntries(actionEntries.filter((entry) => selected.includes(entry.path)), false, permanent);
+  const contextAction = (action: string, entry: Entry, shiftKey = false) => {
     setMenu(null);
     if (action === 'open') enterFolder(entry);
     if (action === 'preview') void openPreview(entry);
@@ -621,13 +651,13 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     if (action === 'paste') paste();
     if (action === 'temporary' && owns(entry)) setTemporaryEntry(entry);
     if (action === 'favorite') void toggleFavorite(entry);
-    if (action === 'delete') confirmDeleteEntries([entry]);
+    if (action === 'delete') confirmDeleteEntries([entry], false, shiftKey);
     if (action === 'restore') void restoreEntry(entry);
     if (action === 'properties') setDetails(entry);
   };
   const actionsFor = (entry: Entry): ContentAction[] => {
     if (!authenticatedUser) return [];
-    const action = (id: string, label: string, Icon: typeof Folder, danger = false): ContentAction => ({ id, label, icon: <Icon size={16} />, danger, disabled: busy, run: () => contextAction(id, entry) });
+    const action = (id: string, label: string, Icon: typeof Folder, danger = false): ContentAction => ({ id, label, shiftLabel: id === 'delete' && !entry.trashedAt ? 'Delete forever' : undefined, icon: <Icon size={16} />, danger, disabled: busy, run: modifiers => contextAction(id, entry, modifiers?.shiftKey) });
     if (entry.trashedAt) return owns(entry) ? [action('restore', 'Restore', RotateCcw), action('delete', 'Delete forever', Trash2, true)] : [];
     const actions = entry.isFolder || filePreviewKind(entry) ? [action('open', entry.isFolder ? 'Open' : 'Preview', entry.isFolder ? Folder : Eye)] : [];
     if (owns(entry)) actions.push(action('rename', 'Rename', Pencil), action('share', 'Share', Share2), action('temporary', 'Create 24-hour share link', Link), action('move', 'Move', Move), action('copy', 'Copy', Copy), ...(canPaste ? [action('paste', 'Paste here', ClipboardPaste)] : []), action('favorite', entry.favorite ? 'Remove from Favorites' : 'Add to Favorites', Star));
@@ -670,7 +700,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
     } finally { if (version === listingState.current.version) setRootPaging(false); }
   };
 
-  const renderFileEntry = (entry: Entry) => <FileCard key={entry.path} entry={entry} actions={actionsFor(entry)} selectable={!!authenticatedUser} shareMode={shareIndicators[entry.path]} location={guest || isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout === 'tree' ? 'list' : layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); if (!authenticatedUser) return; setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { if (!actionsFor(entry).length) return; event.preventDefault(); event.stopPropagation(); setMenu({ x: event.clientX, y: event.clientY, entry }); }} />;
+  const renderFileEntry = (entry: Entry) => <FileCard key={entry.path} entry={entry} actions={actionsFor(entry)} selectable={!!authenticatedUser} shareMode={shareIndicators[entry.path]} location={guest || isSearching || view === 'shared' ? resultLocation(entry) : undefined} layout={layout === 'tree' ? 'list' : layout} selected={selected.includes(entry.path)} onSelect={(event) => { if (event) event.stopPropagation(); if (!authenticatedUser) return; setSelected((current) => current.includes(entry.path) ? current.filter((path) => path !== entry.path) : [...current, entry.path]); }} onOpen={() => isSearching ? openSearchResult(entry) : enterFolder(entry)} onMenu={(event) => { if (!actionsFor(entry).length) return; event.preventDefault(); event.stopPropagation(); setMenu({ x: event.clientX, y: event.clientY, shiftKey: event.shiftKey, entry }); }} />;
 
   return (
     <FileDropArea appearance="light" enabled={!guest && view === 'files' && !uploadOpen && !dialog && !preview && !shareEntry && !temporaryEntry && !details} onFiles={(files) => void uploadFiles(files)}>
@@ -726,7 +756,7 @@ export function FileManager({ searchTerm, onSearchTermChange, publicOnly = false
               : <p className="text-sm">Use <strong>Copy</strong> in a file or folder menu, then choose <strong>Paste</strong> above.</p>}
           </div>}
           <div className="fm-toolbar mb-5"><label className="fm-search flex h-11 min-w-[220px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={17} className="shrink-0 text-slate-400" /><input ref={searchInput} value={searchTerm} onChange={(event) => onSearchTermChange(event.target.value)} aria-label="Search files and folders" placeholder="Search files and folders" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" /><kbd className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 sm:block">⌘ K</kbd></label><div className="fm-view-switch flex rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => changeLayout('grid')} title="Grid view" aria-label="Grid view" aria-pressed={layout === 'grid'} className={`rounded-lg p-2 ${layout === 'grid' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><Grid2X2 size={17} /></button><button onClick={() => changeLayout('list')} title="List view" aria-label="List view" aria-pressed={layout === 'list'} className={`rounded-lg p-2 ${layout === 'list' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><List size={17} /></button><button onClick={() => changeLayout('tree')} aria-label="Tree View" title="Tree View" aria-pressed={layout === 'tree'} className={`rounded-lg p-2 ${layout === 'tree' ? 'bg-blue-50 text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}><GitBranch size={17} /></button></div></div>
-          {authenticatedUser && selected.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"><span className="mr-auto text-sm font-medium text-blue-800">{selected.length} selected</span>{view !== 'trash' && selectionOwned && <button onClick={() => { const selectedEntries = actionEntries.filter((item) => selected.includes(item.path) && owns(item)); const targets = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`))); setDialog({ kind: 'move', entry: targets[0], entries: targets, value: folder }); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Move size={14} className="mr-1 inline" />Move</button>}{view !== 'trash' && <button onClick={() => void bulkDownload()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Download size={14} className="mr-1 inline" />Download</button>}{selectionOwned && <button onClick={() => void bulkDelete()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"><Trash2 size={14} className="mr-1 inline" />{view === 'trash' ? 'Delete forever' : 'Delete'}</button>}<button onClick={() => setSelected([])} aria-label="Clear selection" className="rounded-lg p-1.5 text-blue-700 hover:bg-blue-100"><X size={16} /></button></div>}
+          {authenticatedUser && selected.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"><span className="mr-auto text-sm font-medium text-blue-800">{selected.length} selected</span>{view !== 'trash' && selectionOwned && <button onClick={() => { const selectedEntries = actionEntries.filter((item) => selected.includes(item.path) && owns(item)); const targets = selectedEntries.filter((entry) => !selectedEntries.some((parent) => parent.isFolder && entry.path.startsWith(`${parent.path}/`))); setDialog({ kind: 'move', entry: targets[0], entries: targets, value: folder }); }} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Move size={14} className="mr-1 inline" />Move</button>}{view !== 'trash' && <button onClick={() => void bulkDownload()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"><Download size={14} className="mr-1 inline" />Download</button>}{selectionOwned && <button title="Hold Shift to permanently delete" onClick={event => bulkDelete(event.shiftKey)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"><Trash2 size={14} className="mr-1 inline" />{view === 'trash' ? 'Delete forever' : 'Delete'}</button>}<button onClick={() => setSelected([])} aria-label="Clear selection" className="rounded-lg p-1.5 text-blue-700 hover:bg-blue-100"><X size={16} /></button></div>}
           {guest && <div aria-label="Public folder path" className="fm-breadcrumbs mb-4"><Globe size={16} /><span>Publicly shared content · Read-only</span><button className="underline" onClick={() => { navigate({}); }}>Public files</button>{publicFolder?.ancestors?.map((ancestor) => <button key={ancestor.id} className="underline" onClick={() => { navigate({ publicFolder: ancestor }); }}>{ancestor.name}</button>)}{publicFolder && <span>/ {publicFolder.name}</span>}<button title="Refresh" onClick={() => void load()}><RotateCcw size={16} /></button></div>}
           {error && <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
           {view === 'shared' && <div aria-label="Shared folder path" className="fm-breadcrumbs mb-3"><button onClick={() => { navigate({ view: 'shared' }); }} className="font-semibold text-blue-700">Shared with me</button>{sharedCrumbs.map((path) => <span key={path} className="flex min-w-0 items-center gap-1"><ChevronRight size={13} /><button title={path.split('/').pop()} aria-current={path === sharedFolder ? 'page' : undefined} className="max-w-36 truncate rounded-md px-1 py-1 hover:bg-blue-50" onClick={() => navigate({ view: 'shared', sharedFolder: path })}>{path.split('/').pop()}</button></span>)}<button title="Refresh shared items" onClick={() => { if (sharedOffset === 0) void load(); else setSharedOffset(0); }} className="ml-auto rounded-lg p-2 text-blue-600"><RotateCcw size={16} /></button><span className="text-xs text-slate-500">Read-only</span></div>}
