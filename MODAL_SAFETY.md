@@ -238,3 +238,11 @@ fullscreen. PDF-only VisualViewport measurement and safe-area padding retain Clo
 and controls during toolbar changes/rotation. Unsupported element fullscreen uses
 a CSS viewport fallback. The read-only viewer has no draft or destructive actions.
 Temporary-share PDFs use the same modal and their existing scoped endpoint.
+
+Android phone/coarse-pointer normal landscape uses its separate platform marker
+and stylesheet: a definite dvh card height, compact nonshrinking UI rows, a bounded
+scrolling reaction row, and a flex playback area with centered contain fitting.
+Every new surface rule excludes page/native fullscreen. Existing iPhone geometry,
+portrait/desktop sizing and presentation/playback/seek/gesture handlers are unchanged.
+See ANDROID_VIDEO_LAYOUT.md for the reproduced overflow, pixel comparison tests
+and physical-device/PiP validation limits.

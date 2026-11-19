@@ -1,0 +1,50 @@
+/* Android phones only, normal landscape only. Presentation-mode rules and the
+   separate iPhone viewport implementation retain their existing geometry. */
+@media (orientation: landscape) and (pointer: coarse) {
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 32px);
+    max-height: 100%;
+    overflow: hidden;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-playback-area {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    aspect-ratio: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: black;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-player-header {
+    padding: 2px 12px;
+    gap: 8px;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls {
+    padding: 2px 8px;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-reactions {
+    flex: 0 0 auto;
+    min-height: 0;
+    height: 52px;
+    max-height: 52px;
+    padding: 2px 8px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .media-reactions {
+    margin-top: 0;
+  }
+}

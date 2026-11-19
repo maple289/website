@@ -64,6 +64,11 @@ jobs:
           BROWSER_CHANNEL=chromium node tests/iphone-video-hit-testing.mjs
           BROWSER_ENGINE=webkit node tests/iphone-video-hit-testing.mjs
 
+      - name: Android normal landscape frame fitting
+        run: |
+          BROWSER_CHANNEL=chromium node tests/android-video-layout.mjs
+          BROWSER_ENGINE=firefox node tests/android-video-layout.mjs
+
       - name: Preserve iPhone frame comparison failures
         if: failure()
         uses: actions/upload-artifact@v4
