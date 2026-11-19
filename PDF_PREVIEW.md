@@ -21,8 +21,8 @@ other file/image/video behavior remain unchanged.
   expiry, revocation and Trash checks apply separately to metadata and bytes.
 
 The server streams private storage using server-only credentials, no redirects or
-signed URLs. Responses are no-store; the viewer receives a local, revoked-on-close
-Blob URL. Saved endpoint URLs are checked again and cannot grant private access.
+signed URLs. Responses are no-store; PDF.js receives already-authorized bytes
+directly, without fetching a Blob URL. Saved endpoint URLs are checked again and cannot grant private access.
 Already received/downloaded bytes cannot be recalled when access is later revoked.
 The existing original download authorization and anonymous download policy remain.
 
@@ -66,6 +66,11 @@ Browser profiles are emulation, not physical iPhone/Android tests. Physical iPho
 Safari/FxiOS, Android touch gestures, memory pressure and native download UI still
 need device validation. Test reports must distinguish those limits from passing
 engine-level regressions. No production private user document is used in fixtures.
+
+The PDF browser suite applies the exact `connect-src` directive extracted from
+the production Caddy configuration. This reproduces the original deployment-only
+failure: PDF.js fetching a Blob URL violates `connect-src 'self' https: wss:`.
+Direct byte input fixes it without broadening the site's security policy.
 
 Local verification on 2026-11-18 passed the full core suite, type-check, lint
 (one pre-existing vendored lint warning), production build, zero-vulnerability

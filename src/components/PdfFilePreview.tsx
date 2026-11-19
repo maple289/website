@@ -11,8 +11,8 @@ import './PdfFilePreview.css';
 GlobalWorkerOptions.workerSrc = pdfWorker;
 const clampZoom = (value: number) => Math.max(0.25, Math.min(3, value));
 
-export function PdfFilePreview({ url, name, allowDownload = true, onDownload, onClose }: {
-  url: string; name: string; allowDownload?: boolean; onDownload?: () => void; onClose?: () => void;
+export function PdfFilePreview({ data, name, allowDownload = true, onDownload, onClose }: {
+  data: Blob; name: string; allowDownload?: boolean; onDownload?: () => void; onClose?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null), pages = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<PDFViewer | null>(null);
@@ -75,14 +75,19 @@ export function PdfFilePreview({ url, name, allowDownload = true, onDownload, on
       eventBus.on('scalechanging', scaled); eventBus.on('pagerendered', rendered);
       const base = `${import.meta.env.BASE_URL}pdfjs/`;
       // No PDF scripting, XFA, editable annotations or external link actions.
-      // The caller fetched these Blob bytes through the existing authorized path.
-      task = getDocument({ url, enableXfa: false, useSystemFonts: true,
-        cMapUrl: `${base}cmaps/`, cMapPacked: true, standardFontDataUrl: `${base}standard_fonts/`, wasmUrl: `${base}wasm/`,
-        canvasMaxAreaInBytes: 16 * 1048576 });
-      void task.promise.then(document => {
+      // Bytes have already passed the caller's authorized, bounded fetch. A Blob
+      // URL would require a second fetch, blocked by production connect-src CSP.
+      const load = async () => {
+        const bytes = new Uint8Array(await data.arrayBuffer());
+        if (!active || failed) return;
+        task = getDocument({ data: bytes, enableXfa: false, useSystemFonts: true,
+          cMapUrl: `${base}cmaps/`, cMapPacked: true, standardFontDataUrl: `${base}standard_fonts/`, wasmUrl: `${base}wasm/`,
+          canvasMaxAreaInBytes: 16 * 1048576 });
+        const document = await task.promise;
         if (!active || failed) return;
         viewer!.setDocument(document); linkService.setDocument(document);
-      }).catch(cause => fail(cause, 'document_load'));
+      };
+      void load().catch(cause => fail(cause, 'document_load'));
       resize = new ResizeObserver(() => {
         if (active && !failed && viewer?.pagesCount && viewer.currentScaleValue === 'page-width') viewer.currentScaleValue = 'page-width';
       });
@@ -101,7 +106,7 @@ export function PdfFilePreview({ url, name, allowDownload = true, onDownload, on
       catch { /* Source destruction and explicit Close must still complete. */ }
       void task?.destroy().catch(() => {});
     };
-  }, [url]);
+  }, [data]);
   const go = (next: number) => {
     const viewer = viewerRef.current;
     if (viewer && count && Number.isFinite(next)) viewer.currentPageNumber = Math.min(count, Math.max(1, Math.trunc(next)));

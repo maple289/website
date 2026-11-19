@@ -3,6 +3,7 @@ import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { createPublicPreviewServer } from '../tests/public-previews-server.mjs';
 const suites = {
   'messenger-notifications-ui': 'notification-test',
@@ -23,6 +24,8 @@ const suites = {
   'video-player-recovery': 'public-preview-test',
   'media-double-tap': 'public-preview-test',
 };
+// Exercise the deployed connection policy, rather than Vite's permissive default.
+const pdfConnectPolicy = (await readFile('docker/Caddyfile', 'utf8')).match(/connect-src [^;]+;/)[0];
 for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(suites)) {
   if (!suites[name]) throw Error('Unknown fixture suite: ' + name);
   const localApiPort = name === 'messenger-group-sharing-ui' ? 5229 : name === 'media-group-filter' ? 5230 : null;
@@ -32,7 +35,8 @@ for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object
     // Match production's same-origin proxy for the group lifecycle fixture.
     // WebKit otherwise reports navigation-aborted mocked CORS RPCs as page errors.
     define: { 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(localApiPort ? `http://127.0.0.1:${localApiPort}` : `https://${suites[name]}.supabase.co`), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('isolated-fixture') },
-    server: { host: '127.0.0.1', port: localApiPort ?? 0, strictPort: localApiPort !== null },
+    server: { host: '127.0.0.1', port: localApiPort ?? 0, strictPort: localApiPort !== null,
+      ...(name === 'pdf-preview' ? { headers: { 'Content-Security-Policy': pdfConnectPolicy } } : {}) },
   });
   try {
     await server?.listen();

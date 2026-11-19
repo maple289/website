@@ -15,7 +15,7 @@ import { PdfPreviewBoundary, PdfPreviewUnavailable } from './PdfPreviewBoundary'
 import { logPdfFailure } from '@/lib/pdfDiagnostics';
 import './PdfPreviewModal.css';
 
-type State = { status: 'loading' | 'generating' | 'ready' | 'failed' | 'unsupported'; kind?: PreviewKind; url?: string; text?: string; csv?: ReturnType<typeof parsePreviewCsv>; message?: string };
+type State = { status: 'loading' | 'generating' | 'ready' | 'failed' | 'unsupported'; kind?: PreviewKind; url?: string; pdf?: Blob; text?: string; csv?: ReturnType<typeof parsePreviewCsv>; message?: string };
 const PdfFilePreview = lazy(async () => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -107,8 +107,11 @@ export function FilePreview({ entry, onClose, onDownload, allowDownload = true, 
           } else {
             if (actualKind === 'pdf' && !(await blob.slice(0, 1024).text()).includes('%PDF-')) throw new Error('This file is not a readable PDF. You can still download the original file.');
             signal.throwIfAborted();
-            objectUrl = URL.createObjectURL(blob);
-            setState({ status: 'ready', kind: actualKind, url: objectUrl });
+            if (actualKind === 'pdf') setState({ status: 'ready', kind: actualKind, pdf: blob });
+            else {
+              objectUrl = URL.createObjectURL(blob);
+              setState({ status: 'ready', kind: actualKind, url: objectUrl });
+            }
           }
           return;
         }
@@ -136,7 +139,7 @@ export function FilePreview({ entry, onClose, onDownload, allowDownload = true, 
       <div className="video-playback-area relative flex min-h-0 flex-1 flex-col overflow-auto bg-slate-100 p-2 sm:p-4" aria-busy={loading}>
         {loading ? <div role="status" className="m-auto px-4 text-center"><LoaderCircle size={32} className="mx-auto mb-3 animate-spin text-blue-600" /><p className="font-semibold text-slate-800">{state.status === 'generating' ? 'Generating preview…' : 'Loading preview…'}</p><p className="mt-2 text-sm text-slate-500">{state.message || 'You can close this window while the preview is prepared.'}</p></div>
           : state.status !== 'ready' ? isPdf ? <PdfPreviewUnavailable allowDownload={allowDownload} onDownload={onDownload} onClose={close} message={previewMessage} /> : <div role="status" className="m-auto max-w-md px-4 text-center"><FileText size={44} className="mx-auto mb-3 text-slate-400" /><h3 className="font-semibold text-slate-800">{state.status === 'unsupported' ? 'Preview is not available for this file type' : 'Preview could not be generated'}</h3><p className="mt-2 wrap-break-word text-sm text-slate-600">{previewMessage || (allowDownload ? `You can still download the original file (${(entry.size / 1048576).toFixed(2)} MB).` : 'A preview is currently unavailable.')}</p>{allowDownload && <button onClick={onDownload} className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700">Download original file</button>}</div>
-          : state.kind === 'pdf' && state.url ? <PdfPreviewBoundary key={state.url} fallback={<PdfPreviewUnavailable allowDownload={allowDownload} onDownload={onDownload} onClose={close} />}><Suspense fallback={<p role="status" className="m-auto text-sm text-slate-500">Loading PDF viewer…</p>}><PdfFilePreview url={state.url} name={entry.name} allowDownload={allowDownload} onDownload={onDownload} onClose={close} /></Suspense></PdfPreviewBoundary>
+          : state.kind === 'pdf' && state.pdf ? <PdfPreviewBoundary key={entry.path} fallback={<PdfPreviewUnavailable allowDownload={allowDownload} onDownload={onDownload} onClose={close} />}><Suspense fallback={<p role="status" className="m-auto text-sm text-slate-500">Loading PDF viewer…</p>}><PdfFilePreview data={state.pdf} name={entry.name} allowDownload={allowDownload} onDownload={onDownload} onClose={close} /></Suspense></PdfPreviewBoundary>
           : state.kind === 'image' ? <img src={state.url} alt={entry.name} onError={() => setState({ status: 'failed', message: 'This image could not be decoded. You can still download the original file.' })} className="m-auto max-h-full max-w-full object-contain" />
           : state.kind === 'video' ? <video ref={videoRef} src={state.url} controls playsInline controlsList={allowDownload ? 'nofullscreen' : 'nodownload nofullscreen'} onEnded={completion.onEnded} onSeeking={completion.onSeeking} onPlaying={completion.onPlaying} onError={() => setState({ status: 'failed', message: 'This video cannot be played by your browser. You can still download the original file.' })} className="managed-video m-auto max-h-full max-w-full object-contain" />
           : state.kind === 'csv' && state.csv ? <><p className="mb-2 shrink-0 text-xs text-slate-500">{state.csv.truncated ? 'Showing up to 200 rows, 50 columns and 2,000 characters per cell.' + (allowDownload ? ' Download the original for all data.' : '') : `${state.csv.rows.length} rows · Read-only table`}</p><div className="min-h-0 overflow-auto rounded-lg border border-slate-200 bg-white"><table className="w-full border-collapse text-left text-sm text-slate-800"><tbody>{state.csv.rows.map((row, index) => <tr key={index} className={index % 2 ? 'bg-slate-50' : ''}>{row.map((cell, column) => <td key={column} className="min-w-[100px] max-w-xs whitespace-pre-wrap wrap-break-word border border-slate-100 px-3 py-2 align-top">{cell}</td>)}</tr>)}</tbody></table></div></>

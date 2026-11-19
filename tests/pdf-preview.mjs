@@ -7,6 +7,7 @@ const channel = engine === 'chromium' ? process.env.BROWSER_CHANNEL : undefined;
 const browser = await engines[engine].launch({ headless: true, ...(channel ? { channel } : {}) });
 console.log(`PDF browser: ${channel || engine} ${browser.version()}`);
 const base = process.env.TEST_BASE_URL;
+const connectPolicy=(await fs.readFile('docker/Caddyfile','utf8')).match(/connect-src [^;]+;/)[0];
 const owner = '11111111-1111-4111-8111-111111111111';
 const folder = '22222222-2222-4222-8222-222222222222';
 function makePdf(count) {
@@ -34,6 +35,10 @@ for (const [label,width,height,touch,userAgent] of profiles.filter(p=>!process.e
   page.setDefaultTimeout(20000);
   page.on('pageerror',e=>errors.push(e.message));
   page.on('console',e=>{if(e.type()==='error') logs.push(e.text());});
+  await page.addInitScript(()=>{
+    window.__pdfCspViolations=[];
+    document.addEventListener('securitypolicyviolation',event=>window.__pdfCspViolations.push({directive:event.violatedDirective,uri:event.blockedURI}));
+  });
   const entries=['Manual.PDF','Large.pdf','MIME-only guide','Corrupt.pdf','Denied.pdf','Slow.pdf'].map((name,i)=>({id:`33333333-3333-4333-8333-${String(i).padStart(12,'0')}`,name,path:`${owner}/Documents/${name}`,isFolder:false,size:10000,mimeType:'application/pdf',updatedAt:new Date().toISOString(),favorite:false,trashedAt:null}));
   let expired=false;
   await page.route('https://preview-test.supabase.co/**',async route=>{
@@ -62,10 +67,12 @@ for (const [label,width,height,touch,userAgent] of profiles.filter(p=>!process.e
   const painted=async()=>{await dialog.locator('.page[data-loaded="true"] canvas').first().waitFor();await dialog.getByText('Rendering PDF…',{exact:true}).waitFor({state:'hidden'});};
   try {
     console.log(`CHECK ${label}: open and paint`);
-    await page.goto(base+'/tests/file-previews.html#/files');
+    const documentResponse=await page.goto(base+'/tests/file-previews.html#/files');
+    assert.equal(documentResponse.headers()['content-security-policy'],connectPolicy,'fixture must enforce the deployed connection policy');
     await page.getByText('Documents',{exact:true}).click();
     const folderUrl=page.url();
     await open('Manual.PDF'); await painted();
+    assert.deepEqual(await page.evaluate(()=>window.__pdfCspViolations.filter(v=>v.directive==='connect-src')),[],'PDF rendering obeys production connect-src without Blob fetches');
     assert.equal(await dialog.locator('iframe,object,embed').count(),0);
     assert.ok(await dialog.locator('canvas').first().evaluate(c=>{const p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;for(let i=0;i<p.length;i+=4)if(p[i+3]&&Math.min(p[i],p[i+1],p[i+2])<230)return true;return false;}));
     await dialog.getByRole('button',{name:'Next PDF page',exact:true}).click();
