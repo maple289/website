@@ -29,7 +29,17 @@ const pdfConnectPolicy = (await readFile('docker/Caddyfile', 'utf8')).match(/con
 for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(suites)) {
   if (!suites[name]) throw Error('Unknown fixture suite: ' + name);
   const localApiPort = name === 'messenger-group-sharing-ui' ? 5229 : name === 'media-group-filter' ? 5230 : null;
-  const server = name === 'messenger-notifications-ui' ? null : ['public-previews', 'public-consumption', 'video-player-recovery', 'media-double-tap'].includes(name) ? await createPublicPreviewServer() : await createServer({ configFile: false, root: process.cwd(), plugins: [react()], envPrefix: [],
+  const server = name === 'messenger-notifications-ui' ? null : ['public-previews', 'public-consumption', 'video-player-recovery', 'media-double-tap'].includes(name) ? await createPublicPreviewServer() : await createServer({ configFile: false, root: process.cwd(), plugins: [
+    // Keep the PDF fixture offline. A pending remote @import delays the entire
+    // utility stylesheet in WebKit, including PDF.js's required absolute host.
+    // Strip only the optional font import; retain every layout rule and CSP.
+    ...(name === 'pdf-preview' ? [{ name: 'pdf-fixture-local-fonts', enforce: 'pre', transform(code, id) {
+      if (id.replaceAll('\\', '/').endsWith('/src/index.css')) {
+        return code.replace(/@import\s+url\(['"]https:\/\/fonts\.googleapis\.com\/[^'"]+['"]\)\s*(?:layer\([^)]*\)\s*)?;/g, '');
+      }
+    } }] : []),
+    react(),
+  ], envPrefix: [],
     resolve: { alias: { '@': path.resolve('src') } },
     ...(name === 'pdf-preview' || name === 'file-previews' ? { optimizeDeps: { include: ['pdfjs-dist/legacy/build/pdf.mjs', 'pdfjs-dist/legacy/web/pdf_viewer.mjs'] } } : {}),
     // Match production's same-origin proxy for the group lifecycle fixture.

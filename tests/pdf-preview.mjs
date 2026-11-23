@@ -31,9 +31,10 @@ await fs.mkdir('.runtime/pdf-preview',{recursive:true});
 try {
 for (const [label,width,height,touch,userAgent] of profiles.filter(p=>!process.env.PDF_PROFILE || p[0]===process.env.PDF_PROFILE)) {
   const context = await browser.newContext({viewport:{width,height},hasTouch:touch,...(engine!=='firefox'?{isMobile:touch}:{}),...(userAgent?{userAgent}:{}),acceptDownloads:true});
-  const page = await context.newPage(), errors=[], logs=[], requests=[];
+  const page = await context.newPage(), errors=[], logs=[], requests=[], externalFonts=[];
   page.setDefaultTimeout(20000);
   page.on('pageerror',e=>errors.push(e.message));
+  page.on('request',r=>{if(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(r.url()))externalFonts.push(r.url());});
   page.on('console',e=>{if(e.type()==='error') logs.push(e.text());});
   await page.addInitScript(()=>{
     window.__pdfCspViolations=[];
@@ -156,6 +157,7 @@ for (const [label,width,height,touch,userAgent] of profiles.filter(p=>!process.e
     assert.ok(requests.slice(prior).every(p=>p.endsWith('/temporary-share')),'capability viewer uses only temporary-share endpoint');
     await close();expired=true;await page.getByRole('button',{name:'Open PDF',exact:true}).click();
     await dialog.getByRole('heading',{name:'Preview unavailable',exact:true}).waitFor();await close();
+    assert.deepEqual(externalFonts,[],'PDF fixtures must not depend on remote font CSS before viewer initialization');
     assert.deepEqual(errors,[]);
     if(!touch) {
       console.log(`CHECK ${label}: stalled source and missing module`);
