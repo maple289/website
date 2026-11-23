@@ -97,9 +97,14 @@ try {
   }
   for (const ua of ['Mozilla/5.0 (Linux; Android 14) Chrome/132.0 Mobile Safari/537.36', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/132.0']) {
     const page = await open(ua, 844, 390, ua.includes('Android'));
-    assert.equal(await page.locator('.video-player-header').evaluate(el => getComputedStyle(el).pointerEvents), 'auto');
-    assert.equal(await page.locator('.video-presentation-controls').evaluate(el => getComputedStyle(el).pointerEvents), 'auto');
+    assert.equal(await page.locator('.iphone-video-viewport').count(), 0);
+    // Android now owns separate landscape overlays with the same decorative
+    // pass-through policy. Desktop keeps its original in-flow hit regions.
+    const policy = ua.includes('Android') ? 'none' : 'auto';
+    assert.equal(await page.locator('.video-player-header').evaluate(el => getComputedStyle(el).pointerEvents), policy);
+    assert.equal(await page.locator('.video-presentation-controls').evaluate(el => getComputedStyle(el).pointerEvents), policy);
+    assert.equal(await page.getByRole('button', { name: 'Close video player', exact: true }).evaluate(el => getComputedStyle(el).pointerEvents), 'auto');
     await page.close();
   }
-  console.log(`PASS ${engine} Android and desktop pointer policies unchanged`);
+  console.log(`PASS ${engine} Android/desktop excluded from iPhone rules; platform pointer policies retained`);
 } finally { await browser.close(); await server.close(); }

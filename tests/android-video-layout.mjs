@@ -165,7 +165,21 @@ try{
    for(const [name,b] of Object.entries(boxes).filter(([,value])=>typeof value==='object')){
      assert.ok(b.top>=0&&b.bottom<=size.height+1&&b.left>=0&&b.right<=size.width+1,name+' must fit the viewport');
    }
-   assert.ok(boxes.area.height>=24,'video gets remaining landscape height');
+   assert.ok(Math.abs(boxes.area.height-(boxes.client-boxes.reactions.height))<=1,
+     'video gets all card height except the compact reaction row: '+JSON.stringify(boxes));
+   // Reproduce the previous in-flow header/control rows with identical card,
+   // video fitting and reactions. Compare the PICTURE size, not black space.
+   const oldRows=await page.addStyleTag({content:'.android-mobile-video .video-player-surface .video-player-header,.android-mobile-video .video-player-surface .video-presentation-controls{position:static!important;padding-block:2px!important;}'});
+   const prior=await geometry(page);
+   await oldRows.evaluate(el=>el.remove());
+   assert.ok(boxes.area.height-prior.area.height>=88,'overlay rows return at least 88px to the video');
+   console.log(`SIZE ${engine} ${size.width}x${size.height}: video height ${prior.area.height} -> ${boxes.area.height}`);
+   const nativeHit=await page.evaluate(()=>{
+     const v=document.querySelector('video'),r=v.getBoundingClientRect();
+     return document.elementFromPoint(r.left+24,r.top+24)===v;
+   });
+   assert.ok(nativeHit,'decorative header passes input through to native video');
+   assert.ok(boxes.controls.bottom<=boxes.area.bottom-64+1,'custom bar leaves native seek strip clear');
    for(const edge of ['top','bottom','left','right','width','height'])assert.ok(Math.abs(boxes.video[edge]-boxes.area[edge])<1,'video fits final playback area: '+edge);
    assert.deepEqual(await page.locator('video').evaluate(v=>[getComputedStyle(v).objectFit,getComputedStyle(v).objectPosition]),['contain','50% 50%']);
    await completeFrame(page,`${size.width}x${size.height}`);
@@ -189,6 +203,12 @@ try{
  await page.getByRole('button',{name:'Enter fullscreen',exact:true}).click();
  await page.getByRole('button',{name:'Exit fullscreen',exact:true}).waitFor();
  await withoutAndroidCss(page);await completeFrame(page,'native-fullscreen');
+ await page.getByRole('button',{name:'Exit fullscreen',exact:true}).click();
+ await page.getByRole('button',{name:'Enter fullscreen',exact:true}).waitFor();
+ const tapArea=(await geometry(page)).area;
+ await page.touchscreen.tap(tapArea.left+80,tapArea.top+80);
+ await page.touchscreen.tap(tapArea.left+80,tapArea.top+80);
+ await page.getByRole('button',{name:'Exit fullscreen',exact:true}).waitFor();
  await page.getByRole('button',{name:'Exit fullscreen',exact:true}).click();
  await page.getByRole('button',{name:'Enter fullscreen',exact:true}).waitFor();
  // Also protect the existing CSS fullscreen fallback (used by unsupported APIs).
@@ -215,5 +235,5 @@ try{
  for(const [userAgent,touch] of [['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1',true],['Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/145.0',false],['Mozilla/5.0 (Linux; Android 14) Chrome/145.0 Safari/537.36',true]]){
    const other=await browser.newPage({viewport:{width:844,height:390},userAgent,hasTouch:touch});await open(other);await withoutAndroidCss(other);assert.equal(await other.locator('.android-mobile-video').count(),0);await other.close();
  }
- console.log(`PASS ${engine} Android: complete decoded frame/four edges at 390/330/260/220px landscape, repeated rotation, portrait/desktop/iPhone exclusion, play/pause/seek, fullscreen, PiP API roundtrip, reactions and Close`);
+ console.log(`PASS ${engine} Android: complete decoded frame/four edges at 390/330/260/220px landscape, repeated rotation, portrait/desktop/iPhone exclusion, play/pause/seek, double-tap, fullscreen, PiP API roundtrip, reactions and Close`);
 }finally{await browser.close();await server.close();}

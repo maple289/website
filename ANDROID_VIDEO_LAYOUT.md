@@ -15,7 +15,10 @@ were therefore off-screen inside the scrolling/clipped card.
 
 The Android landscape card now has a definite `calc(100dvh - 32px)` height,
 accounting for the existing 16px modal padding on each side. A column flex layout
-reserves compact header/mode rows and a bounded 52px scrolling reaction row.
+reserves only a bounded 52px scrolling reaction row. The compact title/Close and
+presentation buttons overlay the video instead of taking separate flex rows.
+Decorative overlay space passes pointer input to the video; actual buttons remain
+tappable. The translucent mode bar leaves the native 64px transport strip clear.
 The playback area takes the remaining height with zero minimum, automatic aspect
 ratio and a positioned video filling that final area. `object-fit:contain` remains
 unchanged, with explicit centered positioning and maximum dimensions. This scales
@@ -26,7 +29,7 @@ Every new geometry selector excludes page, standard and WebKit fullscreen.
 Native PiP rendering and its API lifecycle are independent of this normal-page
 layout. Rotation/media queries recalculate automatically without stored sizes.
 
-`tests/android-video-layout.mjs` reproduces the old overflow and compares decoded
+`tests/android-video-layout.mjs` checks bounded card geometry and compares decoded
 frame pixels with uniform contain scaling, including top/bottom/left/right strips,
 at 390/330/260/220px landscape heights. It repeats portrait→landscape rotation,
 checks portrait/iPhone/desktop/tablet exclusion by disabling only the new stylesheet,
@@ -46,3 +49,18 @@ suites in Chromium/WebKit (Safari/FxiOS/CriOS profiles). Type-check, lint and
 production build passed; lint retains its existing vendored warning. The Android
 pixel test checks colored corner marker bounds as well as picture/edge regions,
 so black letterboxing cannot hide a missing or clipped picture.
+
+The subsequent size correction addresses the rows retained by the first fitting
+fix: they took 96px away from the video. At 844px viewport width, playback heights
+were 208/148/78/38px for 390/330/260/220px visible landscape heights. Removing those
+rows yields 304/244/174/134px while leaving the card height, 52px reaction row and
+contain sizing unchanged. The regression test reconstructs the former rows and
+checks the size gain, full decoded frame, pointer pass-through and native seek
+clearance. Chromium and Firefox Android profiles passed those checks, touch
+double-tap fullscreen, native/page fullscreen, PiP API roundtrip, playback/seek,
+reactions and Close. Portrait exclusion remained exact. The unchanged WebKit
+iPhone layout suite passed Safari, FxiOS and CriOS profiles. Existing graph paths
+used: VideoPlayer() → VideoPresentationControls()
+→ useVideoPresentation(), VideoPlayer() → MediaReactions(), and VideoPlayer() →
+useIPhoneVideoViewport() (reference only). CSS allocation was verified directly;
+the existing graph was not regenerated.

@@ -2,6 +2,7 @@
    separate iPhone viewport implementation retain their existing geometry. */
 @media (orientation: landscape) and (pointer: coarse) {
   .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) {
+    --android-video-reaction-row: 52px;
     display: flex;
     flex-direction: column;
     height: calc(100dvh - 32px);
@@ -29,17 +30,42 @@
     object-position: center;
   }
   .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-player-header {
-    padding: 2px 12px;
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 3;
+    padding: 0 12px;
     gap: 8px;
+    background: linear-gradient(#000b, transparent);
+    pointer-events: none;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-player-header button {
+    pointer-events: auto;
   }
   .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls {
-    padding: 2px 8px;
+    /* Float above the native transport strip instead of taking a flex row. */
+    position: absolute;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(var(--android-video-reaction-row) + max(64px, env(safe-area-inset-bottom)));
+    z-index: 3;
+    max-width: calc(100% - 16px);
+    padding: 0;
+    border-radius: 12px;
+    background: rgb(0 0 0 / .55);
+    pointer-events: none;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls:not(.video-controls-hidden) button {
+    pointer-events: auto;
+  }
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls button {
+    gap: 4px;
+    padding-inline: 8px;
+    font-size: 12px;
   }
   .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-reactions {
     flex: 0 0 auto;
     min-height: 0;
-    height: 52px;
-    max-height: 52px;
+    height: var(--android-video-reaction-row);
+    max-height: var(--android-video-reaction-row);
     padding: 2px 8px;
     overflow-y: auto;
     overscroll-behavior: contain;
