@@ -1,0 +1,24 @@
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 1801 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                          1.06 kB │ gzip:   0.54 kB
+dist/assets/cursor-editorTextHighlight-kG3uUOwL.svg      5.40 kB │ gzip:   2.15 kB
+dist/assets/pdf.worker.min-BmVo14Nb.mjs              1,317.03 kB
+dist/assets/UserStatistics-CV1QX_aZ.css                  1.17 kB │ gzip:   0.40 kB
+dist/assets/AdminStatistics-Bg4Tlu9M.css                 8.55 kB │ gzip:   2.12 kB
+dist/assets/index-Bv4VvFFb.css                         134.97 kB │ gzip:  25.29 kB
+dist/assets/PdfFilePreview-CH6Z-BfK.css                223.28 kB │ gzip:  41.18 kB
+dist/assets/AdminStatistics-C0mzMSbF.js                  6.35 kB │ gzip:   2.36 kB
+dist/assets/UserStatistics-ZzxxLUvx.js                  10.88 kB │ gzip:   3.63 kB
+dist/assets/AdminStatistics-BhfCQMfR.js                 19.27 kB │ gzip:   5.90 kB
+dist/assets/Messenger-BcY-FmGX.js                       44.51 kB │ gzip:  13.89 kB
+dist/assets/PdfFilePreview-Cs1J8iyM.js                 716.66 kB │ gzip: 221.73 kB
+dist/assets/index-Cw8cv1SY.js                          767.64 kB │ gzip: 223.58 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.44s

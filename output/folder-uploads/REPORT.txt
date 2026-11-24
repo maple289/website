@@ -195,3 +195,25 @@ extraction, with no model API cost. Its generated backup under
 graphify-out/2026-11-24 was retained: automatic approval review rejected optional
 cleanup because the backup may contain recovery data. This does not affect the
 implementation or validation.
+
+CI follow-up
+
+Run 45415658208 passed typecheck, lint, core regressions, build and PDF browser
+compatibility, then failed at folder-uploads-ui.mjs while setting the selected
+directory at 390px. The preceding 1440px case passed.
+
+The upload dialog's Add Folder action was targeting the page's background input,
+which is made inert by the shared modal layer. It now uses a dedicated input
+inside the active upload dialog. The page-level picker waits for selection
+before opening the upload modal. Both inputs share the same change handler.
+The regression asserts that the file chooser belongs to the non-inert dialog.
+
+The fixture also now honors BROWSER_ENGINE and BROWSER_CHANNEL, defaults to
+bundled Chromium, and retains explicit TEST_BROWSER overrides for installed
+Chrome/Edge. It previously defaulted to Edge despite CI selecting Chromium.
+
+Focused upload tests passed in Chromium, Firefox and WebKit at 1440px/390px.
+Existing file-integrity tests passed at 1440px/768px/390px. Folder discovery and
+database regressions, typecheck, changed-file lint and frontend build passed.
+These are local checks; the follow-up changes have not been pushed or run in
+GitHub Actions yet.

@@ -1,9 +1,9 @@
 # Graph Report - Project  (2026-11-24)
 
 ## Corpus Check
-- 484 files · ~373,666 words
+- 484 files · ~373,729 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 63 file(s) not represented in the graph (top: .log 23, .css 20, (none) 11)
+- Unclassified: 64 file(s) not represented in the graph (top: .log 24, .css 20, (none) 11)
 
 ## Summary
 - 2692 nodes · 6079 edges · 137 communities (100 shown, 37 thin omitted)
@@ -582,17 +582,17 @@ Nodes (4): extglobChars(), POSIX_CHARS, POSIX_REGEX_SOURCE, WINDOWS_CHARS
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `@supabase/supabase-js` connect `supabase.ts` to `AuthContext.tsx`, `dependencies`, `library-storage-links-http.mjs`, `media-reactions-harness.tsx`, `package.json`?**
-  _High betweenness centrality (0.097) - this node is a cross-community bridge._
+- **Why does `react` connect `react` to `supabase.ts`, `AuthContext.tsx`, `lucide-react`, `Messenger.tsx`, `dependencies`, `AdminPage.tsx`, `FileManager.tsx`, `CallPanel.tsx`, `AdminStatistics.tsx`, `TaskModal`, `appHistory.ts`, `TemporaryShareModal.tsx`, `media-reactions-harness.tsx`, `package.json`, `useVideoPresentation.ts`?**
+  _High betweenness centrality (0.096) - this node is a cross-community bridge._
 - **What connects `STREAMLY_PROJECT_ROOT`, `STREAMLY_REALTIME_SEED`, `STREAMLY_PROJECT_ROOT` to the rest of the system?**
   _3 weakly-connected nodes found - possible missing edges._
 - **Should `supabase.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.03677685950413223 - nodes in this community are weakly interconnected._
-- **Why does `react` connect `react` to `supabase.ts`, `AuthContext.tsx`, `lucide-react`, `Messenger.tsx`, `dependencies`, `AdminPage.tsx`, `FileManager.tsx`, `CallPanel.tsx`, `AdminStatistics.tsx`, `TaskModal`, `appHistory.ts`, `TemporaryShareModal.tsx`, `media-reactions-harness.tsx`, `package.json`, `useVideoPresentation.ts`?**
-  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+- **Why does `@supabase/supabase-js` connect `supabase.ts` to `AuthContext.tsx`, `dependencies`, `library-storage-links-http.mjs`, `media-reactions-harness.tsx`, `package.json`?**
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
 - **Should `AuthContext.tsx` be split into smaller, more focused modules?**
   _Cohesion score 0.08032786885245902 - nodes in this community are weakly interconnected._
 - **Why does `typescript` connect `ref_node_fs` to `temporary-share-server.mjs`, `library-storage-links-http.mjs`, `messenger-call-engine.mjs`, `ref_node_crypto`, `package.json`, `devDependencies`, `@electric-sql/pglite`, `audit-client-resilience.mjs`, `folder-uploads.mjs`, `picomatch-security.mjs`, `group-media-upload-db.mjs`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
 - **Should `lucide-react` be split into smaller, more focused modules?**
   _Cohesion score 0.09437751004016064 - nodes in this community are weakly interconnected._

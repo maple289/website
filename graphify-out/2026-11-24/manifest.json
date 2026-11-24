@@ -691,9 +691,9 @@
     "semantic_hash": ""
   },
   "src/components/FileManager.tsx": {
-    "mtime": 1795529923.7386355,
-    "seen": 1795529994.6347694,
-    "ast_hash": "6d9c67c00afbd68aefdf0bc502428ed3",
+    "mtime": 1795530340.7116303,
+    "seen": 1795530390.2371666,
+    "ast_hash": "4f4f1df8666958744e9c7b7f42b8dba4",
     "semantic_hash": ""
   },
   "src/components/FilePreview.tsx": {
@@ -3295,9 +3295,9 @@
     "semantic_hash": ""
   },
   "tests/folder-uploads-ui.mjs": {
-    "mtime": 1795530076.2267494,
-    "seen": 1795530206.1336532,
-    "ast_hash": "bace232a1f9d5b2c0cf9e63b96750a80",
+    "mtime": 1795530340.914287,
+    "seen": 1795530390.2755795,
+    "ast_hash": "ee8ac34eb70c5bc8544ff2fbe1b56708",
     "semantic_hash": ""
   },
   "output/folder-uploads/chrome-1440.png": {
@@ -3313,14 +3313,14 @@
     "semantic_hash": ""
   },
   "output/folder-uploads/edge-1440.png": {
-    "mtime": 1795530084.1990361,
-    "seen": 1795530206.174827,
+    "mtime": 1795530358.861381,
+    "seen": 1795530390.3240948,
     "ast_hash": "ad73455e10c39b8aa86f7c17f410c24a",
     "semantic_hash": ""
   },
   "output/folder-uploads/edge-390.png": {
-    "mtime": 1795530086.320268,
-    "seen": 1795530206.1748288,
+    "mtime": 1795530360.9188097,
+    "seen": 1795530390.3240974,
     "ast_hash": "da892b6104b88959a55a4f97a9d7ad73",
     "semantic_hash": ""
   },
@@ -3349,9 +3349,9 @@
     "semantic_hash": ""
   },
   "output/folder-uploads/REPORT.txt": {
-    "mtime": 1795530165.2443888,
-    "seen": 1795530206.166801,
-    "ast_hash": "83ec857eaac97d60b7258b072cff397b",
+    "mtime": 1795530627.3574686,
+    "seen": 1795531018.5340145,
+    "ast_hash": "35f4769f7a67d44eed04e0be96fc2ebc",
     "semantic_hash": ""
   },
   "package-lock.json": {

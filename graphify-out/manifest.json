@@ -691,9 +691,9 @@
     "semantic_hash": ""
   },
   "src/components/FileManager.tsx": {
-    "mtime": 1795530340.7116303,
-    "seen": 1795530390.2371666,
-    "ast_hash": "4f4f1df8666958744e9c7b7f42b8dba4",
+    "mtime": 1795531861.553266,
+    "seen": 1795531941.4615982,
+    "ast_hash": "412a69a6ca330ec5eb0180c3071785c7",
     "semantic_hash": ""
   },
   "src/components/FilePreview.tsx": {
@@ -3295,9 +3295,9 @@
     "semantic_hash": ""
   },
   "tests/folder-uploads-ui.mjs": {
-    "mtime": 1795530340.914287,
-    "seen": 1795530390.2755795,
-    "ast_hash": "ee8ac34eb70c5bc8544ff2fbe1b56708",
+    "mtime": 1795531861.747231,
+    "seen": 1795531941.4961033,
+    "ast_hash": "7c88cef1918eafca853fd798dc05ff87",
     "semantic_hash": ""
   },
   "output/folder-uploads/chrome-1440.png": {
@@ -3325,33 +3325,45 @@
     "semantic_hash": ""
   },
   "output/folder-uploads/firefox-1440.png": {
-    "mtime": 1795530111.0153086,
-    "seen": 1795530206.1748304,
+    "mtime": 1795531898.5206542,
+    "seen": 1795531941.53893,
     "ast_hash": "648935bfabeca1887e905c8ccc023cf0",
     "semantic_hash": ""
   },
   "output/folder-uploads/firefox-390.png": {
-    "mtime": 1795530114.2514935,
-    "seen": 1795530206.1748319,
+    "mtime": 1795531901.500088,
+    "seen": 1795531941.5389323,
     "ast_hash": "d6d8ac12feb367dafad14c94d7d8184e",
     "semantic_hash": ""
   },
   "output/folder-uploads/webkit-1440.png": {
-    "mtime": 1795530110.244628,
-    "seen": 1795530206.1748333,
+    "mtime": 1795531898.253211,
+    "seen": 1795531941.538934,
     "ast_hash": "3cbc204b33a7d2bf09718ce402a1f45d",
     "semantic_hash": ""
   },
   "output/folder-uploads/webkit-390.png": {
-    "mtime": 1795530115.8055706,
-    "seen": 1795530206.174835,
+    "mtime": 1795531903.3904552,
+    "seen": 1795531941.5389357,
     "ast_hash": "42d3be0584228a6a326fd60f1e1eb7c1",
     "semantic_hash": ""
   },
   "output/folder-uploads/REPORT.txt": {
-    "mtime": 1795530165.2443888,
-    "seen": 1795530206.166801,
-    "ast_hash": "83ec857eaac97d60b7258b072cff397b",
+    "mtime": 1795530627.3574686,
+    "seen": 1795531018.5340145,
+    "ast_hash": "35f4769f7a67d44eed04e0be96fc2ebc",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/chromium-1440.png": {
+    "mtime": 1795531895.295149,
+    "seen": 1795531941.5384924,
+    "ast_hash": "54cb0a89f667c57093e548a59eed7b79",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/chromium-390.png": {
+    "mtime": 1795531898.0894535,
+    "seen": 1795531941.5384948,
+    "ast_hash": "f9a116dfdd32cff80ac2fcafc491ff41",
     "semantic_hash": ""
   },
   "package-lock.json": {
