@@ -51,6 +51,7 @@
     padding: 0;
     border-radius: 12px;
     background: rgb(0 0 0 / .55);
+    transition: opacity 180ms ease, visibility 180ms;
     pointer-events: none;
   }
   .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls:not(.video-controls-hidden) button {
@@ -73,4 +74,7 @@
   .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .media-reactions {
     margin-top: 0;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .android-mobile-video .video-player-surface:not(:is(.video-page-fullscreen, :fullscreen, :-webkit-full-screen)) .video-presentation-controls { transition: none; }
 }

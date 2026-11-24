@@ -11,6 +11,8 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     const coarse = view.matchMedia('(pointer: coarse)');
     const landscape = view.matchMedia('(orientation: landscape)');
     const iphone = /iPhone|iPod/i.test(view.navigator.userAgent);
+    const android = /Android/i.test(view.navigator.userAgent) && /Mobile/i.test(view.navigator.userAgent) &&
+      !!surface.closest('.android-mobile-video');
     let normalWaiting = false, normalLastTime = video.currentTime;
     let timer: number | undefined, held = false, keyboard = false, revealTouch = false, nativeControlsHidden = false;
     let progressTimer: number | undefined, lastTime = video.currentTime, progressedAt = -Infinity;
@@ -30,8 +32,8 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       controls.removeAttribute('aria-hidden');
     };
     const mobileFullscreen = () => fullscreen && !error && coarse.matches && surface.classList.contains('video-player-surface');
-    const normalLandscape = () => iphone && !fullscreen && !pip && !error && coarse.matches && landscape.matches &&
-      !!surface.closest('.iphone-video-viewport') && !surface.classList.contains('video-page-fullscreen') &&
+    const normalLandscape = () => !fullscreen && !pip && !error && coarse.matches && landscape.matches &&
+      ((iphone && !!surface.closest('.iphone-video-viewport')) || android) && !surface.classList.contains('video-page-fullscreen') &&
       !doc.fullscreenElement && !doc.webkitFullscreenElement;
     const running = () => !video.paused && !video.ended && !video.seeking && !video.error && video.readyState >= video.HAVE_CURRENT_DATA;
     const needsProgress = () => mobileFullscreen() && running() && video.readyState < video.HAVE_FUTURE_DATA;
@@ -167,7 +169,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
     doc.addEventListener('webkitfullscreenchange', browserFullscreenChanged);
     view.addEventListener('keydown', keyDown, true);
     coarse.addEventListener('change', schedule);
-    if (iphone) {
+    if (iphone || android) {
       landscape.addEventListener('change', orientationChanged);
       view.addEventListener('pointerup', releasedOutside, true);
       view.addEventListener('pointercancel', releasedOutside, true);
@@ -193,7 +195,7 @@ export function useVideoControlsAutoHide(videoRef: RefObject<HTMLVideoElement>, 
       doc.removeEventListener('webkitfullscreenchange', browserFullscreenChanged);
       view.removeEventListener('keydown', keyDown, true);
       coarse.removeEventListener('change', schedule);
-      if (iphone) {
+      if (iphone || android) {
         landscape.removeEventListener('change', orientationChanged);
         view.removeEventListener('pointerup', releasedOutside, true);
         view.removeEventListener('pointercancel', releasedOutside, true);

@@ -64,3 +64,13 @@ used: VideoPlayer() → VideoPresentationControls()
 → useVideoPresentation(), VideoPlayer() → MediaReactions(), and VideoPlayer() →
 useIPhoneVideoViewport() (reference only). CSS allocation was verified directly;
 the existing graph was not regenerated.
+
+Normal Android phone landscape now also opts into the existing control-idle hook.
+Previously only iPhone normal landscape and mobile fullscreen could hide that bar,
+so the Android overlay stayed visible throughout playback. The same single 2.5s
+deadline now fades the Android bar, with inert/aria-hidden and no pointer input
+while hidden. Touch reveals it without blocking native video defaults; pause,
+buffering, seeking, keyboard focus or an active control press keeps it available.
+Rotation to portrait and Close clear the idle state/timer. Portrait, tablets,
+desktop and non-gallery viewers are excluded from this additional opt-in. Existing
+iPhone/fullscreen timing, native controls, presentation APIs and sizing are retained.

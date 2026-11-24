@@ -251,7 +251,12 @@ and stylesheet: a definite dvh card height, compact title/Close and presentation
 overlays, a bounded scrolling reaction row, and a flex playback area with centered
 contain fitting. Decorative overlays pass input through; actual buttons opt in.
 The mode bar leaves the native seek strip clear. Overlay rows return their height
-to the video without changing the shared modal layer or close behavior.
+to the video without changing the shared modal layer or close behavior. The
+existing idle hook now also opts this Android normal-landscape bar into its single
+2.5s timer: playing hides it, touch reveals it, pause/seek/buffering/focus and a
+held control retain it. Hidden controls are inert and cannot intercept input.
+Rotation into portrait and unmount clear the idle state; native controls and
+Close retain their existing behavior.
 Every new surface rule excludes page/native fullscreen. Existing iPhone geometry,
 portrait/desktop sizing and presentation/playback/seek/gesture handlers are unchanged.
 See ANDROID_VIDEO_LAYOUT.md for the reproduced overflow, pixel comparison tests

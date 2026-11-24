@@ -127,6 +127,50 @@ async function withoutAndroidCss(page){
  await page.evaluate(()=>{for(const sheet of document.styleSheets)if(sheet.ownerNode?.getAttribute('data-vite-dev-id')?.endsWith('/AndroidVideoPlayer.css'))sheet.disabled=false;});
  assert.deepEqual(before,prior,'non-target geometry stays exactly unchanged');
 }
+async function landscapeIdle(page){
+ const bar=page.locator('.video-presentation-controls');
+ const hidden=()=>bar.evaluate(el=>el.classList.contains('video-controls-hidden'));
+ const waitHidden=value=>page.waitForFunction(value=>{
+   const el=document.querySelector('.video-presentation-controls');
+   return el?.classList.contains('video-controls-hidden')===value&&(!value||getComputedStyle(el).opacity==='0');
+ },value,{timeout:4500});
+ const play=()=>page.locator('video').evaluate(v=>v.play());
+ await page.locator('video').evaluate(v=>{v.pause();v.playbackRate=.0625;v.currentTime=0;});
+ await page.waitForFunction(()=>!document.querySelector('video').seeking);
+ const area=(await geometry(page)).area;
+ await waitHidden(false);await play();
+ await page.waitForTimeout(1500);assert.equal(await hidden(),false,'initial playback keeps mode controls visible briefly');
+ await waitHidden(true);
+ assert.equal(await bar.getAttribute('aria-hidden'),'true');
+ assert.equal(await bar.evaluate(el=>el.hasAttribute('inert')),true);
+ assert.equal(await bar.locator('button').first().evaluate(el=>getComputedStyle(el).pointerEvents),'none','faded controls cannot intercept video input');
+ assert.equal(await page.locator('video').evaluate(v=>v.controls),true,'native normal-view controls remain enabled');
+ assert.deepEqual((await geometry(page)).area,area,'idle never changes video sizing');
+ const clickAllowed=await page.locator('video').evaluate(v=>{
+   const r=v.getBoundingClientRect(),touch={identifier:1,target:v,clientX:r.left+80,clientY:r.top+80};
+   for(const type of ['touchstart','touchend']){
+     const e=new Event(type,{bubbles:true,cancelable:true});
+     Object.defineProperties(e,{touches:{value:type==='touchstart'?[touch]:[]},changedTouches:{value:[touch]}});v.dispatchEvent(e);
+   }
+   return v.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail:1}));
+ });
+ assert.equal(clickAllowed,true,'tap reveals without blocking native playback/seek defaults');
+ await waitHidden(false);assert.equal(await bar.evaluate(el=>el.hasAttribute('inert')),false);
+ await page.locator('[data-video-fullscreen-toggle]').dispatchEvent('pointerdown',{pointerId:91,pointerType:'touch',bubbles:true});
+ await page.waitForTimeout(2800);assert.equal(await hidden(),false,'held mode button cannot time out');
+ await page.evaluate(()=>window.dispatchEvent(new PointerEvent('pointerup',{pointerId:91,pointerType:'touch'})));
+ await waitHidden(true);
+ await page.locator('video').evaluate(v=>v.pause());await waitHidden(false);
+ await page.waitForTimeout(2800);assert.equal(await hidden(),false,'paused mode controls remain visible');
+ await play();await waitHidden(true);
+ await page.setViewportSize({width:390,height:844});await waitHidden(false);
+ await page.waitForTimeout(2800);assert.equal(await hidden(),false,'Android portrait never auto-hides the in-flow bar');
+ await page.setViewportSize({width:844,height:330});await waitHidden(true);
+ await page.locator('video').evaluate(v=>{v.dispatchEvent(new Event('waiting'));v.pause();});await waitHidden(false);
+ assert.ok(await page.evaluate(()=>window.normalIdleTimers.maximum<=1),'one normal-view idle timer at most');
+ await page.locator('video').evaluate(v=>{v.playbackRate=1;});
+ console.log(`PASS ${engine} Android landscape idle: hide/reveal, native controls, held button, pause/resume, rotation and single timer`);
+}
 async function open(page){
  await page.route('**/functions/v1/serve-media?*',r=>r.fulfill({json:{url:'/tests/fixtures/video-frame-edges.mp4'}}));
  await page.goto('http://127.0.0.1:5217/tests/public-previews.html');
@@ -145,6 +189,16 @@ async function open(page){
 }
 try{
  const page=await browser.newPage({viewport:{width:390,height:844},userAgent:android,hasTouch:true,...(engine!=='firefox'?{isMobile:true}:{})});
+ await page.addInitScript(()=>{
+   const nativeSet=window.setTimeout.bind(window),nativeClear=window.clearTimeout.bind(window),live=new Set();
+   window.normalIdleTimers={maximum:0,live};
+   window.setTimeout=(fn,delay,...args)=>{
+     if(delay!==2500)return nativeSet(fn,delay,...args);
+     const id=nativeSet(()=>{live.delete(id);fn.apply(window,args);},delay);
+     live.add(id);window.normalIdleTimers.maximum=Math.max(window.normalIdleTimers.maximum,live.size);return id;
+   };
+   window.clearTimeout=id=>{live.delete(id);nativeClear(id);};
+ });
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await open(page);
  // Only the operating-system PiP boundary is mocked. Application handlers and
@@ -199,6 +253,7 @@ try{
  await page.waitForFunction(()=>{const v=document.querySelector('video');return !v.seeking&&Math.abs(v.currentTime-.5)<.1;});
  await page.locator('video').evaluate(v=>v.play());await page.waitForFunction(()=>document.querySelector('video').currentTime>.6);
  await page.locator('video').evaluate(v=>v.pause());assert.equal(await page.locator('video').evaluate(v=>v.paused),true);
+ await landscapeIdle(page);
  console.log(`CHECK ${engine}: playback passed; checking fullscreen`);
  await page.getByRole('button',{name:'Enter fullscreen',exact:true}).click();
  await page.getByRole('button',{name:'Exit fullscreen',exact:true}).waitFor();
@@ -229,7 +284,15 @@ try{
  await page.locator('.video-reactions').getByRole('button',{name:'Your reaction: Smile. Click to remove',exact:true}).waitFor({state:'hidden'});
  assert.deepEqual(await page.evaluate(()=>window.layoutReactionWrites),['smile',null]);
  await page.keyboard.press('Escape');assert.equal(await page.locator('.video-player-surface').count(),1);
+ await page.locator('video').evaluate(v=>v.play());
+ await page.waitForFunction(()=>window.normalIdleTimers.live.size===1);
  await page.getByRole('button',{name:'Close video player',exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.normalIdleTimers.live.size),0,'Close clears the idle timer');
+ await page.getByRole('button',{name:'Play Public video',exact:true}).click();
+ await page.locator('.video-player-surface').waitFor();
+ assert.equal(await page.locator('.video-presentation-controls').evaluate(el=>el.classList.contains('video-controls-hidden')),false,'reopening resets visibility');
+ await page.getByRole('button',{name:'Close video player',exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.normalIdleTimers.live.size),0,'reopened player also cleans up');
  assert.equal(await page.locator('[inert]').count(),0);assert.equal(await page.evaluate(()=>document.body.style.overflow),'');
  assert.deepEqual(errors,[]);await page.close();
  for(const [userAgent,touch] of [['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1',true],['Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/145.0',false],['Mozilla/5.0 (Linux; Android 14) Chrome/145.0 Safari/537.36',true]]){

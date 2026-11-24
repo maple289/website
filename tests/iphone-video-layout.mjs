@@ -389,7 +389,9 @@ try {
     console.log(`PASS ${engine} complete frame/source comparison, rotations, lower scrolling and modal safety: ` + (suffix || 'Safari'));
   }
   for (const userAgent of ['Mozilla/5.0 (Linux; Android 14) Chrome/132.0 Mobile Safari/537.36', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/132.0']) {
-    const page = await browser.newPage({ userAgent, hasTouch: userAgent.includes('Android'), viewport: { width: 844, height: 390 } });
+    // Android now has its own normal-landscape idle policy. Its portrait bar
+    // and desktop remain permanently available and outside the iPhone rules.
+    const page = await browser.newPage({ userAgent, hasTouch: userAgent.includes('Android'), viewport: userAgent.includes('Android') ? { width: 390, height: 844 } : { width: 844, height: 390 } });
     await page.route('**/functions/v1/serve-media?*', r => r.fulfill({ json: { url: '/tests/fixtures/video-frame-edges.mp4' } }));
     await page.goto('http://127.0.0.1:5217/tests/public-previews.html');
     await page.getByRole('button', { name: 'Play Public video', exact: true }).click();
@@ -397,10 +399,10 @@ try {
     assert.equal(await page.locator('.iphone-video-viewport').count(), 0);
     await page.waitForFunction(() => { const v = document.querySelector('video'); if (!v || v.readyState < 2) return false; v.loop = true; v.playbackRate = .25; return true; });
     await page.waitForTimeout(2800);
-    assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.classList.contains('video-controls-hidden')), false, 'non-iPhone normal controls remain visible');
+    assert.equal(await page.locator('.video-presentation-controls').evaluate(el => el.classList.contains('video-controls-hidden')), false, 'Android portrait and desktop controls remain visible');
     await page.close();
   }
-  console.log('PASS Android and desktop excluded');
+  console.log('PASS Android portrait and desktop excluded');
 } finally {
   await browser.close();
   await server.close();
