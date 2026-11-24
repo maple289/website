@@ -1,0 +1,197 @@
+MyHostage File Manager folder uploads
+2026-11-24
+
+Implementation status
+
+Implemented in the local checkout. No deployment, production upload, database
+migration, or modification of existing user content was performed.
+
+Root cause
+
+Both FileDropArea and the upload dialog consumed DataTransfer.files. The upload
+loop used only file.name. Neither path inspected directory entries, drained
+directory readers, recursed, or retained relative paths. Browsers can expose
+directory placeholders in that flattened FileList; those placeholders were sent
+to Storage as ordinary, zero-byte objects. Looking at filename extensions cannot
+solve this: extensionless files and directories both legitimately exist.
+
+The authenticated production UI showed qBittorrentPortable/App, Data and Other
+as File, 0 B. App's Properties also showed File, 0 B. The parent contained those
+three items and qBittorrentPortable.exe. The client renderer classifies ordinary
+storage objects by their non-null object ID; the catalog is synchronized by
+server triggers. This supports a placeholder-upload diagnosis rather than an
+icon-only defect. Production database rows and raw storage objects were not
+independently queried, so their precise state and backup recoverability remain
+unverified.
+
+Implemented behavior
+
+- Add files retains single/multiple file selection.
+- Add Folder uses showDirectoryPicker when available, with recursive handles;
+  otherwise it uses webkitdirectory and webkitRelativePath. It preserves the
+  selected root folder name and destination hierarchy.
+- Both File Manager drop surfaces use webkitGetAsEntry, capture entries during
+  the drop event, and read every directory-reader batch until empty.
+- All three methods produce the same validated upload plan and use the same
+  sequential queue, storage resolution, ordinary upload and resumable upload.
+- Directories are created before files. A failed directory blocks its subtree;
+  independent siblings continue. Empty directories are retained when supplied
+  by entry/handle APIs. The file-list fallback explicitly warns that empty
+  directories are unavailable, and an empty supplied list is not called success.
+- Paths reject absolute/empty segments, dot traversal, backslashes, control
+  characters and reserved folder-marker names. Duplicate source paths fail
+  validation before mutation.
+- Existing destination root names are checked across listing pages. A duplicate
+  folder and its contents are skipped; existing content is never overwritten or
+  silently merged. Storage uploads retain x-upsert=false and server collision
+  checks, including races after preflight. Choose another destination or rename
+  the source to keep both.
+- The queue shows relative names, file/folder icons, completed file and directory
+  counts, aggregate item progress, failures and incomplete/completed status.
+  Aggregate progress weights each queue item equally; it is not byte-weighted.
+- Discovery and queue processing share a synchronous pending guard. Closing and
+  starting another batch are disabled while pending. Shared modal handling is
+  retained, including ignoring Escape and outside clicks.
+- The original per-file 10 GiB limit, resumable retry delays, authenticated
+  location resolution and server RLS remain in force. Storage/quota errors are
+  shown per item; no new account-wide quota policy was introduced.
+- Server Storage/catalog triggers commit file metadata with storage objects.
+  There is no client-side insert of an unsaved file record and no compensating
+  deletion after an ambiguous response. Successfully created directories and
+  successfully saved files remain after a partial failure.
+- Resumable uploads retry transient failures within the running page. There is
+  no new persistent folder-job queue or automatic continuation after closing
+  the page. Check the destination before retrying; a fresh destination avoids
+  conflicting with already completed work.
+
+Storage and authorization
+
+No schema changes were necessary. Existing create_user_file_folder,
+resolve_user_file_location, file_manager_objects, Storage upload endpoints and
+catalog triggers already support the required hierarchy. In the current users
+layout, folders are catalog rows with is_folder=true and no source object;
+files bind to storage objects. Legacy user-files folders use .folder markers.
+Object storage uses flat keys, not operating-system directories. Current keys
+normally use <owner>/files/<relative path>; the existing Unicode mapping can
+use the files-utf8 namespace while retaining the virtual name/hierarchy.
+
+Authorization is resolved on the server for each destination. Client validation
+and confirmation state are never treated as permission. The existing backend
+rejects cross-owner writes, path traversal, files used as parents and metadata
+without a corresponding storage object.
+
+Regression coverage
+
+tests/folder-uploads.mjs:
+  Single/nested directories; multiple roots and mixed files; empty directories;
+  extensionless files; spaces/Unicode/special characters; root-name collisions;
+  251 files across multiple reader batches; traversal/reserved-name rejection;
+  read-permission failure; unsupported ambiguous drops; native handle traversal;
+  failed parent propagation; interrupted-item isolation.
+
+tests/folder-uploads-db.mjs:
+  Executes the real existing SQL migrations in isolated PostgreSQL/PGlite.
+  Verifies folder/file counts, sizes, catalog-to-storage identity, physical keys,
+  Unicode paths, empty folders, nested destination, collisions, orphan rejection,
+  non-directory parent rejection and cross-owner RLS. It uses synthetic storage
+  rows, not a production object-storage service.
+
+tests/folder-uploads-ui.mjs:
+  Runs the actual FileManager component against isolated mocked RPCs and a local
+  HTTP upload receiver. Verifies the folder chooser opens from the upload modal,
+  folder file selection, native handle discovery, recursive mixed drops, empty
+  directories, extensionless names, Unicode, nested destination, navigation and
+  refresh persistence, duplicate protection, storage-limit errors, interrupted
+  responses and modal safety. Received small-file and 7 MiB TUS payloads match
+  source SHA-256 hashes. A file saved before its response is lost remains saved
+  while its queue item is correctly reported as failed.
+
+Browser results
+
+Browser or environment             Result
+Google Chrome                      PASS at 1440px and 390px
+Microsoft Edge                     PASS at 1440px and 390px
+Playwright Firefox 146.0.1          PASS at 1440px and 390px
+Playwright WebKit                  PASS at 1440px and 390px
+Safari on macOS                    Not available; WebKit is engine coverage only
+Physical iPhone/iPad/Android        Not available; narrow viewports are not devices
+
+The OS folder-picker UI and physical OS drag gestures were not driven in these
+automated fixtures. File chooser events were exercised; selection, directory
+handles and drag directory entries were supplied by the fixtures. The real
+supported methods are chosen by feature detection. Unsupported/unclassifiable
+drops fail with a supported alternative instead of uploading directory stubs.
+
+Compatibility references:
+https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/webkitdirectory
+https://developer.mozilla.org/en-US/docs/Web/API/DataTransferItem/webkitGetAsEntry
+https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryReader/readEntries
+
+Limits of verification
+
+No production source-folder count/checksum comparison was performed. There was
+no 10 GiB transfer or production storage-exhaustion test. Storage limits and
+ambiguous network failures were simulated; 7 MiB transfers used the real TUS
+client and a local receiver. Large directory discovery was tested at 251 files,
+not millions of entries. Mobile file-provider behavior requires physical-device
+verification. Existing backend catalog/RLS tests provide authorization evidence;
+the new UI tests do not replace an authenticated production acceptance upload
+after deployment.
+
+Safe recovery of previously affected uploads
+
+1. Retain the existing qBittorrentPortable tree unchanged.
+2. If server recovery is desired, an authorized operator should inspect the
+   owner's exact user_file_metadata paths, is_folder/file_size/source_id and the
+   matching storage.objects rows, including any descendant keys and backups.
+   Zero-byte placeholder objects contain no original descendant payloads.
+3. If actual descendant objects exist, take a backup and prepare a separate,
+   reviewable repair plan based on those exact objects. Do not simply toggle
+   is_folder on the placeholders or manipulate storage tables as a byte repair.
+4. If the bytes are absent, create a new empty recovery destination through
+   File Manager, open it and use Add Folder to upload the original local
+   qBittorrentPortable folder after the fix is deployed. Its original name and
+   hierarchy are retained without touching the affected upload.
+5. Compare file/directory counts, sizes and important-file checksums, refresh,
+   navigate and download before considering cleanup. Any removal of the old
+   data needs separate authorization and the existing deletion confirmation.
+
+Changed application and test files
+
+src/lib/folderUploads.ts
+src/components/FileManager.tsx
+src/components/FileDropArea.tsx
+tests/folder-uploads.mjs
+tests/folder-uploads-db.mjs
+tests/folder-uploads-ui.mjs
+scripts/run-core-regressions.mjs
+scripts/run-ui-regressions.mjs
+
+Graphify outputs and its generated cache/manifest/label metadata were refreshed.
+The graph update reports that 98 SQL files cannot be extracted because the
+tree_sitter_sql dependency is missing. SQL behavior above was tested directly.
+
+Validation artifacts
+
+core-regressions.log: full core suite passed with PYTHON_BIN set to installed
+Python. The initial default-alias run stopped at the ZIP test because Windows'
+python alias was inaccessible; ZIP and remaining tests passed after correction.
+build.log: production build passed, with the existing chunk-size advisory.
+TypeScript typecheck, changed-file ESLint and git diff --check passed.
+Browser screenshots: chrome-1440.png, chrome-390.png, edge-1440.png,
+edge-390.png, firefox-1440.png, firefox-390.png, webkit-1440.png, webkit-390.png.
+ui-regressions.log and ui-regressions-continued.log: all existing UI suites
+passed across the original run and continuation. The first run stopped when
+pdf-preview could not find its headless Chromium executable. After installing
+the official runtime, pdf-preview and every subsequent suite passed. Earlier
+passed suites were retained, including File Manager copy/move, permissions,
+navigation, previews and deletion/modal behavior. The focused folder-upload
+suite also passed in all four engines; its final added discovery-failure check
+passed in Edge at both widths. A discovery failure cannot reuse an earlier
+batch's successful completion status.
+
+Graphify was refreshed after the final application changes using AST-only
+extraction, with no model API cost. Its generated backup under
+graphify-out/2026-11-24 was retained: automatic approval review rejected optional
+cleanup because the backup may contain recovery data. This does not affect the
+implementation or validation.

@@ -1,0 +1,318 @@
+PASS folder discovery, mixed selections, batched traversal, empty directories, names, paths, permissions/quota failure propagation and interruption isolation
+PASS folder hierarchy, empty directories, file sizes, physical key/catalog identities, Unicode, collision guards, orphan rejection and cross-owner RLS in actual SQL
+PASS Vite, tinyglobby and the lockfile resolve only the local patched picomatch
+PASS normal build/lint globs, Windows paths, Unicode names, finite extglobs and safe character folding
+PASS reported single-branch repeated-extglob attacks and nested variants finish within the process timeout
+PASS real tinyglobby source-file discovery with the patched matcher
+PASS actual PDF Edge handler: owner, MIME-only PDF, shared user, anonymous/public access, revocation and denied-storage isolation
+PASS actual Messenger PDF handler: group-member preview, outsider denial, saved URL denial after removal, and mid-request revocation
+PASS non-superuser migration protects Storage objects without altering service-owned internal tables
+PASS existing actor claims lose owner RLS and privileged REST access after disablement
+PASS Auth deletion, profile demotion and ban cannot remove the last active administrator
+PASS approval credentials are bound to the saved delivery; retry preserves credential and exact expiry; unrelated deliveries cannot issue passwords
+PASS 12-symbol hash-only credential expires at one hour; wrong/expired/replaced/exhausted credentials fail; no Auth session before permanent password; old capabilities and temporary password cannot be reused
+PASS existing accounts retain normal password sign-in
+PASS public request quotas are server-only and persist across requests
+PASS empty/unchanged storage roots and unrelated saves work; populated media prefixes cannot be changed
+PASS owner/admin/session identity, disablement, logout, expiry and public-to-private revocation checked on every request
+PASS actual Edge handler streams authorized ranges without Storage capabilities; disabled/deleted content never reaches byte storage
+PASS authorized archive downloads reject oversized headers and unknown-length streams, cancel reads, and accept small files
+PASS large folder entries are rejected before downloading payloads
+PASS storage failures are not cached; successful prefixes normalize, expire and invalidate explicitly
+PASS anonymous path lookup succeeds without exposing admin settings/table
+PASS public photo original/preview/thumbnail and video poster readable; private/staging/other buckets denied
+PASS existing authenticated owner policy remains intact
+PASS multi-segment configured prefix uses exact keys, never suffix/bucket-wide matching
+PASS public visibility revocation immediately removes new anonymous reads
+5 public preview database checks passed.
+PASS preview data URLs preserve binary bytes/MIME, reject invalid sources and never fetch
+PASS registration succeeds
+PASS receipt plus notification to every admin (not ordinary members)
+PASS user receipt has correct recipient
+PASS receipt uses requested subject
+PASS all notification emails include a plain-text alternative
+PASS receipt identifies website and pending status
+PASS admin names are HTML escaped
+PASS configured sender used
+PASS duplicate pending request displays a warning
+PASS duplicate submission sends no duplicate mail
+PASS duplicate creates no extra registration
+PASS missing key does not undo registration
+PASS missing key does not make a Resend request
+PASS missing key is logged
+PASS invalid key leaves registration intact
+PASS each invalid-key send records status and failure
+PASS sender rejection logged with status
+PASS unverified sender preserves the request for admin approval
+PASS later admins are attempted even when earlier recipients fail
+PASS transport failure logged
+PASS secret redacted from all error logs
+PASS retry recovers failed messages independently
+PASS concurrent sends claim a delivery only once
+PASS ambiguous old messages are not resent after idempotency expiry
+PASS public cannot read delivery recipients or metadata
+PASS public cannot claim delivery records
+PASS invalid registration email rejected
+PASS database lookup failure is not reported as a successful registration
+PASS lookup failure still preserves an already saved pending request
+PASS approved duplicate displays a reviewed-request warning
+PASS approved duplicate cannot reopen a reviewed request
+PASS rejected duplicate displays a reviewed-request warning
+PASS rejected duplicate cannot reopen a reviewed request
+PASS reviewed duplicates send no new notifications
+PASS explicit Resend sender is required; SMTP admin setting is not an API fallback
+PASS missing sender does not contact Resend
+PASS rate-limited delivery recovers
+PASS rate-limit retry is bounded
+PASS rate-limit retry preserves idempotency key
+PASS customer mail disabled while all admins remain enabled
+PASS only administrators receive registration notifications
+PASS temporary customer suppression is visible in safe logs
+PASS secrets stay redacted
+PASS actual approval handler succeeds
+PASS approval sends one customer email
+PASS sender name and domain address are independently configurable
+PASS approval uses requested subject
+PASS approval has direct login link and accurate initial setup instructions
+PASS approval credential is not persisted in email bodies
+PASS only the approval credential hash is saved
+PASS approved pending row removed
+PASS approval retry succeeds after pending row removal
+PASS approval retry does not duplicate email
+PASS registration retry after approval warns that the email exists
+PASS registration retry after approval neither recreates request nor resends receipt
+PASS existing account lookup ignores case and surrounding whitespace
+PASS existing account response identifies email conflict
+PASS existing account warning suggests another email
+PASS Auth account without a profile also blocks duplicate registration
+PASS existing account warnings trigger no notifications
+PASS non-admin cannot approve or trigger approval email
+PASS approval email failure cannot cancel account creation
+PASS account retains user role when email fails
+PASS approval failure persists diagnostics after pending row deletion
+PASS failed approval email can be retried without recreating account
+PASS approval retry recovers failed delivery
+PASS unrequested customer notifications remain disabled
+67 checks passed; no external emails sent.
+PASS new setting defaults to 3.0 Mbps
+PASS Admin GET returns numeric current setting
+PASS 1 Mbps saved without changing storage configuration
+PASS 2.5 Mbps saved without changing storage configuration
+PASS 3 Mbps saved without changing storage configuration
+PASS 3.5 Mbps saved without changing storage configuration
+PASS 4 Mbps saved without changing storage configuration
+PASS 4.5 Mbps saved without changing storage configuration
+PASS 3.25 Mbps saved without changing storage configuration
+PASS 15 Mbps saved without changing storage configuration
+PASS invalid target rejected: 0
+PASS invalid target rejected: 0.99
+PASS invalid target rejected: 15.01
+PASS invalid target rejected: "3"
+PASS invalid target rejected: null
+PASS invalid target rejected: true
+PASS invalid target rejected: {}
+PASS invalid target rejected: 3.001
+PASS existing storage save preserves video setting
+PASS failed save preserves last saved value
+PASS regular users cannot read/change processing configuration
+PASS anonymous settings request rejected
+PASS database independently enforces range and non-null
+PASS existing RLS blocks direct regular-user settings access
+24 settings API/database checks passed
+PASS forward migration applies over existing admin and personal analytics
+PASS initial baseline preserves pre-existing counters, rankings and activity
+PASS ordinary users, anonymous callers and missing identity cannot reset or write the baseline
+PASS disabled, banned and password-setup administrators are rejected server-side
+PASS audit failure rolls back the entire reset; baseline, cached reports and history remain unchanged
+PASS all admin counters/rankings/charts and activity reset together, including tables and per-user drilldowns
+PASS content, stored objects, lifetime counters and raw events unchanged; private actor/time audit retained and personal reports preserved
+PASS new real views/previews/uploads and activity count normally; exact baseline boundary included
+PASS repeated resets use fresh cache windows and preserve all previous events/audits
+9 admin statistics PostgreSQL checks passed
+PASS self deletion excludes cards from every history/search/snapshot/pagination path; reply reference remains neutral
+PASS self events target only that account; other participant retains content, reactions and attachment access; no storage deletion
+PASS recipient, outsider and anonymous global deletions denied by the backend
+PASS global deletion persists across both participants, reload and pagination; reactions/attachments/stale replies cannot be accessed
+PASS private broadcasts reach every member; reactions removed; source and derived cleanup queued once; text-free tombstone retains reply ID
+PASS deleting the last visible message clears inbox preview and leaves no placeholder
+PASS historical partially deleted rows cannot render a card, inbox placeholder or reaction UI
+Messenger deletion: 7 checks passed
+PASS all eligible people across three cursor pages; self, invalid accounts and both block directions excluded; minimal fields
+PASS full-name/email/one-character search, literal wildcard input, email fallback and cursor validation
+PASS repeated and reversed direct selection reuse one chat; session presence and unread/read badges work
+PASS hidden direct chats reopen; group creation and inbox remain intact
+PASS eligibility rechecked when selecting stale users; foreign chats/membership cannot be accessed
+PASS directory helper/tables remain private; guest, signed-out and disabled accounts cannot browse directory
+Messenger people: 6 checks passed
+PASS call migration applies with actual Messenger RPCs and serializers
+PASS start is idempotent, bound to session, and serializes busy participants
+PASS guest/nonmember/table access rejected; browser IDs cannot select actor
+PASS acceptance, relay credentials, targeted signaling and cursor deduplication
+PASS camera signals validate state/session/actor; versions ignore stale retries; latest state survives signal expiry
+PASS remote end returns terminal heartbeat, purges signaling, updates timeline and protects history
+PASS unanswered timeout, missed bell acknowledgement and decline
+PASS blocking, inactive accounts and midcall membership revocation are enforced
+PASS small group calls survive one departure and enforce participant limit
+9 Messenger call checks passed.
+PASS notification migration applies alongside real Messenger/call migrations
+PASS authenticated ownership, device isolation, RLS and SSRF input validation
+PASS independent multi-device leases, idempotency, expired subscription cleanup and preview privacy; notification display never marks read
+PASS mute, block, preview preferences and read-state changes are rechecked after enqueue
+PASS authenticated page lease, ACK validation, suspended-tab push fallback and foreground exclusivity
+PASS call event deduplication, answer-on-another-device closure and server timeout reconciliation
+PASS device disable and globally revoked auth sessions suppress future push delivery
+PASS notifications preserve users, messages, calls and existing Messenger state
+PASS creator is owner; create/edit/manage existing group actions work with new migration
+PASS normal member, group admin, outsider and anonymous deletion denied; legacy delete route cannot bypass
+PASS video/photo cards, metadata/search and reactions enforce current membership; recipient cannot change grants or issue capabilities
+PASS original, thumbnail, preview and saved video/image capabilities revoke immediately on removal/session expiry; joining restores group access
+PASS discovery lists current member groups only; video/photo filters isolate exact group assignments; removal revokes and rejoining restores; anonymous/nonmember/site-admin enumeration denied
+PASS individual grants coexist; rejected mixed save rolls back grants and visibility atomically
+PASS injected late deletion failure rolls back scrubbed content, grants, notification jobs, cleanup queue and retry receipt together
+PASS nonmember site admin and owner delete; cascade removes all group data/notifications/grants; private realtime reaches members; original media and independent grants survive; offline reload denies
+PASS public/anonymous playback remains supported independently of group shares
+PASS actual queue handler derives owner, saves private group intent, retries idempotently; real video/photo publisher creates exactly one group grant atomically
+PASS single-final video publication also commits its group grant atomically
+PASS anonymous/forged, nonmember, invalid group, public group upload and preview group target denied; browser cannot call privileged queue or edit job destination
+PASS membership revoked during processing rolls back publication and grant; rejoining permits safe retry
+PASS grant insertion failure rolls back media and completion; deleted group fails pending publication and preserves completed originals
+PASS ordinary personal uploads retain the original queue/publication path without group grants
+PASS one verified final object publishes Ready idempotently; original probe metadata is retained
+PASS legacy worker original/stream publication remains compatible for a controlled worker upgrade
+PASS mismatched identity/path, missing thumbnail, stale claim and unverified/size-mismatched final metadata cannot publish
+PASS operator drain pauses claims and cleanup without cancelling uploads; queued work resumes
+PASS cleanup retains failed/nonready/nonfinite/deleting/missing-final sources and never targets permanent media
+PASS anonymous/browser roles cannot call privileged publication or cleanup RPCs
+PASS existing prefixes resolve exactly; private preparations and migration registry are unavailable to anonymous clients
+PASS old/new image paths use current visibility, current group membership and current verified session; saved grants never overwrite the new path
+PASS confirmed server cleanup resolves only owned active/retained photo objects; deletion leaves retirement protection intact
+PASS file preview sources use the actual metadata-bound object; unpublished and unbound copies never become preview sources
+PASS copy preparation stays inactive; cutover preserves virtual hierarchy/public ID; favorite upserts retain new bindings and cross-owner access is denied
+PASS actual durable Move/receipt and empty-folder Copy plans work on new objects; renamed files preserve public identity and explicit sharing
+PASS old-copy deletion does not remove current file metadata or sharing; anonymous clients cannot enumerate owner folders
+PASS owner-only new file uploads/catalog synchronization; raw media and legacy writes denied; maintenance blocks browser/service mutations while browsing and Messenger storage remain available
+PASS Trash is rechecked server-side; private retry receipts block replacement/restore, remove retained aliases first, skip completed removals and permit safe path reuse only after completion
+PASS storage-safe keys round-trip Russian, accents, CJK, emoji and reserved ASCII; malformed encodings and traversal are rejected
+PASS the original saved rename resumes without replacing its receipt; object/public identity, Russian display name and sharing survive
+PASS Russian folder/file Copy uses virtual suffixes and independently confirmed storage/metadata steps
+PASS encoded files retain owner/RLS, Trash deletion resolution, pending-deletion locks and storage maintenance gates
+PASS preview source resolvers bind Russian names to the actual storage object after rename
+PASS Storage INSERT/copy/move RETURNING works before metadata AFTER triggers, preserves identity and rejects foreign writes and anonymous forged-sub access
+PASS preview cache layout, ready reuse, library drain, Messenger independence, scoped cleanup, late-upload rejection, prepared copy, source invalidation and Russian filename preview/Trash invalidation
+PASS storage links resolve current public/private resources and legacy aliases; sharing/session revocation, stable file moves, Trash/deletion and privileged RPC denial remain enforced
+PASS retired duplicate cleanup: private intents, maintenance gates, exact versions, expiry, browser denial, active replacement/metadata protection and durable aliases
+PASS actual Storage SDK signing, Unicode/space names, public revalidation, private session-bound grants, Range/HEAD, old-token denial, unsupported routes and independent revocation
+PASS reservations bind verified owner/kind and immutable staging location; queued jobs capture output layout; unreserved/foreign/replacement writes and active-source deletion are denied
+PASS old-client inputs stay compatible, preview output follows its target, incomplete/paused requests fail, and expired leases renew without deleting any TUS state
+PASS users-bucket video/photo/preview publication is atomic and idempotent, retains source metadata, authorizes public bytes by current visibility and cleans only unused owned thumbnails
+PASS wrong-layout/unverified outputs never publish; failed-job cleanup targets only its unpublished outputs; retry retains the exact input location; final-identity changes block source cleanup
+PASS ordinary/TUS uploads use only the server-reserved staging bucket/key; mismatched owner or permanent bucket is rejected before uploading
+PASS confirmed queue rejection cleans only the new attempt; ambiguous queue/server failures retain inputs for recovery without touching permanent media
+PASS photo deletion rechecks verified actor, active account and owner; partial cleanup retains the row and retry removes only remaining objects before deletion
+PASS file deletion verifies actor, derives owner, validates Trash identity, rejects foreign locations, preserves partial retries and bounds pending cleanup
+PASS authenticated issuance binds verified user/session, exact resource path, hash-only storage; invalid/anonymous/forged requests fail closed
+PASS saved URL reauthorizes on GET/HEAD; removed group/session blocks Storage; no signed redirect or cache; save failure never issues a capability
+PASS anonymous images, current-bucket aliases and ETag revalidation work; visibility revocation precedes caching and unexpected buckets are rejected
+PASS delayed pre-removal inbox/history snapshot cannot resurrect a revoked group/message
+PASS fresh authorized reconnect snapshot restores a group after re-addition even when its realtime event was missed
+PASS restored membership never restores individually deleted message cards
+PASS missing, invalid and inactive sessions cannot get relay credentials
+PASS preflight exposes no secrets; missing configuration and unauthorized call fail closed
+PASS local coturn credentials use private per-user TTL/HMAC signing
+PASS membership/session revocation during signing suppresses credential response
+PASS preflight and credential issuance reject malformed relay/STUN configuration
+5 relay checks passed.
+PASS synchronous pending guard prevents duplicate starts and media acquisition
+PASS production ICE permits direct paths; refreshing relay credentials does not restart healthy media
+PASS mute, camera toggles, device replacement and screen restoration release old tracks
+PASS failed device replacement stops newly acquired capture and retains old camera
+PASS end stops capture during network failure, prevents duplicate submission and retries
+PASS remote hangup clears local capture through terminal heartbeat
+PASS signout during browser permission acquisition cannot leak media
+PASS Accept requests permission synchronously, prevents double taps and never waits for optional device enumeration
+PASS stalled permission shows an actionable error, does not accept on the server and stops late capture
+PASS camera state signals are versioned, honor actual capture, preserve screen/audio and reuse peer connections
+PASS new peer starts with persisted camera state for late joiners
+11 call engine checks passed.
+PASS mobile identity and conservative output labels, without screen-size/device-ID assumptions
+PASS voice default, confirmed toggle and late-participant consistency
+PASS video default, confirmed toggle and late-participant consistency
+PASS Bluetooth/wired/USB/unclassified outputs preserve the system route
+PASS known or opaque headset input protects OS routing even when its output is not enumerated
+PASS desktop default unchanged; explicit output selection remains available
+PASS unsupported routing leaves system audio intact
+PASS partial group switch rejects optimistic state and rolls back successful nodes
+PASS resolved API promise without matching sinkId never claims a successful switch
+PASS accessory connection restores OS routing for automatic defaults; chosen route persists until unavailable
+PASS permission picker grants dynamic output; cancellation preserves the route
+PASS synchronous guard prevents repeated pending switches
+PASS late browser completion restores the current choice without overlapping output requests
+PASS rejected device-loss fallback does not repeatedly retry on focus/devicechange
+PASS denied automatic preference remains on system audio without automatic retries
+PASS picker metadata survives an enumeration that started before permission was granted
+16 audio output policy checks passed (simulated browser outputs, not phone hardware).
+PASS each real push displays a native notification; repeated IDs quietly update the same tag
+PASS malformed push uses private generic notification; mismatched-device and logged-out payloads are ignored
+PASS page-claimed events use foreground cards or background OS; actual push always remains native
+PASS call cleanup closes directly without replacement; expired/reordered original pushes never resume ringing
+PASS resume reconciliation keeps active calls, closes ended/expired alerts and never shows another notification
+PASS removed/deleted group reconciliation closes only that account’s inaccessible alerts without replacement
+PASS SW click focuses existing page without reload, routes new page safely and rejects stale account links
+PASS unfocused browser window uses OS alert instead of a second foreground popup/ringtone
+PASS temporary OS display failure releases dedupe claim for retry
+PASS empty push still displays a private generic update with safe Messenger routing
+PASS notification delivery and cleanup are owner-specific across delayed sign-out/account switching
+PASS notification SW leaves media fetches, WebRTC and read state untouched
+PASS migration applies to PostgreSQL with required existing tables
+PASS hash-only storage, exact 24 hours, one active link, confirmed replacement race check
+PASS non-owner creation, revocation and operations denied; anonymous RPC access denied
+PASS folder capability lists only its subtree; rejects traversal and expired links
+PASS server checks destination ownership/existence, cycles, conflicts and full recursive plans
+PASS moved identity follows metadata; deleted videos/files cascade to capability deletion
+6 PostgreSQL checks passed
+Temporary share routes pass for root and subdirectory hosting.
+PASS folder ZIP opens in standard unzip reader with empty folders, nested payloads, Unicode names and valid checksums
+PASS owner can read private files
+PASS folder share grants deep descendant storage access
+PASS folder boundary excludes similarly named siblings
+PASS global search returns only accessible matches
+PASS no-match search is empty
+PASS shared root lists shared folder without duplicate descendants
+PASS shared browsing lists immediate children
+PASS inherited user-share indicator
+PASS recipient cannot change sharing
+PASS recipient cannot enumerate grants
+PASS recipient cannot search owner user directory
+PASS recipient cannot rename or move storage object
+PASS recipient cannot delete storage object
+PASS recipient cannot trash metadata
+PASS recipient cannot upload into shared folder
+PASS direct grant-table writes denied
+PASS unshared user cannot read a known path
+PASS unshared user cannot discover sharing state
+PASS owner can find existing users
+PASS future files automatically inherit access
+PASS Everyone grants authenticated user read access
+PASS Everyone does not grant anonymous URL access
+PASS anonymous user cannot manage sharing
+PASS revoking Everyone and users removes descendant access
+PASS owner retains access after revocation
+PASS second selected recipient receives access
+PASS removing one recipient revokes only their grant
+PASS remaining selected recipient keeps access
+PASS individual file sharing works
+PASS file share does not grant descendants
+PASS literal wildcard folder works
+PASS percent and underscore never broaden folder access
+PASS dialog reports direct and inherited access
+PASS trashed ancestor blocks even direct child grants
+PASS direct grants follow renamed metadata via foreign key
+PASS old filename no longer grants access
+PASS moving out of shared folder removes inherited access
+PASS unknown recipients rejected atomically
+PASS invalid save leaves existing grants intact
+PASS metadata deletion cascades grants and blocks orphaned storage
+PASS shared listing is bounded with pagination lookahead
+PASS global shared search pages do not overlap
+
+42 database security and behavior checks passed.

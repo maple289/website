@@ -1,7 +1,7 @@
 import { useDeleteConfirmation } from '@/lib/deleteConfirmation';
 import { useEffect, useState, type ReactNode } from 'react';
 
-export function FileDropArea({ enabled, onFiles, children, appearance = 'default', mediaKind, message = 'Drop files here to upload' }: { enabled: boolean; onFiles: (files: File[]) => void; children: ReactNode; appearance?: 'default' | 'light' | 'media'; message?: string; mediaKind?: 'video' | 'photo' }) {
+export function FileDropArea({ enabled, onFiles, onDropItems, children, appearance = 'default', mediaKind, message = 'Drop files here to upload' }: { enabled: boolean; onFiles: (files: File[]) => void; onDropItems?: (data: DataTransfer) => void; children: ReactNode; appearance?: 'default' | 'light' | 'media'; message?: string; mediaKind?: 'video' | 'photo' }) {
   const { isOpen } = useDeleteConfirmation();
   enabled = enabled && !isOpen;
   const [active, setActive] = useState(false);
@@ -14,7 +14,7 @@ export function FileDropArea({ enabled, onFiles, children, appearance = 'default
   return <div data-drag-active={active && enabled} className={`${appearance === 'light' ? 'fm-drop-area' : appearance === 'media' ? 'media-drop' : ''} relative min-h-[240px] ${active && enabled && appearance === 'default' ? 'rounded-xl ring-4 ring-blue-400' : ''}`}
     onDragOver={(event) => { if (!enabled || !event.dataTransfer.types.includes('Files')) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setInvalidDrag(!!mediaKind && Array.from(event.dataTransfer.items).some(item => mediaKind === 'video' ? item.type.startsWith('image/') : item.type.startsWith('video/'))); setActive(true); }}
     onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setActive(false); }}
-    onDrop={(event) => { if (!enabled || !event.dataTransfer.types.includes('Files')) return; event.preventDefault(); event.stopPropagation(); setActive(false); if (event.dataTransfer.files.length) onFiles(Array.from(event.dataTransfer.files)); }}>
+    onDrop={(event) => { if (!enabled || !event.dataTransfer.types.includes('Files')) return; event.preventDefault(); event.stopPropagation(); setActive(false); if (onDropItems) onDropItems(event.dataTransfer); else if (event.dataTransfer.files.length) onFiles(Array.from(event.dataTransfer.files)); }}>
     {children}
     {active && enabled && <div className={appearance === 'light' ? 'fm-drop-message pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-6 text-center' : appearance === 'media' ? 'media-drop-message pointer-events-none z-50 flex items-center justify-center p-6 text-center font-semibold' : 'pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-blue-400 bg-blue-950/80 p-6 text-center text-xl font-semibold text-white'}><span>{invalidDrag ? `Some files are not ${mediaKind === 'video' ? 'videos' : 'photos'}. Only valid files will upload.` : message}</span></div>}
   </div>;

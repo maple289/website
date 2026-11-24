@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 const suites = [
+  'tests/folder-uploads.mjs',
+  'tests/folder-uploads-db.mjs',
   'tests/picomatch-security.mjs',
   'tests/pdf-preview-access.mjs',
   'tests/audit-account-security.mjs', 'tests/audit-media-security.mjs', 'tests/audit-client-resilience.mjs',

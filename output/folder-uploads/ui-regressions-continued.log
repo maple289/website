@@ -1,0 +1,160 @@
+PDF browser: chromium 145.0.7632.6
+CHECK Desktop: open and paint
+CHECK Desktop: fullscreen and download
+CHECK Desktop: large PDF and navigation
+CHECK Desktop: corrupt and denied PDFs
+CHECK Desktop: temporary share
+CHECK Desktop: stalled source and missing module
+PASS chromium Desktop: 12/300-page rendering, MIME fallback, scroll/navigation/zoom/pinch, fullscreen, download, close, rotation, failure and temporary expiry
+CHECK Android: open and paint
+CHECK Android: fullscreen and download
+CHECK Android: large PDF and navigation
+CHECK Android: corrupt and denied PDFs
+CHECK Android: temporary share
+PASS chromium Android: 12/300-page rendering, MIME fallback, scroll/navigation/zoom/pinch, fullscreen, download, close, rotation, failure and temporary expiry
+9:24:42 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+PASS 1440px: batch file picker continues after failure and refreshes cards
+PASS 1440px: dropped saved file survives lost metadata response; no rollback deletion or overflow
+PASS 768px: batch file picker continues after failure and refreshes cards
+PASS 768px: dropped saved file survives lost metadata response; no rollback deletion or overflow
+PASS 390px: batch file picker continues after failure and refreshes cards
+PASS 390px: dropped saved file survives lost metadata response; no rollback deletion or overflow
+6 File Manager browser checks passed
+PASS 1440px: valid save, numeric validation and duplicate-submit guard
+PASS 1440px: persisted value reloads and failed save preserves draft/current value
+PASS 1440px: protected discard dialog, touch layout and no overflow/runtime errors
+PASS 1440px: normal user does not see Admin setting
+PASS 768px: valid save, numeric validation and duplicate-submit guard
+PASS 768px: persisted value reloads and failed save preserves draft/current value
+PASS 768px: protected discard dialog, touch layout and no overflow/runtime errors
+PASS 768px: normal user does not see Admin setting
+PASS 390px: valid save, numeric validation and duplicate-submit guard
+PASS 390px: persisted value reloads and failed save preserves draft/current value
+PASS 390px: protected discard dialog, touch layout and no overflow/runtime errors
+PASS 390px: normal user does not see Admin setting
+12 Admin settings browser checks passed
+PASS failed lazy page preserves navigation and incoming call controls; switching pages recovers cleanly
+PASS Desktop: normal password field, explicit resend, protected permanent-password draft, expired setup error, duplicate-submit guard, memory-only capability and full login
+PASS Tablet: normal password field, explicit resend, protected permanent-password draft, expired setup error, duplicate-submit guard, memory-only capability and full login
+PASS Portrait: normal password field, explicit resend, protected permanent-password draft, expired setup error, duplicate-submit guard, memory-only capability and full login
+PASS Landscape: normal password field, explicit resend, protected permanent-password draft, expired setup error, duplicate-submit guard, memory-only capability and full login
+PASS chromium 1440px: admin action, baseline, protected confirmation and unchanged Cancel
+PASS chromium 1440px: failure stays in confirmation and preserves reports/timestamp
+PASS chromium 1440px: guarded POST, reset/refresh, stale-response rejection, activity empty and no reload
+PASS chromium 1440px: new activity/rankings, responsive layout and no runtime errors
+PASS chromium 1440px: regular user cannot see the reset action
+PASS chromium 768px: admin action, baseline, protected confirmation and unchanged Cancel
+PASS chromium 768px: failure stays in confirmation and preserves reports/timestamp
+PASS chromium 768px: guarded POST, reset/refresh, stale-response rejection, activity empty and no reload
+PASS chromium 768px: new activity/rankings, responsive layout and no runtime errors
+PASS chromium 768px: regular user cannot see the reset action
+PASS chromium 390px: admin action, baseline, protected confirmation and unchanged Cancel
+PASS chromium 390px: failure stays in confirmation and preserves reports/timestamp
+PASS chromium 390px: guarded POST, reset/refresh, stale-response rejection, activity empty and no reload
+PASS chromium 390px: new activity/rankings, responsive layout and no runtime errors
+PASS chromium 390px: regular user cannot see the reset action
+15 admin statistics browser checks passed
+PASS chromium 1440px: real captured frame replaces preview under production connect-src; confirmation/Cancel/duplicate guard and old-preview cleanup
+PASS chromium 1440px: data: fetch remains blocked while local conversion succeeds
+PASS chromium 390px: real captured frame replaces preview under production connect-src; confirmation/Cancel/duplicate guard and old-preview cleanup
+PASS chromium 390px: data: fetch remains blocked while local conversion succeeds
+PASS chromium Captured frame: failed upload preserves original preview and draft; retry succeeds in the same confirmation
+PASS chromium From picture: failed upload preserves original preview and draft; retry succeeds in the same confirmation
+9:25:40 AM [vite] (client) hmr update /src/index.css
+9:25:40 AM [vite] (client) hmr update /src/index.css
+PASS chromium From picture PNG: button opens picker, preview loads, Cancel preserves original, confirmed save succeeds once under CSP
+PASS chromium From picture JPG: button opens picker, preview loads, Cancel preserves original, confirmed save succeeds once under CSP
+PASS chromium From picture WEBP: button opens picker, preview loads, Cancel preserves original, confirmed save succeeds once under CSP
+9 preview replacement browser checks passed
+9:25:44 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+PASS chromium 1440px: anonymous previews/refresh, failure recovery, repeated auth transitions, private hiding, file icons/image reuse and generated preview
+PASS chromium 390px: anonymous previews/refresh, failure recovery, repeated auth transitions, private hiding, file icons/image reuse and generated preview
+9:25:59 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+PASS chromium 1440px: anonymous video/refresh, natural ended, pause/stall/seek safety, released source, scroll/focus/inert cleanup, reopen/manual close
+PASS chromium 1440px: public photos/files, unsupported icon, no anonymous selection/download/context actions, owner/read-only permissions, empty menus, logout removes open menu
+PASS actual desktop fullscreen: natural end exits fullscreen and restores gallery
+PASS chromium 1440px: standard and simulated native exits attempted; delayed/rejected exits cannot prevent closing
+PASS chromium 390px: anonymous video/refresh, natural ended, pause/stall/seek safety, released source, scroll/focus/inert cleanup, reopen/manual close
+PASS chromium 390px: public photos/files, unsupported icon, no anonymous selection/download/context actions, owner/read-only permissions, empty menus, logout removes open menu
+PASS chromium 390px: standard and simulated native exits attempted; delayed/rejected exits cannot prevent closing
+PASS chromium 768px: anonymous video/refresh, natural ended, pause/stall/seek safety, released source, scroll/focus/inert cleanup, reopen/manual close
+PASS chromium 768px: public photos/files, unsupported icon, no anonymous selection/download/context actions, owner/read-only permissions, empty menus, logout removes open menu
+PASS chromium 768px: standard and simulated native exits attempted; delayed/rejected exits cannot prevent closing
+9:26:31 AM [vite] (client) page reload graphify-out/graph.html
+PASS chromium Close: media URL loading, unmounted and reopened
+PASS chromium Close: normal, tap received, unmounted, scroll/focus cleanup, reopen
+PASS chromium Close: paused, tap received, unmounted, scroll/focus cleanup, reopen
+PASS chromium Close: buffering, tap received, unmounted, scroll/focus cleanup, reopen
+PASS chromium Close: rejected-exits, tap received, unmounted, scroll/focus cleanup, reopen
+PASS chromium Close: silent-native-entry, tap received, unmounted, scroll/focus cleanup, reopen
+PASS chromium Close: hung-standard-entry, tap received, unmounted, scroll/focus cleanup, reopen
+PASS chromium natural ended: normal, direct event auto-close, cleanup/reopen
+PASS chromium natural ended: rejected-exit, direct event auto-close, cleanup/reopen
+PASS chromium natural ended: silent-entry, direct event auto-close, cleanup/reopen
+PASS chromium natural ended: hung-entry, direct event auto-close, cleanup/reopen
+PASS chromium natural ended: undelivered-ended, manual Close after withheld event, cleanup/reopen
+PASS chromium: non-native seek-to-end remains open
+PASS chromium: native seeking before real ended closes
+PASS chromium: webkitendfullscreen recovers real completion, preserves active playback and removes stale listeners
+PASS chromium: webkitpresentationmodechanged recovers real completion, preserves active playback and removes stale listeners
+PASS chromium mobile Fullscreen: viewport fallback on first tap, no native takeover/PiP prerequisite, exit/re-entry
+PASS chromium fullscreen: standard, direct gesture, exit, rejection cannot block Close
+PASS chromium fullscreen: native, direct gesture, exit, rejection cannot block Close
+PASS chromium pip: standard, direct gesture, exit, rejection cannot block Close
+PASS chromium pip: native, direct gesture, exit, rejection cannot block Close
+PASS chromium: unsupported programmatic PiP hidden; normal playback/Close independent
+PASS chromium Android-style PiP handoff: leave-pause-full, playing continues on same source/node/time
+PASS chromium Android-style PiP handoff: full-pause-leave, playing continues on same source/node/time
+PASS chromium Android-style PiP handoff: pause-leave-full, playing continues on same source/node/time
+PASS chromium Android-style PiP handoff: leave-full-pause, playing continues on same source/node/time
+PASS chromium Android-style PiP handoff: full-leave-pause, playing continues on same source/node/time
+PASS chromium explicit Exit PiP then Fullscreen preserves playing state
+PASS chromium explicit Exit PiP then Fullscreen preserves paused state
+PASS chromium Android native expand: focus after PiP leave, playing state, no DOM fullscreen required
+PASS chromium Android native expand: focus after PiP leave, paused state, no DOM fullscreen required
+PASS chromium Android native expand: focus before PiP leave, playing state, no DOM fullscreen required
+PASS chromium Android native expand: focus before PiP leave, paused state, no DOM fullscreen required
+PASS chromium PiP Pause stays paused on system fullscreen return
+PASS chromium system PiP dismissal stays paused; expired intent cannot restart later fullscreen
+PASS chromium intentional Pause after fullscreen return cancels handoff recovery
+PASS chromium PiP leave does not tear down restored page fullscreen
+PASS chromium handoff waits for foreground visibility before restoring fullscreen playback
+PASS chromium rejected recovery leaves Play/Close usable without automatic retries
+PASS chromium Close during delayed PiP exit cannot resume released media
+PASS chromium delayed old exit cannot overwrite a newer PiP playback session
+PASS chromium combinations: standard, repeated modes, rotation, system exit, natural end in fullscreen/PiP
+PASS chromium combinations: native, repeated modes, rotation, system exit, natural end in fullscreen/PiP
+PASS actual chromium container fullscreen: first tap, viewport layout, repeated exit/re-entry, natural end
+PASS chromium iPhone Safari: three seeks, pointer-only second scrub, missing touchend, outside release/cancel, fullscreen toggles, blur/Close cleanup and pinch zoom
+PASS chromium iPhone Firefox: three seeks, pointer-only second scrub, missing touchend, outside release/cancel, fullscreen toggles, blur/Close cleanup and pinch zoom
+PASS chromium Android: existing video touch policy and native controls unchanged
+PASS chromium desktop: existing video touch policy and native controls unchanged
+PASS chromium mobile video visible viewport: offsets, toolbar resize, rotation, pinch, exit, reentry and Close
+PASS chromium fullscreen control bar: hides during playback, touch reveals safely, pause/keyboard retain controls, hidden double-tap exit and Close/reopen cleanup
+PASS chromium idle controls: delayed container takeover restores browser-owned playback controls
+PASS chromium current-data playback: progress hides controls, a stopped clock reveals them, recovery hides again and Close cleans up
+PASS chromium mobile video button 390x844: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible
+PASS chromium mobile video button 844x390: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible
+PASS chromium mobile video button 932x430: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible
+PASS chromium mobile video button 844x320: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible
+PASS chromium mobile video button 768x1024: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible
+PASS chromium mobile video button 1024x768: previous normal size restored, viewport fullscreen contains complete video, button/gesture exits, overlay controls accessible
+PASS chromium video native-events: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP
+PASS chromium video standard: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP
+PASS chromium video presentation: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP
+PASS chromium video legacy: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP
+PASS chromium video vendor: repeated enter/exit, shared button state, controls/swipe/pinch/long-press exclusion, independent PiP
+PASS chromium iPhone-like presentation: page owns both double taps, rotation, shared button, no native video takeover, PiP/Close cleanup
+PASS chromium iPhone-like legacy: page owns both double taps, rotation, shared button, no native video takeover, PiP/Close cleanup
+PASS chromium iPhone-like container-noop: page owns both double taps, rotation, shared button, no native video takeover, PiP/Close cleanup
+PASS chromium iPhone-like container-rejection: page owns both double taps, rotation, shared button, no native video takeover, PiP/Close cleanup
+PASS chromium delayed video container: second double tap cancels pending entry, late Close cleanup
+PASS chromium photo 390px: viewport fallback escapes parent, shared toggle, swipe retains fullscreen, controls, keyboard/wheel, pinch and close cleanup
+PASS chromium photo 768px: viewport fallback escapes parent, shared toggle, swipe retains fullscreen, controls, keyboard/wheel, pinch and close cleanup
+PASS chromium photo rejected API: complete CSS fullscreen retained, exit/Close available
+PASS chromium photo standard: shared API action, external exit state, late-entry cancellation/Close cleanup
+PASS chromium photo vendor: shared API action, external exit state, late-entry cancellation/Close cleanup
+PASS chromium photo coalesced: shared API action, external exit state, late-entry cancellation/Close cleanup
+PASS chromium photo delayed: shared API action, external exit state, late-entry cancellation/Close cleanup
+PASS real Chromium touch events: immediate video/photo API entry, double-tap exits, external exit state, fullscreen Close cleanup
+PASS real chromium desktop double-click and fullscreen button

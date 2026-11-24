@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createPublicPreviewServer } from '../tests/public-previews-server.mjs';
 const suites = {
+  'folder-uploads-ui': 'upload-test',
   'messenger-notifications-ui': 'notification-test',
   'messenger-group-sharing-ui': 'upload-test',
   'media-group-filter': 'upload-test',

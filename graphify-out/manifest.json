@@ -463,16 +463,16 @@
     "semantic_hash": "f52abd41693579b92756b3b31a56c426"
   },
   "scripts/run-core-regressions.mjs": {
-    "mtime": 1795025700.5986812,
-    "seen": 1795317444.3080761,
-    "ast_hash": "7ad688265e790598a0c0d881dc1ee26d",
-    "semantic_hash": "7ad688265e790598a0c0d881dc1ee26d"
+    "mtime": 1795529627.2031453,
+    "seen": 1795529994.62694,
+    "ast_hash": "1ee8d1af62279e2bf92ba55906016c1b",
+    "semantic_hash": ""
   },
   "scripts/run-ui-regressions.mjs": {
-    "mtime": 1795052778.4165988,
-    "seen": 1795317444.308202,
-    "ast_hash": "639dbaee0b4c4af3e846d7a66c7d4db9",
-    "semantic_hash": "639dbaee0b4c4af3e846d7a66c7d4db9"
+    "mtime": 1795529430.1859803,
+    "seen": 1795529994.6269429,
+    "ast_hash": "1b47307efe5260adf4d22aaad7685b89",
+    "semantic_hash": ""
   },
   "scripts/sync-functions.sh": {
     "mtime": 1790210104.946592,
@@ -685,16 +685,16 @@
     "semantic_hash": "0d40ae2cdd647f0887de219d2a264b33"
   },
   "src/components/FileDropArea.tsx": {
-    "mtime": 1790527288.0454376,
-    "seen": 1795317444.3129334,
-    "ast_hash": "7be7c2a096703b7181fb5db64b6561ff",
-    "semantic_hash": "7be7c2a096703b7181fb5db64b6561ff"
+    "mtime": 1795529139.8785186,
+    "seen": 1795529330.0141282,
+    "ast_hash": "7928d86fcbad76910e6b53850b7947cb",
+    "semantic_hash": ""
   },
   "src/components/FileManager.tsx": {
-    "mtime": 1795088873.9980514,
-    "seen": 1795317444.3130534,
-    "ast_hash": "8d320b44251d4b877fa188662eecf325",
-    "semantic_hash": "8d320b44251d4b877fa188662eecf325"
+    "mtime": 1795530340.7116303,
+    "seen": 1795530390.2371666,
+    "ast_hash": "4f4f1df8666958744e9c7b7f42b8dba4",
+    "semantic_hash": ""
   },
   "src/components/FilePreview.tsx": {
     "mtime": 1795052841.0071924,
@@ -1099,10 +1099,10 @@
     "semantic_hash": "05d91efd0eb54ffe4fa82c4407ee3064"
   },
   "src/hooks/useVideoControlsAutoHide.ts": {
-    "mtime": 1794761100.3842714,
-    "seen": 1795317444.321219,
-    "ast_hash": "c743b8264311fecb7a2c118b25e2e75b",
-    "semantic_hash": "c743b8264311fecb7a2c118b25e2e75b"
+    "mtime": 1795479872.3991,
+    "seen": 1795529330.0293837,
+    "ast_hash": "32918c128f3c6ec50835f4296368d66f",
+    "semantic_hash": ""
   },
   "src/hooks/useVideoPresentation.ts": {
     "mtime": 1792256384.9097054,
@@ -1525,10 +1525,10 @@
     "semantic_hash": "2dc1aa784af4a5cc92fca94c357c1dea"
   },
   "tests/android-video-layout.mjs": {
-    "mtime": 1795055079.8371048,
-    "seen": 1795317444.3295658,
-    "ast_hash": "8da349f92f03a4e18f0dbe235e64d16d",
-    "semantic_hash": "8da349f92f03a4e18f0dbe235e64d16d"
+    "mtime": 1795479923.418538,
+    "seen": 1795529330.0451407,
+    "ast_hash": "0df7a63f3553b6c91d492c5217018441",
+    "semantic_hash": ""
   },
   "tests/audit-account-security.mjs": {
     "mtime": 1791850173.827294,
@@ -1693,16 +1693,16 @@
     "semantic_hash": "2b356d5dd9151cfff795feaa918e2792"
   },
   "tests/iphone-video-hit-testing.mjs": {
-    "mtime": 1794778429.492948,
-    "seen": 1795317444.3331792,
-    "ast_hash": "606ee4414aef8f0029c9e1c68acdb0fe",
-    "semantic_hash": "606ee4414aef8f0029c9e1c68acdb0fe"
+    "mtime": 1795462705.0455976,
+    "seen": 1795529330.051259,
+    "ast_hash": "e92aaad86da352f387e122b89bb01c21",
+    "semantic_hash": ""
   },
   "tests/iphone-video-layout.mjs": {
-    "mtime": 1794762036.3663907,
-    "seen": 1795317444.3332956,
-    "ast_hash": "5f06cec3a97df31ea7acb784ce9606cc",
-    "semantic_hash": "5f06cec3a97df31ea7acb784ce9606cc"
+    "mtime": 1795479872.703691,
+    "seen": 1795529330.0512612,
+    "ast_hash": "299106f51629c1e71f0956c407081d55",
+    "semantic_hash": ""
   },
   "tests/library-storage-gateway-template.py": {
     "mtime": 1794716853.4464006,
@@ -1951,10 +1951,10 @@
     "semantic_hash": "0a0231d79d1983819960e1dd0852e56a"
   },
   "tests/pdf-preview.mjs": {
-    "mtime": 1795052923.441668,
-    "seen": 1795317444.338287,
-    "ast_hash": "9ae07ab2214e18bf51743e48133b92fe",
-    "semantic_hash": "9ae07ab2214e18bf51743e48133b92fe"
+    "mtime": 1795464048.644793,
+    "seen": 1795529330.060755,
+    "ast_hash": "1cc4dc06da4548b85c1b55224991ed69",
+    "semantic_hash": ""
   },
   "tests/photo-storage-deletion.mjs": {
     "mtime": 1794716853.4524817,
@@ -2365,9 +2365,9 @@
     "semantic_hash": ""
   },
   "ANDROID_VIDEO_LAYOUT.md": {
-    "mtime": 1795055135.8090076,
-    "seen": 1795317805.0120566,
-    "ast_hash": "d9146d83bed823e051da712ca712aa21",
+    "mtime": 1795479923.5788338,
+    "seen": 1795529330.0760622,
+    "ast_hash": "3267b7b7ed60adb78d3c5bc35b419771",
     "semantic_hash": ""
   },
   "AUDIT_REMEDIATION.md": {
@@ -2509,9 +2509,9 @@
     "semantic_hash": ""
   },
   "MODAL_SAFETY.md": {
-    "mtime": 1795088803.830131,
-    "seen": 1795317805.0120816,
-    "ast_hash": "c431600365837c14c043c822037f726d",
+    "mtime": 1795479929.4383397,
+    "seen": 1795529330.0812116,
+    "ast_hash": "53387e4a39026f1f3f35b109e8d875b6",
     "semantic_hash": ""
   },
   "PDF_PREVIEW.md": {
@@ -3274,6 +3274,84 @@
     "mtime": 1791133838.2980304,
     "seen": 1795317805.0122032,
     "ast_hash": "6da7e7d7adb34bacff8889c0c5854654",
+    "semantic_hash": ""
+  },
+  "src/lib/folderUploads.ts": {
+    "mtime": 1795530052.1590717,
+    "seen": 1795530206.1180234,
+    "ast_hash": "be3998f6a808e7adfa979c74bbe1faaa",
+    "semantic_hash": ""
+  },
+  "tests/folder-uploads.mjs": {
+    "mtime": 1795530052.3087966,
+    "seen": 1795530206.1336558,
+    "ast_hash": "1948ee55970a8383a4eca816493e133d",
+    "semantic_hash": ""
+  },
+  "tests/folder-uploads-db.mjs": {
+    "mtime": 1795529659.8482695,
+    "seen": 1795529994.6729083,
+    "ast_hash": "da8543e4466c8110f2b19c97e0f3774e",
+    "semantic_hash": ""
+  },
+  "tests/folder-uploads-ui.mjs": {
+    "mtime": 1795530340.914287,
+    "seen": 1795530390.2755795,
+    "ast_hash": "ee8ac34eb70c5bc8544ff2fbe1b56708",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/chrome-1440.png": {
+    "mtime": 1795530110.6256402,
+    "seen": 1795530206.1748223,
+    "ast_hash": "5d2787ebfe04a7450f75bd62f630e4de",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/chrome-390.png": {
+    "mtime": 1795530113.516837,
+    "seen": 1795530206.174825,
+    "ast_hash": "b0884e1b585911806d6c8efb0ee9c48d",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/edge-1440.png": {
+    "mtime": 1795530358.861381,
+    "seen": 1795530390.3240948,
+    "ast_hash": "ad73455e10c39b8aa86f7c17f410c24a",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/edge-390.png": {
+    "mtime": 1795530360.9188097,
+    "seen": 1795530390.3240974,
+    "ast_hash": "da892b6104b88959a55a4f97a9d7ad73",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/firefox-1440.png": {
+    "mtime": 1795530111.0153086,
+    "seen": 1795530206.1748304,
+    "ast_hash": "648935bfabeca1887e905c8ccc023cf0",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/firefox-390.png": {
+    "mtime": 1795530114.2514935,
+    "seen": 1795530206.1748319,
+    "ast_hash": "d6d8ac12feb367dafad14c94d7d8184e",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/webkit-1440.png": {
+    "mtime": 1795530110.244628,
+    "seen": 1795530206.1748333,
+    "ast_hash": "3cbc204b33a7d2bf09718ce402a1f45d",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/webkit-390.png": {
+    "mtime": 1795530115.8055706,
+    "seen": 1795530206.174835,
+    "ast_hash": "42d3be0584228a6a326fd60f1e1eb7c1",
+    "semantic_hash": ""
+  },
+  "output/folder-uploads/REPORT.txt": {
+    "mtime": 1795530165.2443888,
+    "seen": 1795530206.166801,
+    "ast_hash": "83ec857eaac97d60b7258b072cff397b",
     "semantic_hash": ""
   },
   "package-lock.json": {
